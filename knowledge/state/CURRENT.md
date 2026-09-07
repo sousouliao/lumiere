@@ -1,428 +1,76 @@
 # Current Project State
 
-- Updated: 2026-09-04
-- Current milestone: 1 — Cross-platform HDR-aware MVP
-- Release target: Windows + macOS HDR-aware MVP with sRGB Visual Match
-- Completed foundation record: [GitHub Issue #1](https://github.com/Mournerliao/lumiere/issues/1)
-- Operating model: Contract → Environment-eligible Frontier → Verification
+- Updated: 2026-09-07
+- Milestone: 1 — Cross-platform HDR-aware MVP with sRGB Visual Match
+- Posture: native capture and shared product surface complete; Windows distribution pending.
+- Frontier Issues #12, #14, #15, and #16 were checked on GitHub on 2026-09-07.
 
 ## Current Position
 
-The repository has converged on the final `apps/`, `protocol/`, `hosts/`, and
-`knowledge/` ownership layout. Lumiere has an Electron/React shared shell,
-language-neutral platform-host schemas with versioned executable fixtures, explicit
-unavailable behavior, dual-platform CI, and isolated native host trees. Protocol v1 and
-v2 are frozen; v3 owns capture-before-overlay Region sessions, a query-only capability
-handshake, per-target delivery outcomes, and the cancellation responsibility boundary.
+Electron/React drives Swift and .NET Hosts through platform-host v3 JSON Lines.
+Display and frozen-frame Region capture support Clipboard, Folder, and Both delivery.
+Main owns persisted output, save-directory, shortcut, after-capture, and HDR-reminder
+settings. Region uses a logical-resolution preview and crops the retained backing frame;
+the reusable Overlay and native preparation run in parallel.
 
-The compact shared main window now uses the approved generated tokens and drives an
-integrated Swift ScreenCaptureKit host through one main-process capture command router
-and the platform-host v3 JSON Lines process interface. The router owns capability and
-delivery gating, persisted clipboard/folder/both preferences with a clipboard-and-folder
-default, in-flight state, per-target result projection, and product failure mapping. The
-approved Settings output surface now reads and writes that main-owned preference through
-validated task-shaped preload/IPC, updates the main-window summary and next capture
-immediately, and restores the value after restart. Region capture now freezes one native
-frame before the Overlay appears: the Host retains that frame, Electron main grants a
-revocable preview URL, and commit crops the same frozen frame. The Overlay owns only
-target-local selection geometry and local cancel; it never sees the preview file path.
-Region preparation now derives a lossless sRGB preview at one pixel per rounded target
-logical point while retaining the full backing-resolution authoritative frame. Electron
-prewarms and reuses one sandboxed Overlay renderer, scopes every activation and response to
-a generation, and prepares that renderer in parallel with native capture. macOS reuses one
-prewarmed `CIContext` and prefetches ScreenCaptureKit shareable content only after permission
-is already granted; Windows has a dedicated linear-light downsampling preview encoder that
-does not allocate a full-resolution BGRA8 intermediate. The temporary PNG/token bridge remains
-because measured file I/O is not the latency bottleneck.
-[Issue #15](https://github.com/sousouliao/lumiere/issues/15) tracks this slice and remains
-open for Windows build, runtime, performance, and resource-stability verification.
-macOS display and region capture convert once to a timestamped
-RGBA8/sRGB PNG representation and deliver those same bytes through native clipboard and
-folder adapters. The macOS Host now derives Display and Region output dimensions from the
-selected ScreenCaptureKit filter's point-to-pixel scale, so scaled 4K and Retina targets
-produce backing-pixel-density artifacts instead of one pixel per logical point. Region and
-Display now have independent opt-in global shortcut settings;
-main owns atomic registration, conflict handling, versioned settings migration, and recording
-suspension, while the tray/menu-bar projects capability-gated Region/Display commands,
-registered accelerators, Open, Settings, and Quit through the same capture router. The macOS
-development launch now resolves Electron 43's lazy-installed executable before electron-vite,
-incrementally builds the current Swift Debug Host, and resolves that Host ahead of any stale
-Release artifact; explicit Host overrides remain authoritative. The shared
-Settings surface now also persists `Do nothing` or `Show in folder` after-capture behavior
-through validated main-owned IPC. One main-process completion path applies that preference
-to main-window, shortcut, and tray/menu-bar captures without changing artifact success when
-Finder or Explorer cannot reveal an already-saved file. The shared Settings surface now also
-persists whether non-blocking HDR status reminders are shown. The default remains on; validated
-main-owned IPC writes the setting, the capture router
-projects an advisory only when the Host still declares capture available, and disabling the
-preference hides neither the underlying target status nor any blocking Host, permission, or
-capture failure. The main window now keeps one application-level capture-surface snapshot while a
-visible-window main-process monitor observes only pointer-display identity; target changes and
-explicit lifecycle invalidations requery the Host and push stable latest-target state without tying
-refreshes to Capture/Settings view remounts. Settings v5 now also persists an optional custom save directory while migrating
-  v1 through v4 values. Main owns the native directory picker and exposes only a no-argument,
-  task-shaped preload command; Folder and Both capture requests may carry the selected absolute
-  path through protocol v3 while each Host retains directory creation, fixed naming, file writing,
-  and target-local delivery failure. The platform default remains Pictures/Lumiere.
-The Windows engine now exposes Display as one complete capture operation and Region as
-a frozen-frame prepare/commit session. Both paths own target resolution, target-aware
-HDR probing, first-frame acquisition, one sRGB Visual Match conversion, delivery,
-cancellation, and teardown. Region commit crops the retained owned texture rather than
-acquiring a second WGC frame. On HDR-active targets, that conversion now resolves
-the target's Windows SDR white level and normalizes captured scRGB input before tone mapping;
-an unavailable white level fails capture rather than producing an unverified Visual Match
-artifact. A .NET platform-host v3 executable now owns the
-Windows JSON Lines process boundary, strict request validation, correlated structured
-diagnostics, and typed unavailable behavior. The Host connects that engine for Display and
-frozen-frame Region capture, owns its process-scoped lifetime, creates the default
-Pictures/Lumiere destination when needed, and maps Clipboard, Folder, and Both outcomes
-independently from one encoded artifact into protocol v3. Its capability provider
-now resolves the display under the pointer independently of capture, probes that target's HDR
-state, and converts physical pixels through effective monitor DPI. Region is advertised
-only when a reconstructable native target snapshot exists; prepare captures one complete
-frame, copies it to an application-owned D3D11 texture, and commit crops that frozen
-frame without a second WGC acquisition.
-The development entry
-point builds its current Debug artifact, and Electron selects and supervises it through the
-shared native-process transport. The production Windows source now adds an independent assisted
-per-user NSIS lane, a self-contained x64 .NET Host, SignPath/GitHub Release orchestration,
-post-signing updater metadata, and best-effort external-location sparse identity registration.
-The Host requests borderless consent only on the first real capture; denied, unavailable,
-unregistered, and exception paths retain the WGC system border. Unpackaged development builds
-and unsigned preview installers intentionally omit production identity and updates. The unsigned
-preview installer now passes repository construction plus named-machine install, packaged capture,
-restart persistence, and uninstall/reinstall lifecycle verification, and the documented
-`v0.2.0-preview.1` GitHub prerelease is published. Signing, production identity,
-updates, and clean-machine verification remain open. The Windows Host adapter and
-shared product surface are complete through Issues #7 and #9. The macOS packaged-app foundation
-is complete through Issue #11,
-Issue #13 owns the direct-release disk image and checksum, and completed Issue #14 owns
-public release plus installed lifecycle verification. The current source now builds separate,
-English-locale-only `arm64` and `x64` macOS applications and disk images instead of one Universal
-artifact; the published `v0.1.0` Universal release remains the latest stable macOS release.
-WinUI and the old validation/HDR10-JXR paths remain removed.
+Foundation and milestone 1A–1C are recorded complete in
+[#1](https://github.com/Mournerliao/lumiere/issues/1),
+[#4](https://github.com/Mournerliao/lumiere/issues/4),
+[#7](https://github.com/Mournerliao/lumiere/issues/7), and
+[#9](https://github.com/Mournerliao/lumiere/issues/9).
+HDR-preserved export and broader cross-platform fidelity certification remain unstarted.
 
-## Progress At A Glance
+## Verification Boundary
 
-| Roadmap slice | Current state | What is true now | What remains before exit |
-|---|---|---|---|
-| 0. Foundation | Complete | Final layout, secure shell, language-neutral protocol, paused Windows engine; macOS and Windows CI pass | None |
-| 1A. macOS native capture | Complete ([#4](https://github.com/Mournerliao/lumiere/issues/4), [PR #6](https://github.com/Mournerliao/lumiere/pull/6)) | Swift host, explicit permission/cancellation states, SDR/HDR display capture, sRGB PNG file delivery, Electron process integration, fixed bright/dark scene verification on XDR hardware | None |
-| 1B. Windows host adapter | Complete ([#7](https://github.com/Mournerliao/lumiere/issues/7), [#10](https://github.com/Mournerliao/lumiere/issues/10)) | The v3 Host has strict JSON Lines handling, structured diagnostics, Electron supervision, target-aware HDR/logical-geometry capabilities, SDR-white-aware HDR Visual Match conversion, Display plus target-bound Region routing, Clipboard/Folder/Both delivery, sanitized protocol failures, deterministic teardown, and verified interactive HDR/SDR runtime journeys | None |
-| 1C. Shared product surface | Complete ([#9](https://github.com/Mournerliao/lumiere/issues/9)) | Approved compact main window and Settings output/shortcut/after-capture/HDR-reminder/save-directory surfaces, generated tokens, persisted capability-gated preferences, one main-process capture router, capability-gated tray/menu-bar, v3 frozen-region/delivery/custom-directory contract, shared Region Overlay over a Host-frozen preview, HiDPI-aware macOS geometry, and independently verified macOS and Windows product journeys | None |
-| 1D. Distribution and release | In progress (macOS complete through [#14](https://github.com/Mournerliao/lumiere/issues/14) and [#13](https://github.com/Mournerliao/lumiere/issues/13); [Windows #12](https://github.com/sousouliao/lumiere/issues/12)) | The published Universal (`arm64` + `x86_64`), ad-hoc-signed macOS app, versioned DMG, SHA-256 manifest, local artifact inspection, GitHub Release, published-asset integrity, browser-download quarantine, manual Gatekeeper exception, replacement, uninstall/reinstall, packaged capture, repeat, and clean exit are verified on the named development Mac; current source additionally builds independently signed, size-bounded arm64 and x64 apps/DMGs with only English Electron locales and required runtime resources; Windows has a locally verified unsigned assisted NSIS preview with a self-contained Host, custom-directory install, shortcuts, packaged Display/Region delivery, setting preservation, and clean uninstall; the unified workflow then published the documented unsigned `v0.2.0-preview.1` GitHub prerelease with its checksum manifest, leaving sparse identity, SignPath, full-installer updater, and signed-release verification open | Apply to SignPath Foundation, then complete signing, production identity/update, borderless/fallback, and clean-machine verification |
-| 2. HDR-preserved export | Planned; not started | Claim gate and milestone are defined | Choose format/viewers, specify semantics, implement and verify both platforms |
-| 3. Cross-platform HDR fidelity | Planned; not started | Fidelity is separated from artifact success and HDR preservation | Define support matrix/tolerances and run fixed-scene verification |
+- **Current shared-shell slice — [#16](https://github.com/sousouliao/lumiere/issues/16):**
+  independent Toast removed; success/cancellation stay quiet, background failures use
+  silent system notifications, and main-window recovery shares one capture busy state.
+  `pnpm check`, `pnpm test:shared` (24 files, 126 tests), and `pnpm build` pass on this Mac.
+  Electron fixture checks cover notification routing/clicks, closed-window recovery,
+  stale actions, folder/permission recovery, cancellation, and content-driven window
+  growth/restoration without scrolling. Real macOS Host Display
+  output and Region cancellation pass. Fixture notification checks do not establish OS
+  banner delivery; packaged macOS notification presentation and Windows remain unverified.
+- **macOS runtime:** recorded Display/Region delivery, settings persistence, cancellation,
+  frozen-frame commit, external-4K backing geometry, and bounded repeat checks pass.
+  Region latency on the named SDR target was 607 ms cold and 343.5 ms warm median
+  (311–415 ms). Built-in Retina XDR geometry still needs observation after the correction.
+- **Windows runtime:** recorded HDR/SDR capture, independent delivery outcomes, settings,
+  cancellation, and lifecycle checks pass. Those observations predate the outstanding
+  Region performance slice and do not verify its current Windows implementation.
+- **Distribution:** macOS `v0.1.0` Universal release lifecycle is recorded verified on the
+  named Mac. Current source builds separate arm64/x64 apps and DMGs; construction,
+  signatures, launch, and Host handshake passed, but split-artifact capture and repeat
+  behavior remain unverified because the new bundle paths lacked TCC permission.
+  Windows unsigned `v0.2.0-preview.1` publication and named-machine installer lifecycle
+  are recorded; fresh-machine installation of the published artifact remains unverified.
+- **Fidelity and CI:** named macOS bright/dark fixtures and one Windows HDR-target sRGB
+  reference passed. These do not certify broad fidelity or HDR preservation. The last
+  recorded shell/engine CI checkpoint is `fccf812`, not current-HEAD evidence.
 
-This table is a project posture snapshot, not a task ledger. GitHub Issues own
-acceptance criteria and implementation status for each vertical slice.
-
-## Verification Truth
-
-- **Repository:** frozen install, layout and TypeScript checks, one hundred fifteen cross-platform
-  shell/protocol/process/settings/UI tests, five macOS path/packaging/release tests, thirty-four Swift
-  protocol/capability/permission/diagnostic/geometry/native-delivery tests, and the current
-  production TypeScript check pass on this Mac. Windows Host/engine tests for protocol v3
-  frozen Region sessions are in source but were not run here because `dotnet` is not
-  installed. Shared, macOS, and Windows test gates remain explicit and platform-scoped.
-  The frozen-region slice passed `pnpm check`, all eighty-nine shared tests, three macOS
-  path tests, and thirty-two Swift tests on this Mac. That verifies repository contract
-  shape, not the interactive freeze → select → commit journey, Windows Host compilation,
-  or hardware Visual Match.
-  The pointer-target status synchronization slice passed all ninety-nine shared tests,
-  `pnpm check`, the production Electron build, and the renderer design detector on this Mac.
-  A development launch showed the pointer-specific SDR advisory and kept that status when only
-  the window moved to the built-in XDR display while the pointer remained on the external SDR
-  display. The user then moved the pointer between the external SDR display and the built-in XDR
-  display and observed the main-window HDR status switch correctly in both directions without
-  opening Settings or restarting Lumiere. This closes the macOS interactive hardware confirmation
-  for pointer-target status synchronization only; it adds no HDR fidelity or Windows runtime claim.
-  The HDR-reminder slice passed all eighty-two shared tests, repository checks, and the production
-  Electron build on the named Windows machine. A 480×370 local renderer observation covered the
-  enabled advisory, Capture Settings switch, disabled reminder state, and stable no-scroll layout;
-  it used typed local preload-state fixtures and therefore establishes renderer behavior only, not
-  Windows or macOS runtime persistence.
-  The custom-directory slice passed the current macOS repository checks, all eighty-four shared
-  tests, three macOS path tests, thirty Swift tests, Swift formatting, and the production Electron
-  build. Its updated Windows Host source and tests were not run on this Mac because `dotnet` is not
-  installed; the prior Windows counts do not verify this slice.
-  On the named Windows machine, the current worktree passes `pnpm check`, all eighty-nine shared
-  tests, the production Electron build, the Windows Release build with zero warnings, Host 33,
-  Capture 85, Graphics 47, and Interop 35 tests, and `dotnet format --verify-no-changes`.
-- **macOS development runtime:** the Electron display action drove ScreenCaptureKit to
-  RGBA8 PNG files with alpha and an embedded sRGB IEC61966-2.1 profile on an Apple
-  Silicon Mac. SDR capture was observed at 2560×1440 on an external display. Native
-  Region preview latency on the 5120×2880 backing display now uses a 2560×1440 preview.
-  One permission-safe prewarmed cold sample reached the shown Overlay in 607 ms. Ten warm
-  samples reached it in 311–415 ms with a 343.5 ms median, satisfying the 650 ms cold,
-  350 ms warm-median, and 450 ms warm-maximum gates. A real 500×300 logical selection then
-  produced a 1000×600 PNG with the embedded sRGB IEC61966-2.1 profile, confirming that preview
-  downsampling does not replace the full-resolution commit path. These measurements establish
-  the named Mac's SDR Region latency and geometry only; Windows runtime and HDR Visual Match
-  remain separate truth.
-  HDR acquisition and tone mapping were then observed at 1728×1117 on the built-in
-  Retina XDR display through both the host and Electron process boundary. After the
-  lifecycle review fixes, the Electron path again produced a 2560×1440 sRGB PNG from
-  the display under the pointer; the standalone rebuilt CLI remains a distinct TCC
-  identity and returned the expected typed permission failure with correlated logging.
-  The compact command-routed main window then repeated the development display-to-folder
-  journey and produced a 2560×1440 PNG with alpha and an embedded sRGB IEC61966-2.1
-  profile; keyboard focus and two zoom increments remained usable in the rendered window.
-  The rebuilt v2 Host then completed independent display-to-clipboard, display-to-folder,
-  and display-to-both journeys through the development Electron runtime. Preview created
-  a new image from the clipboard-only result; folder-only produced a 2560×1440 PNG with an
-  embedded sRGB IEC61966-2.1 profile; both reported copy and save success and produced the
-  same class of PNG artifact. These observations establish artifact delivery only, not
-  HDR preservation or Visual Match certification. The Settings output slice then changed
-  the live main-window summary and subsequent display command across all three targets.
-  Preview opened the clipboard-only result; folder-only and both each created a 2560×1440
-  PNG with an embedded sRGB IEC61966-2.1 profile, and both reported copy and save success.
-  A non-default Folder preference remained visible in both the main window and Settings
-  after a full development-app restart; the final development preference was restored to
-  Clipboard and folder. The first both-target attempt in this observation exposed the
-  typed Host-unavailable recovery state; the immediate retry restarted the Host and
-  completed both deliveries. Region capture then passed clipboard-only, folder-only,
-  both-target, repeat, Esc cancel, invalid-click cancel, and clean-exit journeys. A repeated
-  region result was 863×694 with alpha and an embedded sRGB IEC61966-2.1 profile; the
-  Overlay was absent from the artifact. The final output preference was restored to both.
-  The shortcut slice then displayed the capability-gated Capture settings and full
-  Region/Display/Open/Settings/Quit menu-bar structure, rejected a conflicting accelerator,
-  registered and persisted `Control+Alt+F12`, and cleared it back to the unconfigured default.
-  This establishes the macOS development shortcut lifecycle and menu structure, not Windows
-  behavior or an additional capture/HDR claim. A root-level `pnpm dev` launch then rebuilt the
-  current Debug Host with the installed Xcode toolchain and exposed both Region and Display;
-  this closes the stale-Release development-selection failure without changing packaged Host
-  discovery. The after-capture slice then selected Folder plus `Show in folder`; display capture
-  saved `Lumiere-2026-08-27-164643.png`, reported `Saved to “Lumiere”`, and opened Finder with
-  that file selected. With Clipboard plus the same after-capture preference, display capture
-  reported `Copied to clipboard` and left Finder on the prior saved file. A full development-app
-  restart restored both the Clipboard output and `Show in folder` preferences. The final
-  development settings were restored to Clipboard and folder plus `Do nothing`. These
-  observations establish after-capture routing and persistence on macOS only; they add no
-  Visual Match, HDR-preservation, or Windows claim. A later external-4K clarity report exposed
-  that the Host had configured ScreenCaptureKit's pixel output with logical point dimensions:
-  a near-full region was only 1408×821 and visibly soft. The rebuilt Host then used the selected
-  filter's 2× pixel scale and produced a 5120×2880 Display artifact where the previous result was
-  2560×1440. A 1320×769 logical Region produced 2640×1538 pixels. Both retained RGBA, alpha, and
-  the embedded sRGB IEC61966-2.1 profile. A ten-capture 4K repeat loop produced 5120×2880 each
-  time without Host restart or retained-memory growth. A later same-display A/B isolated a
-  remaining Region-only softness: the 5120×2880 full ScreenCaptureKit frame matched the macOS
-  system screenshot's edge distribution, while a pixel-aligned `sourceRect` Region remained
-  visibly softer. Region now captures the complete backing frame and applies an integer
-  `CGImage` crop in the Host. A 3005×1691 hardware result restored sharp text at 100% inspection,
-  retained the embedded sRGB profile, and completed clipboard-plus-folder delivery. These
-  observations establish corrected backing-pixel geometry and Region sharpness on the named
-  scaled external display; the built-in Retina XDR path was not re-observed after this geometry
-  correction. The custom-directory Settings surface was then exercised through the real 480×370
-  development Electron window and native directory picker. A Display-to-Both capture wrote
-  `Lumiere-2026-08-31-115523.png` (20,824,119 bytes) to a non-default temporary directory and
-  reported copy and save success. A full development-app restart restored that custom path in the
-  main-window summary. With `Show in folder` enabled, a second Display-to-Both capture wrote
-  `Lumiere-2026-08-31-115928.png` (20,857,480 bytes); Finder opened the custom directory with that
-  artifact selected. The final effective settings were restored to Pictures/Lumiere, Clipboard and
-  folder, and `Do nothing`. These observations establish custom-directory routing, persistence,
-  artifact delivery, and after-capture reveal behavior on macOS only; they add no Visual Match,
-  HDR-preservation, or Windows claim. The final frozen-Region frontier then passed on a MacBook
-  Pro `Mac15,7` with Apple M3 Pro against a local wall-clock, quarter-second counter, and moving-bar
-  fixture on the named scaled external 4K display. With Chrome focused, the persisted
-  `Control+Alt+F12` Region shortcut prepared the frame before the Overlay appeared. The artifact
-  written at 15:44:24 retained 15:44:21 / tick 802 while a later reference had advanced to
-  15:44:27 / tick 825, establishing commit from the pre-selection frame rather than a second
-  ScreenCaptureKit acquisition. The result was a 2233×1551 RGBA PNG with alpha and the embedded
-  sRGB IEC61966-2.1 profile; the Overlay was absent. Esc cancellation returned the main window to
-  `Capture cancelled` without an artifact, and a following commit produced a 1050×750 RGBA/sRGB
-  PNG through the same Swift Host process without retained-memory growth in the bounded
-  observation. The shortcuts and other effective settings were restored to their defaults;
-  quitting returned code 0 and left no Lumiere Host process. This closes Issue #9's macOS
-  development-runtime gate only; it adds no packaged-app, HDR-preservation, or release-readiness
-  claim.
-  The final Issue #11 bundle was then rebuilt and verified on the same MacBook Pro `Mac15,7`
-  with Apple M3 Pro. The ad-hoc-signed universal app launched from `artifacts/macos/Lumiere.app`
-  without a Host override, completed its bundled protocol v3 capability handshake, and exposed
-  Region and Display. Both capture modes completed Clipboard, Folder, and Both delivery on the
-  named scaled 5120×2880 external display; a sampled Display result was a 5120×2880 PNG with the
-  embedded sRGB IEC61966-2.1 profile. Ten further Display-to-Both captures used the same Host PID;
-  its RSS remained bounded between approximately 105 and 113 MB rather than growing linearly.
-  Quitting left no Electron or Swift Host process. This establishes packaged identity permission,
-  delivery, repeat, and clean-exit behavior on the named Mac only; it adds no notarization,
-  public-release lifecycle, HDR-preservation, Visual Match, or Windows release claim.
-  Issue #13 then added one repository-owned `release:macos` command that reuses the same
-  production build, universal Host staging, and ad-hoc signing boundary to produce
-  `Lumiere-0.1.0-macos-universal.dmg` plus `SHA256SUMS`. The final HFS+ disk image mounted
-  read-only with `Lumiere.app` and an Applications link; its warm light Finder layout kept the
-  product icon and install target legible. The contained app retained bundle identifier
-  `io.github.sousouliao.lumiere`, version `0.1.0`, minimum system version 15.0, deep signature
-  validity, and `arm64` plus `x86_64` Electron and Host executables. The SHA-256 manifest verified
-  against the final DMG bytes. Exact repository checks were `pnpm install --frozen-lockfile`,
-  `pnpm check`, `pnpm test:shared`, `pnpm test:macos`,
-  `swift test --package-path hosts/macos`, `pnpm release:macos`, and
-  `shasum -a 256 -c SHA256SUMS` from `artifacts/macos`. This establishes local release-artifact
-  construction and inspection only. Issue #14 then published the production GitHub Release
-  `v0.1.0` from commit `246ec335272d2d2bf0b85cda3b9fa7ab1deaf5c5` with the DMG and
-  `SHA256SUMS` attached. The Release is neither a draft nor a prerelease. Re-downloading both
-  assets from GitHub produced a 223,246,932-byte DMG whose recorded SHA-256
-  `69587d439bdd11161a6fc7bd027a984187ae208cbf13aed2555fbf34e41bedc4` verified successfully.
-  At that checkpoint this established public-release and published-asset integrity truth only;
-  quarantine/Gatekeeper, replacement upgrade, uninstall, and reinstall remained for Issue #14.
-  A subsequent Issue #14 lifecycle observation used a targeted-cleaned MacBook Pro `Mac15,7`
-  with Apple M3 Pro on macOS 27.0 build `26A5425a`. The Chrome-downloaded DMG carried quarantine;
-  ordinary launch after reinstall was rejected, Privacy & Security exposed the documented Open
-  Anyway action, and the released app then launched through App Translocation without requesting
-  Screen Recording permission again. Display-to-Both produced a 5120×2880, 20,937,587-byte
-  RGBA/sRGB PNG; Region-to-Both produced a 2250×1500, 4,452,238-byte RGBA/sRGB PNG. Both reported
-  clipboard and folder success, and Command-Q left no Lumiere or Host process. Normal uninstall
-  did not preserve the non-default settings file through the later blocked relaunch, while a
-  subsequent direct replacement preserved `hdrStatusReminders: false`. After the user accepted the
-  newly presented macOS permission prompt, the replacement launched with the complete Electron and
-  bundled Host process tree; Settings still showed HDR reminders off. Display-to-Both then produced
-  a 5120×2880, 10,084,553-byte RGBA/sRGB PNG and Command-Q again left no Lumiere or Host process.
-  Under the revised ADR 0012 verification gate, this establishes the required named-Mac
-  replacement, uninstall/reinstall, bounded repeat, packaged capture, setting/permission behavior,
-  and clean-exit truth. A separate clean non-development Mac is optional follow-up evidence and no
-  longer blocks macOS completion.
-  The later packaging-size slice replaced the source Universal build with independent arm64 and
-  x64 artifacts while retaining the published `v0.1.0` evidence above. A local
-  `pnpm release:macos` build produced a 108,269,221-byte arm64 DMG and a 113,237,353-byte x64 DMG;
-  their applications occupied 233.12 MiB and 235.69 MiB, respectively, and each `app.asar` was
-  3.16 MiB. Both checksum entries verified, both HFS+ images mounted with `Lumiere.app` and an
-  Applications link, both deep signatures passed, and every inspected Electron and Host binary
-  contained only its named architecture. The arm64 app launched natively and the x64 app launched
-  through Rosetta; both completed the Host capability handshake and exposed Region and Display.
-  A capture attempt in each reached the correct Screen Recording permission-required state because
-  the new local bundle paths were not authorized in TCC, so this observation does not re-establish
-  packaged capture, delivery, or repeat behavior for the split artifacts. Exact repository checks
-  were `pnpm check`, all 113 shared tests, five macOS tests, and 32 Swift tests using the complete
-  Xcode toolchain.
-  Reinstalling dependencies then exposed an Electron 43/electron-vite 5 development-start seam:
-  Electron's package defers its binary download until first resolution, while electron-vite expects
-  `path.txt` to exist before launch. The shared predev/prestart preparation now resolves and verifies
-  the Electron executable first. Its focused regression test passed, and a root `pnpm dev` run then
-  rebuilt the current Host, started the renderer server, and launched the Electron application;
-  the user manually confirmed the development application started and remained usable.
-- **GitHub CI:** the last recorded macOS shell and Windows engine workflow observation passed at
-  `fccf812`; this establishes those configured repository gates at that commit, not current-HEAD CI, Windows Host
-  runtime or hardware behavior.
-- **Windows engine:** restore and Release build pass with warnings treated as errors;
-  Host 28, Capture 85, Graphics 47, and Interop 35 tests pass;
-  `dotnet format --verify-no-changes` passes.
-- **Windows integration:** the named Windows development machine built the Debug Host through the
-  platform-neutral preparation entry point. The Release Host then completed a real JSON Lines
-  Display-to-Folder request through WGC on a 3840×2160 HDR-active display, emitted structured
-  capture and four-stage teardown diagnostics, returned a correlated `completed` result with
-  HDR source state and sRGB Visual Match output profile, wrote an 8,428,590-byte PNG under
-  `Pictures/Lumiere`, and exited cleanly on stdin EOF. Electron transport/path tests passed
-  against the Windows contract. The rebuilt Release Host then completed a standalone
-  `getCapabilities` request on the named scaled HDR-active display, reported target-aware HDR
-  support, and returned an opaque target token with a 2560×1440 logical target size. A subsequent
-  Display-to-Folder regression smoke under the new per-monitor-v2 DPI context acquired the same
-  display at 3840×2160, wrote an 11,421,216-byte PNG, completed all four teardown stages, and exited
-  cleanly on stdin EOF. A root-level `pnpm dev` journey then rebuilt and selected the current Debug
-  Host, exposed Display plus Folder in the shared UI, and completed two consecutive Electron-to-WGC
-  captures on the same 3840×2160 HDR-active display. The requests wrote distinct 6,615,871-byte and
-  6,803,406-byte PNG files with HDR source state and sRGB Visual Match output profile; each completed
-  all four teardown stages. Closing the Electron window exited the development process with code 0
-  and left no Windows Host process. This establishes capability projection, native acquisition,
-  repeated Electron-boundary artifact delivery, and clean exit, not Visual Match certification or HDR
-  preservation; no release-candidate record exists. The current Release Host was also exercised from
-  the non-interactive command session after Region and Clipboard/Both routing landed. That session could
-  not access cursor or WGC services (`GetCursorPos` access denied and
-  `GraphicsCaptureSession.IsSupported` returned `0x80070424`), so it produced no new artifact evidence.
-  The Host kept the technical exception in structured stderr and returned only the typed, sanitized
-  `capture-unavailable` / `The capture target is unavailable. Try again.` protocol result. The
-  interactive Electron runtime then completed Region-to-Folder and Region-to-Both on the named
-  3840×2160 HDR-active display. The Both journey copied the result and wrote a 1200×932 RGBA PNG;
-  Paint consumed the Display clipboard result. A clipboard apartment failure found during that
-  journey was corrected by performing the WinRT clipboard publication on an STA thread, after
-  which structured diagnostics reported `ClipboardOutput` complete. Closing Electron immediately
-  after issuing a native Display request exited with code 0 after the request and all four teardown
-  stages completed, with no remaining Lumiere window or Host process. A separate Region Overlay
-  journey accepted Esc, returned the main window to `Capture cancelled`, produced no artifact, and
-  emitted no native Region reservation or capture request, confirming Shell-owned pre-dispatch
-  cancellation. Windows HDR was then disabled independently: capability polling observed
-  `RgbFullG22NoneP709` with `isHdrActive=False`, and an Electron Display-to-Both request copied the
-  artifact, wrote a 3840×2160 RGBA PNG, and completed all four teardown stages. HDR was restored to
-  its original enabled state after the observation. These observations establish Windows artifact
-  delivery and lifecycle behavior on the named machine, not Visual Match certification, HDR
-  preservation, or release readiness. A subsequent fixed-image HDR observation queried the active
-  3840×2160 target's SDR white as 240 nits, applied the corresponding 80/240 scRGB normalization,
-  and captured a 1401×987 sRGB reference shown at 100%. Alignment against the source measured mean
-  absolute RGB errors of 0.867/0.858/0.886 out of 255, a per-channel 95th-percentile error of 1,
-  and a median luminance ratio of 0.985. This verifies Windows sRGB Visual Match for that named
-  target, SDR-white setting, fixture, and viewer path; it does not establish HDR-preserved export.
-  The current development runtime also verified custom-directory selection and restart persistence,
-  3840×2160 Folder/Both output, Explorer reveal, persisted `Ctrl+Alt+F12` Region activation, a
-  1052×621 commit cropped from the frozen preview, clean timeout recovery, and independent Both
-  delivery where clipboard success survived a folder-target failure. Final settings were restored
-  to Pictures/Lumiere, Clipboard and folder, unconfigured shortcuts, and `Do nothing`. These
-  observations establish Windows routing, persistence, artifact delivery, and lifecycle behavior;
-  they add no new Visual Match or HDR-preservation claim.
-  The Windows distribution lane then passed `pnpm install --frozen-lockfile`, `pnpm check`, the
-  Windows verification script (Release build with zero warnings; Host 33, Capture 85, Graphics 47,
-  and Interop 35 tests; formatting clean), and `pnpm package:windows`. The resulting unsigned
-  `Lumiere-Setup-0.1.0-x64.exe` installed to the user-selected `D:\lumiere` directory and created
-  desktop plus Start menu shortcuts. Its packaged Display and Region actions both completed
-  Clipboard-and-Folder delivery; sampled artifacts were a 3840×2160 Display PNG and a 902×776
-  Region PNG. A changed HDR-reminder preference survived application restart, normal uninstall
-  preserved the settings file while removing the application directory, shortcuts, and processes,
-  and reinstall restored the disabled preference in Settings. This establishes unsigned-preview
-  construction and the named-machine installer lifecycle only; the artifact is not signed and
-  intentionally contains neither production sparse identity nor updater metadata. The unified
-  Release workflow then built and published the public `v0.2.0-preview.1` prerelease from commit
-  `867bce2f9d52b3fcadc35d31fe3a55501a9c4dc8` with `Lumiere-Setup-0.2.0-preview.1-x64.exe`
-  (134,203,918 bytes) and its SHA-256 manifest
-  (`e82e75dd7e2fd93d38fcf758768f68d6d11c6e4e9edfae828380fc925957ac18`) attached; the release is
-  neither a draft nor marked latest, and its notes document the unsigned-publisher warning with
-  production identity and updates disabled. Reaching publication required two packaging-script
-  fixes discovered by CI: prerelease semver acceptance in preview mode, and Electron distribution
-  self-healing when pnpm skips the package's install script from a warm store. The Windows job
-  passed with Host 33, Capture 85, Graphics 47, and Interop 35 tests and zero warnings. This
-  establishes public unsigned-preview publication and release-workflow truth only; the published
-  artifact has not been installed or capture-verified on a fresh machine.
-- **Hardware verified:** the macOS Retina XDR path passed fixed bright and dark scene
-  observations. The bright ramp preserved ten distinct grayscale steps from 25 through
-  255; the dark ramp preserved ten distinct steps from 0 through 32 and alternating
-  19/7 fine detail. The named scaled external 4K display passed Display and Region
-  backing-pixel-dimension observations plus a ten-capture repeat loop after the HiDPI fix.
-  Windows has one fixed-image sRGB Visual Match observation on the named HDR-active 4K target;
-  broader cross-platform fidelity certification and the Retina XDR geometry correction remain
-  independently unobserved on hardware.
-
-Do not describe the foundation as working capture, or the cross-platform MVP as
-release-ready until both owning platforms are explicitly verified.
+Exact prior commands, measurements, and platform qualifications remain available in the
+[Git version before this condensation](https://github.com/Mournerliao/lumiere/blob/e1b48d1dd691ab567b376d1ba27edf27428ba448/knowledge/state/CURRENT.md#verification-truth).
+Owning Issues hold acceptance criteria; new verification belongs there rather than in a
+running history here.
 
 ## Execution Frontiers
 
-Milestone 1A through 1C are complete. Per
-[ADR 0008](../decisions/0008-environment-aware-execution-lanes.md), the active milestone
-may expose one frontier per environment-eligible lane while each writer or worktree
-advances only one current working Issue at a time.
+- **Quiet failure feedback — [#16](https://github.com/sousouliao/lumiere/issues/16):**
+  shared implementation and local macOS capture checks complete. Next: observe native
+  notification presentation/click behavior in packaged macOS and Windows builds,
+  including platform busy/recovery behavior. The Issue remains open for these checks.
 
-- **macOS distribution lane — [Issue #14](https://github.com/Mournerliao/lumiere/issues/14) complete:**
-  the reproducible packaged-app and direct-release artifact are implemented under
-  [ADR 0012](../decisions/0012-direct-ad-hoc-signed-macos-distribution.md). The repository command
-  The published `v0.1.0` build produced the production Electron shell, generated icons, and
-  Universal Release Swift Host in an ad-hoc-signed application; signature, identity, version, minimum system
-  version, architecture, bundled Host discovery, packaged permission, Display/Region delivery,
-  repeat capture, and clean exit passed on the named Mac. Current `release:macos` source now adds
-  versioned arm64 and x64 DMGs, Applications links, one SHA-256 manifest, accurate manual Gatekeeper guidance, and
-  local mounted-artifact verification. The public `v0.1.0` GitHub Release now carries the verified
-  DMG and checksum manifest. Browser-download quarantine, Gatekeeper Open Anyway, uninstall/reinstall,
-  packaged Display/Region delivery, and clean exit have now passed on the named targeted-cleaned
-  development Mac, including replacement setting/permission retention, repeat capture, and clean
-  exit. This satisfies the revised named-Mac release lifecycle gate; a separate clean Mac is not
-  required. Developer ID signing, notarization, Mac App Store distribution, and Homebrew
-  distribution are out of scope.
-- **Windows distribution lane — [Issue #12](https://github.com/sousouliao/lumiere/issues/12):**
-  the implementation follows
-  [ADR 0013](../decisions/0013-windows-nsis-sparse-identity-distribution.md). Repository checks,
-  unsigned NSIS construction, custom-directory install, shortcut creation, packaged Display/Region
-  Clipboard-and-Folder delivery, restart persistence, uninstall cleanup, and reinstall setting
-  restoration now pass on the named Windows development machine, and the unified release workflow
-  published the documented unsigned `v0.2.0-preview.1` prerelease with its checksum manifest.
-  Next: apply to SignPath Foundation using that release as prerequisite evidence. Production sparse
-  identity, signed update, borderless/fallback, and clean-machine verification follow only after approval.
-- **Milestone gate:** platform-owned 1D implementation may advance independently, but
-  cross-platform release verification and the Milestone 1 exit gate remain blocked until
-  both distribution lanes pass their independent criteria.
-
-Neither lane projects repository, runtime, hardware, or completion truth to the other.
+- **Region performance — [#15](https://github.com/sousouliao/lumiere/issues/15):** macOS
+  latency and full-resolution commit are recorded verified. Next: Windows build, runtime,
+  latency, and resource-stability verification for the optimized preview path.
+- **Windows distribution — [#12](https://github.com/sousouliao/lumiere/issues/12):** the
+  [SignPath Foundation application was submitted on 2026-09-05](https://github.com/sousouliao/lumiere/issues/12#issuecomment-5551597700).
+  Next: await approval and the assigned certificate Subject/Publisher, then
+  verify signing, production sparse identity, updates, borderless/fallback behavior,
+  and clean-machine lifecycle.
+- **macOS distribution — [#14](https://github.com/Mournerliao/lumiere/issues/14) complete:**
+  retain the published Universal release evidence; before releasing split artifacts,
+  authorize their bundle paths and verify packaged capture, delivery, and repeat behavior.
+- **Milestone exit:** blocked until both distribution lanes satisfy their independent
+  criteria. Repository success, artifact delivery, visual match, and HDR preservation
+  remain separate claims; one platform never verifies another.

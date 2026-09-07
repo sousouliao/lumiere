@@ -5,7 +5,7 @@
 - Shared shell: Electron, React, TypeScript, and Chromium; Windows and macOS only.
 - Windows host: `.NET 10`, WGC, D3D11, DXGI, Vortice, `x64` / `win-x64`.
 - macOS host: Swift, ScreenCaptureKit, and native Apple color/GPU frameworks; the
-  distribution bundle supports macOS 15 or newer and is universal (`arm64` + `x86_64`).
+  distribution supports macOS 15 or newer with separate `arm64` and `x64` applications.
   Apple Silicon owns HDR acquisition; Intel remains an SDR-only path.
 - MVP output: one shared semantic profile, RGBA8/sRGB Visual Match, delivered through
   platform-native clipboard and file adapters.
@@ -20,14 +20,14 @@ cloud upload, or telemetry as the official capture/conversion foundation.
 | `apps/desktop` | Electron lifecycle, shared React UI, secure preload, platform-host orchestration |
 | `protocol/platform-host` | Language-neutral process protocol, compatibility rules, schema, and fixtures |
 | `hosts/macos` | Swift ScreenCaptureKit adapter, HDR-aware acquisition, sRGB Visual Match conversion, and native delivery |
+| `hosts/windows/src/Lumiere.Windows.Host` | .NET executable, protocol validation, capability queries, and capture-engine orchestration |
 | `hosts/windows/src/Lumiere.Windows.Capture` | WGC target resolution, frame-pool lifecycle, capture state |
 | `hosts/windows/src/Lumiere.Windows.Graphics` | D3D11/DXGI device state, HDR-aware readback, sRGB Visual Match, native delivery |
 | `hosts/windows/src/Lumiere.Windows.Interop` | Required COM/WinRT adapters, diagnostics, and native-resource wrappers |
 
-The macOS native host lives in `hosts/macos` and communicates with Electron only
-through the platform-host process interface. Windows has no executable while paused;
-its three libraries are source material for the future adapter, not a second product
-shell.
+Both native Hosts communicate with Electron through the platform-host JSON Lines
+process interface. Electron selects and supervises the owning platform's executable;
+the Windows Host composes the Capture, Graphics, and Interop libraries.
 
 Platform APIs stay in their owning module. The shell consumes the platform-host
 interface but must not own WGC, DXGI, D3D11, ScreenCaptureKit, Metal, ColorSync,
