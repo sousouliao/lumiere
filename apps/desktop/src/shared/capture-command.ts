@@ -15,7 +15,6 @@ export const captureCommandChannels = {
   refreshSurface: 'capture:refresh-surface',
   recover: 'capture:recover',
   showRequested: 'capture:show-requested',
-  fitContent: 'capture:fit-content',
   getSurfaceSnapshot: 'capture:get-surface-snapshot',
   surfaceChanged: 'capture:surface-changed',
   regionOverlayHostReady: 'region-overlay:host-ready',
@@ -133,7 +132,6 @@ export interface LumiereRendererApi extends LumiereSettingsApi {
   onCaptureActivityChanged(listener: (activity: CaptureActivity) => void): () => void
   refreshCaptureSurface(): Promise<CaptureSurfaceSnapshot>
   recoverCapture(id: number, action: CaptureRecoveryAction): Promise<void>
-  fitCaptureContent(height: number): void
   onShowCaptureRequested(listener: () => void): () => void
   onRegionOverlayActivated(listener: (snapshot: RegionOverlaySnapshot) => void): () => void
   onRegionOverlayReset(listener: () => void): () => void

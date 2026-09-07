@@ -67,7 +67,6 @@ if (process.platform === 'win32') {
 }
 
 let mainWindow: BrowserWindow | null = null
-let captureWindowGrowth = 0
 let applicationTray: ApplicationTray | null = null
 let platformHost: PlatformHost | null = null
 let captureRouter: CaptureCommandRouter | null = null
@@ -124,7 +123,6 @@ function reportRegionCaptureTiming(
 }
 
 function createRendererWindow(): BrowserWindow {
-  captureWindowGrowth = 0
   const window = new BrowserWindow({
     width: 480,
     height: 370,
@@ -348,25 +346,6 @@ function registerIpc(): void {
     return runCapture('region')
   })
 
-  ipcMain.on(captureCommandChannels.fitContent, (event, ...args) => {
-    assertTrustedWindow(event, mainWindow)
-    const height: unknown = args[0]
-    if (args.length !== 1 || typeof height !== 'number' || !Number.isFinite(height) || height < 0)
-      return
-    if (!mainWindow || mainWindow.isMaximized() || mainWindow.isFullScreen()) return
-    const [width, currentHeight] = mainWindow.getContentSize()
-    const frameHeight = mainWindow.getSize()[1] - currentHeight
-    const availableHeight =
-      screen.getDisplayMatching(mainWindow.getBounds()).workArea.height - frameHeight
-    const baseline = Math.max(340, currentHeight - captureWindowGrowth)
-    const nextHeight = Math.min(availableHeight, Math.max(baseline, Math.ceil(height)))
-    captureWindowGrowth = Math.max(0, nextHeight - baseline)
-    mainWindow.setMinimumSize(
-      440,
-      Math.min(availableHeight, Math.max(340, Math.ceil(height))) + frameHeight,
-    )
-    if (nextHeight !== currentHeight) mainWindow.setContentSize(width, nextHeight)
-  })
   ipcMain.handle(captureCommandChannels.getActivity, (event, ...args) => {
     assertTrustedWindow(event, mainWindow)
     assertNoArguments(args)

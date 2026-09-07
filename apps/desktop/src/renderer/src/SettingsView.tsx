@@ -39,9 +39,10 @@ const afterCaptureBehaviorLabels: Record<AfterCaptureBehavior, string> = {
   'show-in-folder': 'Show in folder',
 }
 
-type SettingsSection = 'output' | 'capture' | 'system'
+export type SettingsSection = 'output' | 'capture' | 'system'
 
 interface SettingsViewProps {
+  initialSection?: SettingsSection
   snapshot: SettingsSnapshot | null
   surfaceSnapshot: CaptureSurfaceSnapshot | null
   platform: LumierePlatform
@@ -58,6 +59,7 @@ interface SettingsViewProps {
 }
 
 export function SettingsView({
+  initialSection = 'output',
   snapshot,
   surfaceSnapshot,
   platform,
@@ -72,7 +74,7 @@ export function SettingsView({
   onShortcutChange,
   onShortcutRecordingChange,
 }: SettingsViewProps): React.JSX.Element {
-  const [section, setSection] = useState<SettingsSection>('output')
+  const [section, setSection] = useState<SettingsSection>(initialSection)
   const available = snapshot?.availableOutputDeliveries ?? []
   const selectedDelivery = snapshot?.outputDelivery ?? 'both'
 

@@ -37,9 +37,6 @@ const platformApi: LumiereRendererApi = {
   },
   refreshCaptureSurface: () => ipcRenderer.invoke(captureCommandChannels.refreshSurface),
   recoverCapture: (id, action) => ipcRenderer.invoke(captureCommandChannels.recover, id, action),
-  fitCaptureContent: (height) => {
-    ipcRenderer.send(captureCommandChannels.fitContent, height)
-  },
   onShowCaptureRequested: (listener) => {
     const handle = (): void => {
       listener()

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/motion/button/base'
 import type {
   CaptureCommandResult,
@@ -11,15 +11,10 @@ import type { OutputDelivery } from '../../shared/platform-contract'
 import type { CaptureMode, ShortcutUpdate } from '../../shared/shortcut-command'
 import type { SettingsSnapshot } from '../../shared/settings-command'
 import type { AfterCaptureBehavior } from '../../shared/settings-command'
-import { SettingsView } from './SettingsView'
+import { SettingsView, type SettingsSection } from './SettingsView'
 import { RegionOverlay } from './RegionOverlay'
 import { RecoveryActions } from './RecoveryActions'
-
-const CAPTURE_LOAD_FAILURE: CaptureNotice = {
-  tone: 'critical',
-  title: 'Capture controls are unavailable',
-  detail: 'Check again. Restart Lumiere if the issue continues.',
-}
+import { CAPTURE_LOAD_FAILURE, resolveCaptureNotices } from './capture-notices'
 
 export function App(): React.JSX.Element {
   if (new URLSearchParams(window.location.search).get('surface') === 'region-overlay') {
@@ -31,6 +26,7 @@ export function App(): React.JSX.Element {
 
 function ApplicationSurface(): React.JSX.Element {
   const [view, setView] = useState<'capture' | 'settings'>('capture')
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('output')
   const [activity, setActivity] = useState<CaptureActivity>({
     activeMode: null,
     lastCompletion: null,
@@ -43,6 +39,7 @@ function ApplicationSurface(): React.JSX.Element {
     let isCurrent = true
     let receivedLiveSnapshot = false
     const stopSettingsListening = window.lumierePlatform.onShowSettingsRequested(() => {
+      setSettingsSection('output')
       setView('settings')
     })
     const stopCaptureViewListening = window.lumierePlatform.onShowCaptureRequested(() => {
@@ -96,6 +93,7 @@ function ApplicationSurface(): React.JSX.Element {
 
   return view === 'settings' ? (
     <SettingsWindow
+      initialSection={settingsSection}
       surfaceSnapshot={surfaceSnapshot}
       onDone={() => {
         setView('capture')
@@ -108,7 +106,8 @@ function ApplicationSurface(): React.JSX.Element {
       result={captureResult ?? activity.lastCompletion?.result ?? null}
       activity={activity}
       onResultChange={setCaptureResult}
-      onOpenSettings={() => {
+      onOpenSettings={(section = 'output') => {
+        setSettingsSection(section)
         setView('settings')
       }}
     />
@@ -128,49 +127,12 @@ function MainWindow({
   result: CaptureCommandResult | null
   activity: CaptureActivity
   onResultChange: (result: CaptureCommandResult | null) => void
-  onOpenSettings: () => void
+  onOpenSettings: (section?: SettingsSection) => void
 }): React.JSX.Element {
-  const shellRef = useRef<HTMLElement>(null)
-  useLayoutEffect(() => {
-    const shell = shellRef.current
-    const panel = shell?.querySelector<HTMLElement>('.capture-panel')
-    if (!shell || !panel) return
-    const fit = (): void => {
-      const style = getComputedStyle(panel)
-      const children = Array.from(panel.children)
-      const contentHeight = children.reduce(
-        (height, child) => height + child.getBoundingClientRect().height,
-        0,
-      )
-      const chromeHeight = Array.from(shell.children)
-        .filter((child) => child !== panel)
-        .reduce((height, child) => height + child.getBoundingClientRect().height, 0)
-      window.lumierePlatform.fitCaptureContent(
-        Math.ceil(
-          contentHeight +
-            chromeHeight +
-            parseFloat(style.paddingTop) +
-            parseFloat(style.paddingBottom) +
-            Math.max(0, children.length - 1) * parseFloat(style.rowGap),
-        ),
-      )
-    }
-    const observer = new ResizeObserver(fit)
-    observer.observe(panel)
-    for (const child of panel.children) observer.observe(child)
-    fit()
-    return () => {
-      observer.disconnect()
-    }
-  })
-  useEffect(
-    () => () => {
-      window.lumierePlatform.fitCaptureContent(0)
-    },
-    [],
-  )
   const capturingMode = activity.activeMode
   const [interactionHint, setInteractionHint] = useState<string | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const statusSummaryRef = useRef<HTMLButtonElement>(null)
 
   const captureDisplay = async (): Promise<void> => {
     onResultChange(null)
@@ -204,16 +166,40 @@ function MainWindow({
     snapshot?.hostAvailable === true && snapshot.captureModes.includes('region')
   const supportsDisplayCapture =
     snapshot?.hostAvailable === true && snapshot.captureModes.includes('display')
-  const activeNotice =
-    result?.status === 'failed' || result?.status === 'partial'
-      ? result.notice
-      : loadFailed
-        ? CAPTURE_LOAD_FAILURE
-        : (snapshot?.blockingNotice ?? snapshot?.advisoryNotice)
-  const captureBlocked = loadFailed || snapshot?.blockingNotice !== undefined
+  const { activeNotice, blockingNotice, detailNotice } = resolveCaptureNotices({
+    loadFailed,
+    result,
+    snapshot,
+  })
+  const resultCompletion =
+    activity.lastCompletion?.result === result ? activity.lastCompletion : null
+  const completionNotice =
+    resultCompletion?.result.status === 'failed' || resultCompletion?.result.status === 'partial'
+      ? resultCompletion.result.notice
+      : undefined
+  const detailCompletion = detailNotice === completionNotice ? resultCompletion : null
+  const captureBlocked = blockingNotice !== undefined
+
+  const closeDetails = useCallback((): void => {
+    setDetailsOpen(false)
+    requestAnimationFrame(() => statusSummaryRef.current?.focus())
+  }, [])
+
+  useEffect(() => {
+    if (!detailsOpen) return
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeDetails()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [closeDetails, detailsOpen])
 
   return (
-    <main className="app-shell" ref={shellRef}>
+    <main className="app-shell">
       <header
         className={`title-bar title-bar--${window.lumierePlatform.platform}`}
         aria-label="Lumiere window"
@@ -222,103 +208,160 @@ function MainWindow({
       </header>
 
       <section
-        className={`capture-panel${activeNotice ? ' capture-panel--with-notice' : ''}`}
+        className={`capture-panel${
+          detailsOpen && detailNotice
+            ? ' capture-panel--details'
+            : blockingNotice
+              ? ' capture-panel--blocking'
+              : ''
+        }`}
         aria-label="Capture controls"
       >
-        {activeNotice ? (
-          <Notice
-            notice={activeNotice}
-            completion={activity.lastCompletion}
+        {detailsOpen && detailNotice ? (
+          <NoticeDetails
+            notice={detailNotice}
+            completion={detailCompletion}
             disabled={capturingMode !== null}
+            onBack={closeDetails}
+            onOpenSettings={() => {
+              onOpenSettings('capture')
+            }}
           />
-        ) : null}
+        ) : (
+          <>
+            {blockingNotice ? (
+              <BlockingRecovery
+                notice={blockingNotice}
+                completion={blockingNotice === completionNotice ? resultCompletion : null}
+                disabled={capturingMode !== null}
+              />
+            ) : (
+              <div className="capture-actions">
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  pressScale={0.99}
+                  hoverScale={1}
+                  className="capture-action capture-action--region"
+                  disabled={captureBlocked || !supportsRegionCapture || capturingMode !== null}
+                  onClick={() => void captureRegion()}
+                  onFocus={() => {
+                    setInteractionHint('Drag to select an area')
+                  }}
+                  onBlur={() => {
+                    setInteractionHint(null)
+                  }}
+                  onPointerEnter={() => {
+                    setInteractionHint('Drag to select an area')
+                  }}
+                  onPointerLeave={() => {
+                    setInteractionHint(null)
+                  }}
+                >
+                  <RegionIcon />
+                  <span>{capturingMode === 'region' ? 'Capturing region' : 'Capture region'}</span>
+                  {capturingMode === 'region' ? (
+                    <span className="capture-pulse" aria-hidden="true" />
+                  ) : null}
+                </Button>
 
-        <div className="capture-actions">
-          <Button
-            variant="secondary"
-            size="lg"
-            pressScale={0.99}
-            hoverScale={1}
-            className="capture-action capture-action--region"
-            disabled={captureBlocked || !supportsRegionCapture || capturingMode !== null}
-            onClick={() => void captureRegion()}
-            onFocus={() => {
-              setInteractionHint('Drag to select an area')
-            }}
-            onBlur={() => {
-              setInteractionHint(null)
-            }}
-            onPointerEnter={() => {
-              setInteractionHint('Drag to select an area')
-            }}
-            onPointerLeave={() => {
-              setInteractionHint(null)
-            }}
-          >
-            <RegionIcon />
-            <span>{capturingMode === 'region' ? 'Capturing region' : 'Capture region'}</span>
-            {capturingMode === 'region' ? (
-              <span className="capture-pulse" aria-hidden="true" />
-            ) : null}
-          </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  pressScale={0.99}
+                  hoverScale={1}
+                  className="capture-action"
+                  disabled={captureBlocked || !supportsDisplayCapture || capturingMode !== null}
+                  onClick={() => void captureDisplay()}
+                  onFocus={() => {
+                    setInteractionHint('Capture the display under the pointer')
+                  }}
+                  onBlur={() => {
+                    setInteractionHint(null)
+                  }}
+                  onPointerEnter={() => {
+                    setInteractionHint('Capture the display under the pointer')
+                  }}
+                  onPointerLeave={() => {
+                    setInteractionHint(null)
+                  }}
+                >
+                  <DisplayIcon />
+                  <span>
+                    {capturingMode === 'display' ? 'Capturing display' : 'Capture display'}
+                  </span>
+                  {capturingMode === 'display' ? (
+                    <span className="capture-pulse" aria-hidden="true" />
+                  ) : null}
+                </Button>
+              </div>
+            )}
 
-          <Button
-            variant="secondary"
-            size="lg"
-            pressScale={0.99}
-            hoverScale={1}
-            className="capture-action"
-            disabled={captureBlocked || !supportsDisplayCapture || capturingMode !== null}
-            onClick={() => void captureDisplay()}
-            onFocus={() => {
-              setInteractionHint('Capture the display under the pointer')
-            }}
-            onBlur={() => {
-              setInteractionHint(null)
-            }}
-            onPointerEnter={() => {
-              setInteractionHint('Capture the display under the pointer')
-            }}
-            onPointerLeave={() => {
-              setInteractionHint(null)
-            }}
-          >
-            <DisplayIcon />
-            <span>{capturingMode === 'display' ? 'Capturing display' : 'Capture display'}</span>
-            {capturingMode === 'display' ? (
-              <span className="capture-pulse" aria-hidden="true" />
-            ) : null}
-          </Button>
-        </div>
-
-        <div className="output-summary" aria-label="Current output">
-          <span className="output-label">Output</span>
-          <span className="output-value">{snapshot?.output.label ?? 'Clipboard and folder'}</span>
-          <span className="output-location">
-            {snapshot?.output.location ?? '~/Pictures/Lumiere'}
-          </span>
-        </div>
+            <div className="output-summary" aria-label="Current output">
+              <span className="output-label">Output</span>
+              <span className="output-value">
+                {snapshot?.output.label ?? 'Clipboard and folder'}
+              </span>
+              <span className="output-location">
+                {snapshot?.output.location ?? '~/Pictures/Lumiere'}
+              </span>
+            </div>
+          </>
+        )}
       </section>
 
-      <footer className="status-bar" aria-live="polite">
-        <span className={`status-dot status-dot--${statusTone(snapshot, activeNotice)}`} />
-        <span className="status-message">
-          {statusMessage({
-            activeNotice,
-            captureBlocked,
-            interactionHint,
-            capturingMode,
-            result,
-            snapshot,
-          })}
-        </span>
+      <footer className="status-bar">
+        {detailNotice ? (
+          <Button
+            ref={statusSummaryRef}
+            variant="ghost"
+            size="sm"
+            hoverScale={1}
+            pressScale={0.98}
+            className="status-summary"
+            aria-expanded={detailsOpen}
+            onClick={() => {
+              setDetailsOpen(true)
+            }}
+            disabled={detailsOpen}
+          >
+            <span className={`status-dot status-dot--${statusTone(snapshot, activeNotice)}`} />
+            <span className="status-message" aria-live="polite">
+              {statusMessage({
+                activeNotice,
+                captureBlocked,
+                interactionHint,
+                capturingMode,
+                result,
+                snapshot,
+              })}
+            </span>
+            {!detailsOpen ? <ChevronRightIcon /> : null}
+          </Button>
+        ) : (
+          <div className="status-summary status-summary--static">
+            <span className={`status-dot status-dot--${statusTone(snapshot, activeNotice)}`} />
+            <span className="status-message" aria-live="polite">
+              {statusMessage({
+                activeNotice,
+                captureBlocked,
+                interactionHint,
+                capturingMode,
+                result,
+                snapshot,
+              })}
+            </span>
+          </div>
+        )}
         <Button
           variant="ghost"
           size="sm"
           hoverScale={1}
           pressScale={0.98}
           className="settings-link"
-          onClick={onOpenSettings}
+          onClick={() => {
+            onOpenSettings()
+          }}
         >
           Settings
         </Button>
@@ -328,9 +371,11 @@ function MainWindow({
 }
 
 function SettingsWindow({
+  initialSection,
   surfaceSnapshot,
   onDone,
 }: {
+  initialSection: SettingsSection
   surfaceSnapshot: CaptureSurfaceSnapshot | null
   onDone: () => void
 }): React.JSX.Element {
@@ -431,6 +476,7 @@ function SettingsWindow({
 
   return (
     <SettingsView
+      initialSection={initialSection}
       snapshot={snapshot}
       surfaceSnapshot={surfaceSnapshot}
       platform={window.lumierePlatform.platform}
@@ -451,7 +497,7 @@ function SettingsWindow({
   )
 }
 
-function Notice({
+function BlockingRecovery({
   notice,
   completion,
   disabled,
@@ -474,12 +520,11 @@ function Notice({
     }
   }
   return (
-    <div className={`notice notice--${notice.tone}`} role="status">
-      <div className="notice-title">
-        <span className="notice-dot" aria-hidden="true" />
-        {notice.title}
+    <div className="blocking-recovery" role="status">
+      <div className="notice-copy">
+        <h1>{notice.title}</h1>
+        <p>{notice.detail}</p>
       </div>
-      <p>{notice.detail}</p>
       {completion &&
       (completion.result.status === 'failed' || completion.result.status === 'partial') ? (
         <RecoveryActions
@@ -502,6 +547,58 @@ function Notice({
         </Button>
       ) : null}
       {refreshError ? <p role="alert">{refreshError}</p> : null}
+    </div>
+  )
+}
+
+function NoticeDetails({
+  notice,
+  completion,
+  disabled,
+  onBack,
+  onOpenSettings,
+}: {
+  notice: CaptureNotice
+  completion: CaptureCompletion | null
+  disabled: boolean
+  onBack: () => void
+  onOpenSettings: () => void
+}): React.JSX.Element {
+  return (
+    <div className="notice-details">
+      <Button
+        variant="ghost"
+        size="sm"
+        hoverScale={1}
+        pressScale={0.98}
+        className="notice-details-back"
+        onClick={onBack}
+      >
+        <ChevronLeftIcon />
+        Back to capture
+      </Button>
+      <div className="notice-copy">
+        <h1>{notice.title}</h1>
+        <p>{notice.detail}</p>
+      </div>
+      {completion ? (
+        <RecoveryActions
+          completion={completion}
+          platform={window.lumierePlatform.platform}
+          disabled={disabled}
+        />
+      ) : (
+        <Button
+          variant="ghost"
+          size="sm"
+          hoverScale={1}
+          pressScale={0.98}
+          className="notice-details-action"
+          onClick={onOpenSettings}
+        >
+          Reminder settings
+        </Button>
+      )}
     </div>
   )
 }
@@ -533,7 +630,7 @@ function statusMessage({
     return 'Capture disabled'
   }
   if (activeNotice) {
-    return 'Capture available'
+    return activeNotice.title
   }
   if (interactionHint) {
     return interactionHint
@@ -573,6 +670,22 @@ function DisplayIcon(): React.JSX.Element {
     <svg aria-hidden="true" viewBox="0 0 16 16">
       <rect x="2.25" y="2.75" width="11.5" height="8.25" rx="1.25" />
       <path d="M6 13.25h4M8 11v2.25" />
+    </svg>
+  )
+}
+
+function ChevronLeftIcon(): React.JSX.Element {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16">
+      <path d="m9.5 4-4 4 4 4" />
+    </svg>
+  )
+}
+
+function ChevronRightIcon(): React.JSX.Element {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16">
+      <path d="m6.5 4 4 4-4 4" />
     </svg>
   )
 }

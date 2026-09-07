@@ -24,11 +24,13 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
 
 - **Current shared-shell slice — [#16](https://github.com/sousouliao/lumiere/issues/16):**
   independent Toast removed; success/cancellation stay quiet, background failures use
-  silent system notifications, and main-window recovery shares one capture busy state.
-  `pnpm check`, `pnpm test:shared` (24 files, 126 tests), and `pnpm build` pass on this Mac.
+  silent system notifications, foreground failures use a footer summary with fixed-size
+  details, blocking recovery replaces the capture actions, and all recovery shares one
+  capture busy state. `pnpm check`, `pnpm test:shared` (25 files, 129 tests), and
+  `pnpm build` pass on this Mac.
   Electron fixture checks cover notification routing/clicks, closed-window recovery,
-  stale actions, folder/permission recovery, cancellation, and content-driven window
-  growth/restoration without scrolling. Real macOS Host Display
+  stale actions, folder/permission recovery, and cancellation; renderer unit checks cover
+  fixed-size notice placement. Real macOS Host Display
   output and Region cancellation pass. Fixture notification checks do not establish OS
   banner delivery; packaged macOS notification presentation and Windows remain unverified.
 - **macOS runtime:** recorded Display/Region delivery, settings persistence, cancellation,
