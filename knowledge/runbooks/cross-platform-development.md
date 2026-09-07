@@ -20,9 +20,11 @@ pnpm test:shared
 pnpm build
 ```
 
-`pnpm test` is a safe alias for `pnpm test:shared`. The shared suite contains only
-platform-neutral protocol, process-transport, handler, and pure path-policy tests. It
-must pass on both macOS and Windows.
+`pnpm test` is a safe alias for `pnpm test:shared`. The shared suite discovers
+`*.test.ts` and `*.test.tsx` and covers platform-neutral protocol, process transport,
+handlers, path policies, settings, and renderer markup. It runs in Node with the
+renderer JSX transform and `@` alias, and must pass on both macOS and Windows.
+Renderer markup tests do not establish interactive or native platform behavior.
 
 Platform-owned suites are deliberately separate:
 

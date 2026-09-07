@@ -45,8 +45,18 @@ describe('SettingsView', () => {
     expect(markup).toContain('Default destination')
     expect(markup).toContain('aria-haspopup="listbox"')
     expect(markup).toContain('Clipboard and folder')
-    expect(markup).toContain('role="option" aria-selected="false" disabled=""')
-    expect(markup).toContain('role="option" aria-selected="true" tabindex="-1"')
+    const options = markup.match(/<button\b[^>]*role="option"[^>]*>[\s\S]*?<\/button>/g) ?? []
+    expect(options).toHaveLength(3)
+    expect(options[0]).toContain('>Clipboard<')
+    expect(options[0]).toContain('aria-selected="true"')
+    expect(options[0]).toContain('tabindex="-1"')
+    expect(options[0]).not.toContain('disabled=""')
+    expect(options[1]).toContain('>Folder<')
+    expect(options[2]).toContain('>Clipboard and folder<')
+    for (const option of options.slice(1)) {
+      expect(option).toContain('aria-selected="false"')
+      expect(option).toContain('disabled=""')
+    }
     expect(markup).not.toContain('<select')
     expect(markup).toContain('aria-label="Output settings" aria-pressed="true"')
     expect(markup).toContain('aria-label="Capture settings" aria-pressed="false"')
