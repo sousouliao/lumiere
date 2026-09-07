@@ -12,6 +12,7 @@ Lumiere does not currently claim HDR-preserved export support.
 - [Current project state](knowledge/state/CURRENT.md)
 - [Product roadmap](knowledge/roadmap.md)
 - [Changelog](CHANGELOG.md)
+- [Code signing policy](CODE_SIGNING_POLICY.md)
 - [Knowledge map](knowledge/README.md)
 - [Product contract](knowledge/contracts/product.md)
 - [Cross-platform development runbook](knowledge/runbooks/cross-platform-development.md)
