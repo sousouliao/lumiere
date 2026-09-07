@@ -305,6 +305,7 @@ function captureUnavailableNotice(
     return {
       tone: 'caution',
       title: 'Current output is unavailable',
+      recovery: 'output',
       detail: 'Choose an available output destination and try again.',
     }
   }
@@ -317,6 +318,7 @@ function noticeForFailure(failure: PlatformFailure): CaptureNotice {
       return {
         tone: 'critical',
         title: 'Screen recording permission is required',
+        recovery: 'permissions',
         detail: 'Allow screen recording in System Settings, then try again.',
       }
     case 'host-unavailable':
@@ -336,6 +338,7 @@ function noticeForFailure(failure: PlatformFailure): CaptureNotice {
       return {
         tone: 'caution',
         title: 'Couldn’t deliver capture',
+        recovery: 'output',
         detail: 'Check the output destination, then try again.',
       }
     case 'invalid-request':
@@ -356,13 +359,15 @@ function projectDeliveryResult(deliveries: readonly DeliveryResult[]): CaptureCo
   const filePath =
     folder?.target === 'folder' && folder.status === 'success' ? folder.filePath : undefined
 
+  const folderName = filePath?.split(/[\\/]/).at(-2) ?? 'Lumiere'
+
   if (deliveries.every(({ status }) => status === 'success')) {
     const feedback =
       clipboardSucceeded && folderSucceeded
-        ? 'Copied and saved to “Lumiere”'
+        ? `Copied and saved to “${folderName}”`
         : clipboardSucceeded
           ? 'Copied to clipboard'
-          : 'Saved to “Lumiere”'
+          : `Saved to “${folderName}”`
     return { status: 'success', feedback, ...(filePath ? { filePath } : {}) }
   }
 
@@ -376,7 +381,10 @@ function projectDeliveryResult(deliveries: readonly DeliveryResult[]): CaptureCo
       notice: {
         tone: 'caution',
         title: feedback,
-        detail: 'Check the failed output destination, then try again.',
+        detail: clipboardSucceeded
+          ? 'Choose a writable folder, then take a new capture.'
+          : 'Take a new capture to try copying again. Your saved file is unchanged.',
+        recovery: clipboardSucceeded ? 'folder' : undefined,
       },
       ...(filePath ? { filePath } : {}),
     }
@@ -385,6 +393,7 @@ function projectDeliveryResult(deliveries: readonly DeliveryResult[]): CaptureCo
   return failedResult({
     tone: 'caution',
     title: 'Couldn’t deliver capture',
+    recovery: 'output',
     detail: 'Check the output destination, then try again.',
   })
 }

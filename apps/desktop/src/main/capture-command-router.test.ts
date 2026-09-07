@@ -83,7 +83,7 @@ describe('CaptureCommandRouter', () => {
 
     await expect(new CaptureCommandRouter('macos', host).captureDisplay()).resolves.toEqual({
       status: 'success',
-      feedback: 'Copied and saved to “Lumiere”',
+      feedback: 'Copied and saved to “tmp”',
       filePath: '/tmp/lumiere.png',
     })
     expect(host.requests).toEqual([{ operation: 'display', delivery: 'both' }])
@@ -104,7 +104,7 @@ describe('CaptureCommandRouter', () => {
       }),
     })
 
-    await router.captureDisplay()
+    await expect(router.captureDisplay()).resolves.toMatchObject({ feedback: 'Saved to “custom”' })
 
     expect(host.requests).toEqual([
       { operation: 'display', delivery: 'folder', saveDirectory: '/tmp/custom' },
@@ -152,7 +152,7 @@ describe('CaptureCommandRouter', () => {
       }),
     ).resolves.toEqual({
       status: 'success',
-      feedback: 'Copied and saved to “Lumiere”',
+      feedback: 'Copied and saved to “tmp”',
       filePath: '/tmp/region.png',
     })
     expect(host.requests).toEqual([

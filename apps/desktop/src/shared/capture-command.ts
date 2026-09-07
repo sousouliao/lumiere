@@ -10,7 +10,12 @@ import type { LumiereSettingsApi } from './settings-command'
 export const captureCommandChannels = {
   captureDisplay: 'capture:display',
   captureRegion: 'capture:region',
-  completed: 'capture:completed',
+  getActivity: 'capture:get-activity',
+  activityChanged: 'capture:activity-changed',
+  refreshSurface: 'capture:refresh-surface',
+  recover: 'capture:recover',
+  showRequested: 'capture:show-requested',
+  fitContent: 'capture:fit-content',
   getSurfaceSnapshot: 'capture:get-surface-snapshot',
   surfaceChanged: 'capture:surface-changed',
   regionOverlayHostReady: 'region-overlay:host-ready',
@@ -34,6 +39,50 @@ export interface CaptureNotice {
   tone: 'critical' | 'caution'
   title: string
   detail: string
+  recovery?: 'permissions' | 'folder' | 'output'
+}
+
+export interface CaptureCompletion {
+  id: number
+  mode: CaptureMode
+  result: CaptureCommandResult
+}
+
+export interface CaptureActivity {
+  activeMode: CaptureMode | null
+  lastCompletion: CaptureCompletion | null
+}
+
+export type CaptureRecoveryAction =
+  'capture-again' | 'open-permissions' | 'choose-folder' | 'open-settings' | 'refresh'
+
+export function captureRecoveryActions(
+  result: CaptureCommandResult,
+  platform: LumierePlatform,
+): { action: CaptureRecoveryAction; label: string }[] {
+  if (result.status !== 'failed' && result.status !== 'partial') return []
+  switch (result.notice.recovery) {
+    case 'permissions':
+      return [
+        {
+          action: platform === 'macos' ? 'open-permissions' : 'open-settings',
+          label: platform === 'macos' ? 'Open System Settings' : 'Open settings',
+        },
+        { action: 'refresh', label: 'Check again' },
+      ]
+    case 'folder':
+      return [
+        { action: 'choose-folder', label: 'Choose save folder' },
+        { action: 'capture-again', label: 'Capture again' },
+      ]
+    case 'output':
+      return [
+        { action: 'open-settings', label: 'Output settings' },
+        { action: 'capture-again', label: 'Capture again' },
+      ]
+    default:
+      return [{ action: 'capture-again', label: 'Capture again' }]
+  }
 }
 
 export interface CaptureOutputSummary {
@@ -80,7 +129,12 @@ export interface LumiereRendererApi extends LumiereSettingsApi {
   onCaptureSurfaceChanged(listener: (snapshot: CaptureSurfaceSnapshot) => void): () => void
   captureDisplay(): Promise<CaptureCommandResult>
   captureRegion(): Promise<CaptureCommandResult>
-  onCaptureCompleted(listener: (result: CaptureCommandResult) => void): () => void
+  getCaptureActivity(): Promise<CaptureActivity>
+  onCaptureActivityChanged(listener: (activity: CaptureActivity) => void): () => void
+  refreshCaptureSurface(): Promise<CaptureSurfaceSnapshot>
+  recoverCapture(id: number, action: CaptureRecoveryAction): Promise<void>
+  fitCaptureContent(height: number): void
+  onShowCaptureRequested(listener: () => void): () => void
   onRegionOverlayActivated(listener: (snapshot: RegionOverlaySnapshot) => void): () => void
   onRegionOverlayReset(listener: () => void): () => void
   regionOverlayHostReady(): void

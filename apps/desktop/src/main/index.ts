@@ -18,6 +18,10 @@ import {
   desktopIconPaths,
   type ApplicationTray,
 } from './app-icons'
+import type { ApplicationTrayState } from './tray-menu'
+import { CaptureSession } from './capture-session'
+import { CaptureFailureNotifier } from './capture-failure-notifier'
+import { captureRecoveryActions, type CaptureRecoveryAction } from '../shared/capture-command'
 import { CaptureCommandRouter } from './capture-command-router'
 import { CaptureSurfaceMonitor } from './capture-surface-monitor'
 import { MacOSPlatformHost } from './macos-platform-host'
@@ -63,6 +67,7 @@ if (process.platform === 'win32') {
 }
 
 let mainWindow: BrowserWindow | null = null
+let captureWindowGrowth = 0
 let applicationTray: ApplicationTray | null = null
 let platformHost: PlatformHost | null = null
 let captureRouter: CaptureCommandRouter | null = null
@@ -72,6 +77,20 @@ let shortcutService: ShortcutService | null = null
 let regionOverlaySession: RegionOverlaySession | null = null
 let regionOverlayController: RegionOverlayController | null = null
 let nextRegionOverlayGeneration = 0
+let quitting = false
+let lastTrayState: ApplicationTrayState | null = null
+const captureSession = new CaptureSession((activity) => {
+  if (quitting) return
+  if (activity.activeMode) captureFailureNotifier.clear()
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(captureCommandChannels.activityChanged, activity)
+  }
+  updateApplicationTray()
+})
+
+const captureFailureNotifier = new CaptureFailureNotifier((id) => {
+  if (!quitting && captureSession.getSnapshot().lastCompletion?.id === id) showCaptureWindow()
+})
 
 interface RegionOverlaySession {
   generation: number
@@ -105,6 +124,7 @@ function reportRegionCaptureTiming(
 }
 
 function createRendererWindow(): BrowserWindow {
+  captureWindowGrowth = 0
   const window = new BrowserWindow({
     width: 480,
     height: 370,
@@ -181,6 +201,7 @@ function bindCaptureSurfaceMonitoring(window: BrowserWindow): void {
     captureSurfaceMonitor?.start()
   })
   window.on('focus', () => {
+    captureFailureNotifier.clear()
     void captureSurfaceMonitor?.refresh()
   })
   window.on('restore', () => {
@@ -318,21 +339,57 @@ function registerIpc(): void {
   ipcMain.handle(captureCommandChannels.captureDisplay, async (event, ...args) => {
     assertTrustedWindow(event, mainWindow)
     assertNoArguments(args)
-    const result = completeCapture(await router.captureDisplay())
-    void captureSurfaceMonitor?.invalidate()
-    await refreshApplicationTray()
-    return result
+    return runCapture('display')
   })
 
   ipcMain.handle(captureCommandChannels.captureRegion, async (event, ...args) => {
     assertTrustedWindow(event, mainWindow)
     assertNoArguments(args)
-    const result = completeCapture(await captureRegion(router))
-    void captureSurfaceMonitor?.invalidate()
-    await refreshApplicationTray()
-    return result
+    return runCapture('region')
   })
 
+  ipcMain.on(captureCommandChannels.fitContent, (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    const height: unknown = args[0]
+    if (args.length !== 1 || typeof height !== 'number' || !Number.isFinite(height) || height < 0)
+      return
+    if (!mainWindow || mainWindow.isMaximized() || mainWindow.isFullScreen()) return
+    const [width, currentHeight] = mainWindow.getContentSize()
+    const frameHeight = mainWindow.getSize()[1] - currentHeight
+    const availableHeight =
+      screen.getDisplayMatching(mainWindow.getBounds()).workArea.height - frameHeight
+    const baseline = Math.max(340, currentHeight - captureWindowGrowth)
+    const nextHeight = Math.min(availableHeight, Math.max(baseline, Math.ceil(height)))
+    captureWindowGrowth = Math.max(0, nextHeight - baseline)
+    mainWindow.setMinimumSize(
+      440,
+      Math.min(availableHeight, Math.max(340, Math.ceil(height))) + frameHeight,
+    )
+    if (nextHeight !== currentHeight) mainWindow.setContentSize(width, nextHeight)
+  })
+  ipcMain.handle(captureCommandChannels.getActivity, (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    return captureSession.getSnapshot()
+  })
+  ipcMain.handle(captureCommandChannels.refreshSurface, async (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    await captureSurfaceMonitor?.invalidate()
+    await refreshApplicationTray()
+    return captureSurfaceMonitor?.getSnapshot() ?? router.getSurfaceSnapshot()
+  })
+  ipcMain.handle(captureCommandChannels.recover, async (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    if (args.length !== 2) throw new Error('Expected a result ID and recovery action.')
+    const { activeMode, lastCompletion } = captureSession.getSnapshot()
+    if (activeMode || !lastCompletion || lastCompletion.id !== args[0]) return
+    const action = captureRecoveryActions(lastCompletion.result, currentLumierePlatform()).find(
+      ({ action }) => action === args[1],
+    )?.action
+    if (!action) throw new Error('Recovery action is unavailable for this result.')
+    await recoverCapture(lastCompletion.id, lastCompletion.mode, action)
+  })
   ipcMain.on(captureCommandChannels.regionOverlayHostReady, (event, ...args) => {
     if (args.length !== 0 || !regionOverlayController?.owns(event.sender)) return
     regionOverlayController.rendererBecameReady(event.sender)
@@ -377,22 +434,7 @@ function registerIpc(): void {
   ipcMain.handle(settingsCommandChannels.chooseSaveDirectory, async (event, ...args) => {
     assertTrustedWindow(event, mainWindow)
     assertNoArguments(args)
-    if (!settingsStore || !mainWindow) {
-      throw new Error('Settings are not ready.')
-    }
-    const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Choose save folder',
-      defaultPath: settingsStore.getSaveDirectory() ?? defaultCaptureDirectory(),
-      buttonLabel: 'Choose',
-      properties: ['openDirectory', 'createDirectory'],
-    })
-    if (result.canceled || result.filePaths.length !== 1) {
-      return getSettingsSnapshot()
-    }
-    await settingsStore.setSaveDirectory(result.filePaths[0])
-    const nextSnapshot = await getSettingsSnapshot()
-    broadcastSettingsChanged(nextSnapshot)
-    return nextSnapshot
+    return chooseSaveDirectory()
   })
 
   ipcMain.handle(settingsCommandChannels.setOutputDelivery, async (event, ...args) => {
@@ -494,7 +536,7 @@ async function captureRegion(router: CaptureCommandRouter): Promise<CaptureComma
     timingLastAt = now
   }
   reportTiming('command-received')
-  const restoreMainWindow = mainWindow?.isVisible() === true
+  const restoreMainWindow = mainWindow?.isVisible() === true && !mainWindow.isMinimized()
   const initialDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
   mainWindow?.hide()
   reportTiming('main-window-hidden')
@@ -757,21 +799,76 @@ function broadcastSettingsChanged(snapshot: SettingsSnapshot): void {
   void captureSurfaceMonitor?.invalidate()
 }
 
-function broadcastCaptureCompleted(result: CaptureCommandResult): void {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(captureCommandChannels.completed, result)
-  }
+async function runCapture(mode: 'region' | 'display'): Promise<CaptureCommandResult> {
+  const router = captureRouter
+  if (!router || quitting) return captureFailedResult()
+  return captureSession.run(
+    mode,
+    async () => {
+      return completeCapture(
+        mode === 'region' ? await captureRegion(router) : await router.captureDisplay(),
+      )
+    },
+    (completion) => {
+      if (quitting) return
+      captureFailureNotifier.notify(completion, mainWindow?.isFocused() === true)
+      void captureSurfaceMonitor?.invalidate()
+      void refreshApplicationTray()
+    },
+  )
 }
 
 async function runExternalCapture(mode: 'region' | 'display'): Promise<void> {
-  const router = captureRouter
-  if (!router) return
-  const result = completeCapture(
-    mode === 'region' ? await captureRegion(router) : await router.captureDisplay(),
-  )
-  broadcastCaptureCompleted(result)
-  void captureSurfaceMonitor?.invalidate()
-  await refreshApplicationTray()
+  await runCapture(mode)
+}
+
+async function chooseSaveDirectory(): Promise<SettingsSnapshot> {
+  if (!settingsStore) throw new Error('Settings are not ready.')
+  const window = showMainWindow()
+  const result = await dialog.showOpenDialog(window, {
+    title: 'Choose save folder',
+    defaultPath: settingsStore.getSaveDirectory() ?? defaultCaptureDirectory(),
+    buttonLabel: 'Choose',
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  if (!result.canceled && result.filePaths.length === 1) {
+    await settingsStore.setSaveDirectory(result.filePaths[0])
+  }
+  const snapshot = await getSettingsSnapshot()
+  broadcastSettingsChanged(snapshot)
+  return snapshot
+}
+
+async function recoverCapture(
+  id: number,
+  mode: 'region' | 'display',
+  action: CaptureRecoveryAction,
+): Promise<void> {
+  switch (action) {
+    case 'capture-again':
+      await runCapture(mode)
+      return
+    case 'open-permissions':
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+      )
+      return
+    case 'choose-folder':
+      captureFailureNotifier.clear()
+      await chooseSaveDirectory()
+      return
+    case 'open-settings':
+      captureFailureNotifier.clear()
+      showSettingsWindow()
+      return
+    case 'refresh':
+      captureFailureNotifier.clear()
+      showMainWindow()
+      await captureSurfaceMonitor?.invalidate()
+      await captureSurfaceMonitor?.getSnapshot()
+      captureSession.clearCompletion(id)
+      await refreshApplicationTray()
+  }
 }
 
 function completeCapture(result: CaptureCommandResult): CaptureCommandResult {
@@ -780,6 +877,14 @@ function completeCapture(result: CaptureCommandResult): CaptureCommandResult {
         shell.showItemInFolder(filePath)
       })
     : result
+}
+
+function showCaptureWindow(): void {
+  const window = showMainWindow()
+  // Newly created windows start on Capture; an existing Settings view needs switching.
+  if (!window.webContents.isLoadingMainFrame()) {
+    window.webContents.send(captureCommandChannels.showRequested)
+  }
 }
 
 function showSettingsWindow(): void {
@@ -814,8 +919,19 @@ async function getApplicationTrayState() {
   }
 }
 
+function updateApplicationTray(): void {
+  if (!lastTrayState || quitting) return
+  const busy = captureSession.getSnapshot().activeMode !== null
+  applicationTray?.update({
+    ...lastTrayState,
+    regionAvailable: !busy && lastTrayState.regionAvailable,
+    displayAvailable: !busy && lastTrayState.displayAvailable,
+  })
+}
+
 async function refreshApplicationTray(): Promise<void> {
-  applicationTray?.update(await getApplicationTrayState())
+  lastTrayState = await getApplicationTrayState()
+  updateApplicationTray()
 }
 
 function createPlatformHost(): PlatformHost {
@@ -860,7 +976,8 @@ void app.whenReady().then(async () => {
   })
   shortcutService.initialize()
   applyMacDockIcon()
-  applicationTray = createApplicationTray(await getApplicationTrayState(), {
+  lastTrayState = await getApplicationTrayState()
+  applicationTray = createApplicationTray(lastTrayState, {
     captureRegion: () => {
       void runExternalCapture('region')
     },
@@ -888,6 +1005,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  quitting = true
+  captureFailureNotifier.clear()
   shortcutService?.dispose()
   screen.removeListener('display-added', refreshCaptureSurfaceForDisplayChange)
   screen.removeListener('display-removed', refreshCaptureSurfaceForDisplayChange)

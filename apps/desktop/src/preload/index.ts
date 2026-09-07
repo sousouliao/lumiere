@@ -22,16 +22,31 @@ const platformApi: LumiereRendererApi = {
   },
   captureDisplay: () => ipcRenderer.invoke(captureCommandChannels.captureDisplay),
   captureRegion: () => ipcRenderer.invoke(captureCommandChannels.captureRegion),
-  onCaptureCompleted: (listener) => {
-    const handleCompleted = (
+  getCaptureActivity: () => ipcRenderer.invoke(captureCommandChannels.getActivity),
+  onCaptureActivityChanged: (listener) => {
+    const handle = (
       _event: Electron.IpcRendererEvent,
-      result: Parameters<typeof listener>[0],
+      activity: Parameters<typeof listener>[0],
     ): void => {
-      listener(result)
+      listener(activity)
     }
-    ipcRenderer.on(captureCommandChannels.completed, handleCompleted)
+    ipcRenderer.on(captureCommandChannels.activityChanged, handle)
     return () => {
-      ipcRenderer.removeListener(captureCommandChannels.completed, handleCompleted)
+      ipcRenderer.removeListener(captureCommandChannels.activityChanged, handle)
+    }
+  },
+  refreshCaptureSurface: () => ipcRenderer.invoke(captureCommandChannels.refreshSurface),
+  recoverCapture: (id, action) => ipcRenderer.invoke(captureCommandChannels.recover, id, action),
+  fitCaptureContent: (height) => {
+    ipcRenderer.send(captureCommandChannels.fitContent, height)
+  },
+  onShowCaptureRequested: (listener) => {
+    const handle = (): void => {
+      listener()
+    }
+    ipcRenderer.on(captureCommandChannels.showRequested, handle)
+    return () => {
+      ipcRenderer.removeListener(captureCommandChannels.showRequested, handle)
     }
   },
   onRegionOverlayActivated: (listener) => {

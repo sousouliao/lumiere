@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/components/motion/button/base'
 import type {
   CaptureCommandResult,
+  CaptureActivity,
+  CaptureCompletion,
   CaptureNotice,
   CaptureSurfaceSnapshot,
 } from '../../shared/capture-command'
@@ -11,11 +13,12 @@ import type { SettingsSnapshot } from '../../shared/settings-command'
 import type { AfterCaptureBehavior } from '../../shared/settings-command'
 import { SettingsView } from './SettingsView'
 import { RegionOverlay } from './RegionOverlay'
+import { RecoveryActions } from './RecoveryActions'
 
 const CAPTURE_LOAD_FAILURE: CaptureNotice = {
   tone: 'critical',
   title: 'Capture controls are unavailable',
-  detail: 'Restart Lumiere and try again.',
+  detail: 'Check again. Restart Lumiere if the issue continues.',
 }
 
 export function App(): React.JSX.Element {
@@ -28,6 +31,10 @@ export function App(): React.JSX.Element {
 
 function ApplicationSurface(): React.JSX.Element {
   const [view, setView] = useState<'capture' | 'settings'>('capture')
+  const [activity, setActivity] = useState<CaptureActivity>({
+    activeMode: null,
+    lastCompletion: null,
+  })
   const [captureResult, setCaptureResult] = useState<CaptureCommandResult | null>(null)
   const [surfaceSnapshot, setSurfaceSnapshot] = useState<CaptureSurfaceSnapshot | null>(null)
   const [surfaceLoadFailed, setSurfaceLoadFailed] = useState(false)
@@ -38,14 +45,32 @@ function ApplicationSurface(): React.JSX.Element {
     const stopSettingsListening = window.lumierePlatform.onShowSettingsRequested(() => {
       setView('settings')
     })
-    const stopCaptureListening = window.lumierePlatform.onCaptureCompleted((result) => {
-      setCaptureResult(result)
+    const stopCaptureViewListening = window.lumierePlatform.onShowCaptureRequested(() => {
+      setView('capture')
     })
+    let receivedActivity = false
+    const stopCaptureListening = window.lumierePlatform.onCaptureActivityChanged((next) => {
+      receivedActivity = true
+      setActivity(next)
+      setCaptureResult(null)
+      if (
+        next.lastCompletion?.result.status === 'failed' ||
+        next.lastCompletion?.result.status === 'partial'
+      )
+        setView('capture')
+    })
+    void window.lumierePlatform
+      .getCaptureActivity()
+      .then((next) => {
+        if (isCurrent && !receivedActivity) setActivity(next)
+      })
+      .catch(() => undefined)
     const stopSurfaceListening = window.lumierePlatform.onCaptureSurfaceChanged((snapshot) => {
       if (!isCurrent) return
       receivedLiveSnapshot = true
       setSurfaceSnapshot(snapshot)
       setSurfaceLoadFailed(false)
+      setCaptureResult(null)
     })
     void window.lumierePlatform
       .getCaptureSurfaceSnapshot()
@@ -64,6 +89,7 @@ function ApplicationSurface(): React.JSX.Element {
       isCurrent = false
       stopSettingsListening()
       stopCaptureListening()
+      stopCaptureViewListening()
       stopSurfaceListening()
     }
   }, [])
@@ -79,7 +105,8 @@ function ApplicationSurface(): React.JSX.Element {
     <MainWindow
       snapshot={surfaceSnapshot}
       loadFailed={surfaceLoadFailed}
-      result={captureResult}
+      result={captureResult ?? activity.lastCompletion?.result ?? null}
+      activity={activity}
       onResultChange={setCaptureResult}
       onOpenSettings={() => {
         setView('settings')
@@ -92,49 +119,84 @@ function MainWindow({
   snapshot,
   loadFailed,
   result,
+  activity,
   onResultChange,
   onOpenSettings,
 }: {
   snapshot: CaptureSurfaceSnapshot | null
   loadFailed: boolean
   result: CaptureCommandResult | null
+  activity: CaptureActivity
   onResultChange: (result: CaptureCommandResult | null) => void
   onOpenSettings: () => void
 }): React.JSX.Element {
-  const [capturingMode, setCapturingMode] = useState<'region' | 'display' | null>(null)
+  const shellRef = useRef<HTMLElement>(null)
+  useLayoutEffect(() => {
+    const shell = shellRef.current
+    const panel = shell?.querySelector<HTMLElement>('.capture-panel')
+    if (!shell || !panel) return
+    const fit = (): void => {
+      const style = getComputedStyle(panel)
+      const children = Array.from(panel.children)
+      const contentHeight = children.reduce(
+        (height, child) => height + child.getBoundingClientRect().height,
+        0,
+      )
+      const chromeHeight = Array.from(shell.children)
+        .filter((child) => child !== panel)
+        .reduce((height, child) => height + child.getBoundingClientRect().height, 0)
+      window.lumierePlatform.fitCaptureContent(
+        Math.ceil(
+          contentHeight +
+            chromeHeight +
+            parseFloat(style.paddingTop) +
+            parseFloat(style.paddingBottom) +
+            Math.max(0, children.length - 1) * parseFloat(style.rowGap),
+        ),
+      )
+    }
+    const observer = new ResizeObserver(fit)
+    observer.observe(panel)
+    for (const child of panel.children) observer.observe(child)
+    fit()
+    return () => {
+      observer.disconnect()
+    }
+  })
+  useEffect(
+    () => () => {
+      window.lumierePlatform.fitCaptureContent(0)
+    },
+    [],
+  )
+  const capturingMode = activity.activeMode
   const [interactionHint, setInteractionHint] = useState<string | null>(null)
 
   const captureDisplay = async (): Promise<void> => {
-    setCapturingMode('display')
     onResultChange(null)
     setInteractionHint(null)
     try {
-      onResultChange(await window.lumierePlatform.captureDisplay())
+      await window.lumierePlatform.captureDisplay()
     } catch {
       onResultChange({
         status: 'failed',
         feedback: CAPTURE_LOAD_FAILURE.title,
         notice: CAPTURE_LOAD_FAILURE,
       })
-    } finally {
-      setCapturingMode(null)
     }
   }
 
   const captureRegion = async (): Promise<void> => {
-    setCapturingMode('region')
     onResultChange(null)
     setInteractionHint(null)
     try {
-      onResultChange(await window.lumierePlatform.captureRegion())
+      await window.lumierePlatform.captureRegion()
     } catch {
       onResultChange({
         status: 'failed',
         feedback: CAPTURE_LOAD_FAILURE.title,
         notice: CAPTURE_LOAD_FAILURE,
       })
-    } finally {
-      setCapturingMode(null)
     }
   }
 
@@ -151,7 +213,7 @@ function MainWindow({
   const captureBlocked = loadFailed || snapshot?.blockingNotice !== undefined
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" ref={shellRef}>
       <header
         className={`title-bar title-bar--${window.lumierePlatform.platform}`}
         aria-label="Lumiere window"
@@ -163,7 +225,13 @@ function MainWindow({
         className={`capture-panel${activeNotice ? ' capture-panel--with-notice' : ''}`}
         aria-label="Capture controls"
       >
-        {activeNotice ? <Notice notice={activeNotice} /> : null}
+        {activeNotice ? (
+          <Notice
+            notice={activeNotice}
+            completion={activity.lastCompletion}
+            disabled={capturingMode !== null}
+          />
+        ) : null}
 
         <div className="capture-actions">
           <Button
@@ -172,7 +240,7 @@ function MainWindow({
             pressScale={0.99}
             hoverScale={1}
             className="capture-action capture-action--region"
-            disabled={!supportsRegionCapture || capturingMode !== null}
+            disabled={captureBlocked || !supportsRegionCapture || capturingMode !== null}
             onClick={() => void captureRegion()}
             onFocus={() => {
               setInteractionHint('Drag to select an area')
@@ -200,7 +268,7 @@ function MainWindow({
             pressScale={0.99}
             hoverScale={1}
             className="capture-action"
-            disabled={!supportsDisplayCapture || capturingMode !== null}
+            disabled={captureBlocked || !supportsDisplayCapture || capturingMode !== null}
             onClick={() => void captureDisplay()}
             onFocus={() => {
               setInteractionHint('Capture the display under the pointer')
@@ -383,7 +451,28 @@ function SettingsWindow({
   )
 }
 
-function Notice({ notice }: { notice: CaptureNotice }): React.JSX.Element {
+function Notice({
+  notice,
+  completion,
+  disabled,
+}: {
+  notice: CaptureNotice
+  completion: CaptureCompletion | null
+  disabled: boolean
+}): React.JSX.Element {
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const refresh = async (): Promise<void> => {
+    setRefreshing(true)
+    setRefreshError(null)
+    try {
+      await window.lumierePlatform.refreshCaptureSurface()
+    } catch {
+      setRefreshError('Could not check capture availability. Try again.')
+    } finally {
+      setRefreshing(false)
+    }
+  }
   return (
     <div className={`notice notice--${notice.tone}`} role="status">
       <div className="notice-title">
@@ -391,6 +480,28 @@ function Notice({ notice }: { notice: CaptureNotice }): React.JSX.Element {
         {notice.title}
       </div>
       <p>{notice.detail}</p>
+      {completion &&
+      (completion.result.status === 'failed' || completion.result.status === 'partial') ? (
+        <RecoveryActions
+          key={completion.id}
+          completion={completion}
+          platform={window.lumierePlatform.platform}
+          disabled={disabled}
+        />
+      ) : notice.tone === 'critical' ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          hoverScale={1}
+          pressScale={1}
+          className="capture-recovery-action"
+          disabled={disabled || refreshing}
+          onClick={() => void refresh()}
+        >
+          {refreshing ? 'Checking…' : 'Check again'}
+        </Button>
+      ) : null}
+      {refreshError ? <p role="alert">{refreshError}</p> : null}
     </div>
   )
 }
@@ -415,7 +526,7 @@ function statusMessage({
   if (capturingMode) {
     return capturingMode === 'region' ? 'Capturing region' : 'Capturing display'
   }
-  if (result) {
+  if (result && result.status !== 'cancelled') {
     return result.feedback
   }
   if (captureBlocked) {

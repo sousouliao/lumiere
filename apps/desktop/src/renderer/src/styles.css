@@ -183,7 +183,7 @@ button {
 
 .app-shell {
   display: grid;
-  min-height: 100vh;
+  height: 100vh;
   grid-template-rows: 44px minmax(0, 1fr) 42px;
   background: var(--surface-window);
 }
@@ -229,6 +229,7 @@ button {
 }
 
 .notice {
+  flex-shrink: 0;
   padding: 11px 12px;
   border: 1px solid;
   border-radius: var(--Lumiere-Dark-radiusControl);
@@ -836,4 +837,37 @@ button {
       'value value'
       'location location';
   }
+}
+
+.capture-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 12px;
+}
+.capture-recovery-action {
+  min-height: 24px;
+  height: auto;
+  padding: 3px 0;
+  border-radius: 3px;
+  color: var(--status-caution);
+  font-size: var(--Lumiere-Dark-fontSizeCaption);
+  text-align: left;
+  white-space: normal;
+}
+.notice--critical .capture-recovery-action {
+  color: var(--accent-hover);
+}
+.capture-recovery-action:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: transparent;
+}
+.capture-recovery-action:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
+}
+.capture-recovery-error {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+  font-size: var(--Lumiere-Dark-fontSizeCaption);
 }
