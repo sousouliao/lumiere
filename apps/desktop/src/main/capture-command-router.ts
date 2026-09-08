@@ -10,6 +10,7 @@ import type {
   OutputDelivery,
   DeliveryResult,
   CaptureGeometry,
+  CaptureTarget,
   LogicalSize,
   PixelSize,
   PlatformCapabilities,
@@ -66,6 +67,11 @@ export class CaptureCommandRouter {
     )
   }
 
+  public async resolveRegionTarget(): Promise<CaptureTarget | null> {
+    const capabilities = await this.host.getCapabilities()
+    return capabilities.captureModes.includes('region') ? (capabilities.activeTarget ?? null) : null
+  }
+
   public async captureDisplay(): Promise<CaptureCommandResult> {
     if (this.captureInFlight) {
       return failedResult({
@@ -109,6 +115,7 @@ export class CaptureCommandRouter {
   }
 
   public async beginRegionCapture(
+    targetId: string,
     reportTiming?: RegionCaptureTimingReporter,
   ): Promise<RegionCapturePreparation> {
     if (this.captureInFlight) {
@@ -117,7 +124,7 @@ export class CaptureCommandRouter {
 
     this.captureInFlight = true
     try {
-      const prepared = await this.host.prepareRegion()
+      const prepared = await this.host.prepareRegion(targetId)
       reportTiming?.('native-prepared')
       if (prepared.status === 'failed') {
         this.captureInFlight = false

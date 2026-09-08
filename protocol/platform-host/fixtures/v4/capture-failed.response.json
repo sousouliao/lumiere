@@ -1,0 +1,12 @@
+{
+  "version": 4,
+  "id": "prepare-2",
+  "result": {
+    "status": "failed",
+    "failure": {
+      "code": "capture-unavailable",
+      "message": "The capture target is unavailable.",
+      "retryable": true
+    }
+  }
+}

@@ -1,4 +1,4 @@
-export const PLATFORM_CONTRACT_VERSION = 3 as const
+export const PLATFORM_CONTRACT_VERSION = 4 as const
 
 export type LumierePlatform = 'macos' | 'windows'
 export type CaptureMode = 'region' | 'display'
@@ -13,12 +13,18 @@ export interface PlatformCapabilities {
   deliveryTargets: readonly DeliveryTarget[]
   hdrCapture: 'supported' | 'unavailable' | 'unvalidated'
   outputProfiles: readonly ['srgb-visual-match']
+  activeTarget?: CaptureTarget
   unavailableReason?: PlatformFailure
 }
 
 export interface LogicalSize {
   width: number
   height: number
+}
+
+export interface CaptureTarget {
+  id: string
+  logicalSize: LogicalSize
 }
 
 export interface PixelSize {
@@ -98,7 +104,7 @@ export interface PlatformFailure {
 export interface PlatformHost {
   getCapabilities(): Promise<PlatformCapabilities>
   captureDisplay(request: DisplayCaptureRequest): Promise<CaptureResult>
-  prepareRegion(): Promise<PrepareRegionResult>
+  prepareRegion(targetId: string): Promise<PrepareRegionResult>
   commitRegion(request: CommitRegionRequest): Promise<CaptureResult>
   cancelRegion(sessionId: string): Promise<ReleasedRegionCapture>
 }
@@ -110,8 +116,14 @@ export type PlatformRequestEnvelope =
   | {
       version: typeof PLATFORM_CONTRACT_VERSION
       id: string
-      method: 'getCapabilities' | 'prepareRegion'
+      method: 'getCapabilities'
       params: Record<string, never>
+    }
+  | {
+      version: typeof PLATFORM_CONTRACT_VERSION
+      id: string
+      method: 'prepareRegion'
+      params: { targetId: string }
     }
   | {
       version: typeof PLATFORM_CONTRACT_VERSION

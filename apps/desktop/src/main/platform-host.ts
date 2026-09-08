@@ -32,7 +32,8 @@ export class UnavailablePlatformHost implements PlatformHost {
     return Promise.resolve(this.unavailableResult())
   }
 
-  public prepareRegion(): Promise<PrepareRegionResult> {
+  public prepareRegion(targetId: string): Promise<PrepareRegionResult> {
+    void targetId
     return Promise.resolve(this.unavailableResult())
   }
 

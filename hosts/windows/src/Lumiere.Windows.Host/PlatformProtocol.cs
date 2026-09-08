@@ -26,6 +26,8 @@ public sealed record HostCommitRegionRequest(
 
 public sealed record HostLogicalSize(double Width, double Height);
 
+public sealed record HostCaptureTarget(string Id, HostLogicalSize LogicalSize);
+
 public sealed record HostPixelSize(int Width, int Height);
 
 public sealed record HostRegionPreview(string FilePath, string MediaType, HostPixelSize PixelSize);
@@ -37,7 +39,8 @@ public sealed record HostCapabilities(
     IReadOnlyList<string> CaptureModes,
     IReadOnlyList<string> DeliveryTargets,
     string HdrCapture,
-    IReadOnlyList<string> OutputProfiles);
+    IReadOnlyList<string> OutputProfiles,
+    HostCaptureTarget? ActiveTarget = null);
 
 public sealed record HostDeliveryResult(
     string Target,
@@ -73,6 +76,7 @@ public interface IWindowsHostOperations : IAsyncDisposable
 
     Task<HostPrepareRegionResult> PrepareRegionAsync(
         string requestId,
+        string targetId,
         CancellationToken cancellationToken = default);
 
     Task<HostCaptureResult> CommitRegionAsync(
@@ -85,7 +89,7 @@ public interface IWindowsHostOperations : IAsyncDisposable
 
 public static class PlatformProtocol
 {
-    public const int ContractVersion = 3;
+    public const int ContractVersion = 4;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -186,8 +190,9 @@ public static class PlatformProtocol
         IWindowsHostOperations operations,
         CancellationToken cancellationToken)
     {
-        RequireExactProperties(parameters);
-        var result = await operations.PrepareRegionAsync(requestId, cancellationToken);
+        RequireExactProperties(parameters, "targetId");
+        var targetId = RequireNonEmptyString(parameters, "targetId", "Region target id");
+        var result = await operations.PrepareRegionAsync(requestId, targetId, cancellationToken);
         var failure = result.Failure;
         return new ProtocolLineResult(
             Serialize(new { version = ContractVersion, id = requestId, result }),
@@ -329,7 +334,7 @@ public static class PlatformProtocol
             || !version.TryGetInt32(out var value)
             || value != ContractVersion)
         {
-            throw new PlatformProtocolException("Protocol version must be 3.");
+            throw new PlatformProtocolException("Protocol version must be 4.");
         }
     }
 

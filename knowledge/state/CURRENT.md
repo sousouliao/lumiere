@@ -7,11 +7,13 @@
 
 ## Current Position
 
-Electron/React drives Swift and .NET Hosts through platform-host v3 JSON Lines.
+Electron/React drives Swift and .NET Hosts through platform-host v4 JSON Lines.
 Display and frozen-frame Region capture support Clipboard, Folder, and Both delivery.
 Main owns persisted output, save-directory, shortcut, after-capture, and HDR-reminder
 settings. Region uses a logical-resolution preview and crops the retained backing frame;
-the reusable Overlay and native preparation run in parallel.
+the reusable Overlay and native preparation run in parallel. During Region selection,
+pointer display changes serially replace the native frozen session, preview, and Overlay
+bounds through Host-issued opaque target tokens.
 
 Foundation and milestone 1A–1C are recorded complete in
 [#1](https://github.com/Mournerliao/lumiere/issues/1),
@@ -37,6 +39,11 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
   frozen-frame commit, external-4K backing geometry, and bounded repeat checks pass.
   Region latency on the named SDR target was 607 ms cold and 343.5 ms warm median
   (311–415 ms). Built-in Retina XDR geometry still needs observation after the correction.
+- **Multi-display Region repository slice:** platform-host v4 target tokens, the shared
+  display watcher, switching state, preview/session replacement, and stale-generation guards
+  are implemented. `pnpm test:shared` (27 files, 138 tests), `pnpm build`, and the macOS
+  Host suite (34 tests) pass on this Mac. Real dual-display switching and Windows build/runtime
+  remain unverified.
 - **Windows runtime:** recorded HDR/SDR capture, independent delivery outcomes, settings,
   cancellation, and lifecycle checks pass. Those observations predate the outstanding
   Region performance slice and do not verify its current Windows implementation.

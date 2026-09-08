@@ -93,10 +93,10 @@ non-development Mac is optional follow-up evidence, not an MVP gate.
 
 ## Protocol Smoke Test
 
-Build the host, then send exactly one platform-host v3 JSON Lines request:
+Build the host, then send exactly one platform-host v4 JSON Lines request:
 
 ```sh
-printf '%s\n' '{"version":3,"id":"capabilities-smoke","method":"getCapabilities","params":{}}' \
+printf '%s\n' '{"version":4,"id":"capabilities-smoke","method":"getCapabilities","params":{}}' \
   | hosts/macos/.build/debug/LumiereMacHost
 ```
 

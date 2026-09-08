@@ -27,14 +27,17 @@ public interface IWindowsCaptureEngine : IAsyncDisposable
 
 public sealed class WindowsHostOperations : IWindowsHostOperations
 {
+    private const int IssuedTargetLimit = 8;
     private readonly object sync = new();
     private readonly Func<CancellationToken, Task<IWindowsCaptureEngine>> engineFactory;
     private readonly Func<WindowsTargetCapability?> getTargetCapability;
+    private readonly Func<string> targetTokenFactory;
     private readonly Func<string> outputDirectory;
     private readonly Action<string> createDirectory;
     private readonly ILogger logger;
     private readonly SemaphoreSlim engineCreationGate = new(1, 1);
     private IWindowsCaptureEngine? engine;
+    private readonly List<IssuedTarget> issuedTargets = [];
     private int disposed;
 
     public WindowsHostOperations(
@@ -42,12 +45,14 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
         Func<WindowsTargetCapability?> getTargetCapability,
         Func<string> outputDirectory,
         Action<string> createDirectory,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        Func<string>? targetTokenFactory = null)
     {
         ArgumentNullException.ThrowIfNull(engineFactory);
         this.engineFactory = _ => Task.FromResult(engineFactory());
         this.getTargetCapability = getTargetCapability
             ?? throw new ArgumentNullException(nameof(getTargetCapability));
+        this.targetTokenFactory = targetTokenFactory ?? (() => Guid.NewGuid().ToString("N"));
         this.outputDirectory = outputDirectory ?? throw new ArgumentNullException(nameof(outputDirectory));
         this.createDirectory = createDirectory ?? throw new ArgumentNullException(nameof(createDirectory));
         this.logger = logger ?? NullLogger.Instance;
@@ -62,7 +67,8 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
             capabilityProvider.GetCurrent,
             WindowsCaptureFolder.GetDefaultPath,
             static path => _ = Directory.CreateDirectory(path),
-            logger);
+            logger,
+            static () => Guid.NewGuid().ToString("N"));
     }
 
     private WindowsHostOperations(
@@ -70,11 +76,13 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
         Func<WindowsTargetCapability?> getTargetCapability,
         Func<string> outputDirectory,
         Action<string> createDirectory,
-        ILogger? logger)
+        ILogger? logger,
+        Func<string>? targetTokenFactory = null)
     {
         this.engineFactory = engineFactory ?? throw new ArgumentNullException(nameof(engineFactory));
         this.getTargetCapability = getTargetCapability
             ?? throw new ArgumentNullException(nameof(getTargetCapability));
+        this.targetTokenFactory = targetTokenFactory ?? (() => Guid.NewGuid().ToString("N"));
         this.outputDirectory = outputDirectory ?? throw new ArgumentNullException(nameof(outputDirectory));
         this.createDirectory = createDirectory ?? throw new ArgumentNullException(nameof(createDirectory));
         this.logger = logger ?? NullLogger.Instance;
@@ -84,7 +92,29 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
         var target = getTargetCapability();
-        var supportsRegion = target?.SupportsRegionCapture == true;
+        HostCaptureTarget? activeTarget = null;
+        if (target?.SupportsRegionCapture == true && target.LogicalSize is { } logicalSize)
+        {
+            var token = targetTokenFactory();
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                activeTarget = new HostCaptureTarget(
+                    token,
+                    new HostLogicalSize(logicalSize.Width, logicalSize.Height));
+            }
+        }
+        lock (sync)
+        {
+            if (activeTarget is not null)
+            {
+                issuedTargets.Add(new IssuedTarget(activeTarget.Id, target!));
+                if (issuedTargets.Count > IssuedTargetLimit)
+                {
+                    issuedTargets.RemoveAt(0);
+                }
+            }
+        }
+        var supportsRegion = activeTarget is not null;
         return new HostCapabilities(
             PlatformProtocol.ContractVersion,
             "windows",
@@ -92,7 +122,8 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
             supportsRegion ? ["region", "display"] : ["display"],
             ["clipboard", "folder"],
             MapHdrCapture(target?.HdrState),
-            ["srgb-visual-match"]);
+            ["srgb-visual-match"],
+            activeTarget);
     }
 
     public Task<HostCaptureResult> CaptureDisplayAsync(
@@ -114,12 +145,23 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
 
     public async Task<HostPrepareRegionResult> PrepareRegionAsync(
         string requestId,
+        string targetId,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetId);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
 
-        var target = getTargetCapability();
+        WindowsTargetCapability? target = null;
+        lock (sync)
+        {
+            var targetIndex = issuedTargets.FindIndex(candidate => candidate.Token == targetId);
+            if (targetIndex >= 0)
+            {
+                target = issuedTargets[targetIndex].Target;
+                issuedTargets.RemoveAt(targetIndex);
+            }
+        }
         if (target?.SupportsRegionCapture != true || target.LogicalSize is null)
         {
             return PrepareFailed(
@@ -531,6 +573,8 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
 
         public ValueTask DisposeAsync() => inner.DisposeAsync();
     }
+
+    private sealed record IssuedTarget(string Token, WindowsTargetCapability Target);
 }
 
 internal static class WindowsCaptureFolder

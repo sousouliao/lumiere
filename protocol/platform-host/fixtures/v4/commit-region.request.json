@@ -1,0 +1,16 @@
+{
+  "version": 4,
+  "id": "commit-1",
+  "method": "commitRegion",
+  "params": {
+    "sessionId": "region-session-17",
+    "delivery": "both",
+    "geometry": {
+      "coordinateSpace": "target-logical",
+      "x": 120.5,
+      "y": 80,
+      "width": 960,
+      "height": 640
+    }
+  }
+}

@@ -133,7 +133,9 @@ describe('CaptureCommandRouter', () => {
     const router = new CaptureCommandRouter('macos', host)
     const timingStages: string[] = []
 
-    await expect(router.beginRegionCapture((stage) => timingStages.push(stage))).resolves.toEqual({
+    await expect(
+      router.beginRegionCapture('region-target-17', (stage) => timingStages.push(stage)),
+    ).resolves.toEqual({
       status: 'ready',
       targetSize: { width: 1512, height: 982 },
       previewPath: '/tmp/frozen-region.png',
@@ -156,6 +158,7 @@ describe('CaptureCommandRouter', () => {
       filePath: '/tmp/region.png',
     })
     expect(host.requests).toEqual([
+      { operation: 'prepare-region', targetId: 'region-target-17' },
       {
         operation: 'commit-region',
         delivery: 'both',
@@ -178,10 +181,13 @@ describe('CaptureCommandRouter', () => {
     })
     const router = new CaptureCommandRouter('macos', host)
 
-    await expect(router.beginRegionCapture()).resolves.toMatchObject({ status: 'ready' })
+    await expect(router.beginRegionCapture('region-target-17')).resolves.toMatchObject({
+      status: 'ready',
+    })
     await router.cancelRegionCapture()
     await expect(router.captureDisplay()).resolves.toMatchObject({ status: 'cancelled' })
     expect(host.requests).toEqual([
+      { operation: 'prepare-region', targetId: 'region-target-17' },
       { operation: 'cancel-region', sessionId: 'region-session-17' },
       { operation: 'display', delivery: 'both' },
     ])
@@ -202,7 +208,7 @@ describe('CaptureCommandRouter', () => {
     )
 
     await expect(
-      new CaptureCommandRouter('macos', host).beginRegionCapture(),
+      new CaptureCommandRouter('macos', host).beginRegionCapture('region-target-17'),
     ).resolves.toMatchObject({
       status: 'failed',
       result: { status: 'failed', feedback: 'Capture failed' },
@@ -340,6 +346,7 @@ class StubHost implements PlatformHost {
   public capabilitiesRequests = 0
   public readonly requests: (
     | ({ operation: 'display' } & DisplayCaptureRequest)
+    | { operation: 'prepare-region'; targetId: string }
     | ({ operation: 'commit-region' } & CommitRegionRequest)
     | { operation: 'cancel-region'; sessionId: string }
   )[] = []
@@ -372,7 +379,8 @@ class StubHost implements PlatformHost {
     return Promise.resolve(this.result)
   }
 
-  public prepareRegion(): Promise<PrepareRegionResult> {
+  public prepareRegion(targetId: string): Promise<PrepareRegionResult> {
+    this.requests.push({ operation: 'prepare-region', targetId })
     return Promise.resolve(this.prepared)
   }
 

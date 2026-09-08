@@ -24,7 +24,7 @@ describe('macOS platform host process transport', () => {
 
       const [capabilitiesRequest, captureRequest] = requests
       process.respond({
-        version: 3,
+        version: 4,
         id: captureRequest.id,
         result: {
           status: 'completed',
@@ -34,10 +34,10 @@ describe('macOS platform host process transport', () => {
         },
       })
       process.respond({
-        version: 3,
+        version: 4,
         id: capabilitiesRequest.id,
         result: {
-          contractVersion: 3,
+          contractVersion: 4,
           platform: 'macos',
           hostStatus: 'available',
           captureModes: ['display'],
@@ -98,10 +98,10 @@ describe('macOS platform host process transport', () => {
     secondProcess.stdin.once('data', (chunk: Buffer) => {
       const request = JSON.parse(chunk.toString('utf8')) as Record<string, unknown>
       secondProcess.respond({
-        version: 3,
+        version: 4,
         id: request.id,
         result: {
-          contractVersion: 3,
+          contractVersion: 4,
           platform: 'macos',
           hostStatus: 'available',
           captureModes: ['display'],
@@ -120,7 +120,7 @@ describe('macOS platform host process transport', () => {
     process.stdin.once('data', (chunk: Buffer) => {
       const request = JSON.parse(chunk.toString('utf8')) as Record<string, unknown>
       process.respond({
-        version: 3,
+        version: 4,
         id: request.id,
         result: { status: 'cancelled' },
         error: {
@@ -144,7 +144,7 @@ describe('macOS platform host process transport', () => {
     process.stdin.once('data', (chunk: Buffer) => {
       const request = JSON.parse(chunk.toString('utf8')) as Record<string, unknown>
       process.respond({
-        version: 3,
+        version: 4,
         id: request.id,
         result: { status: 'cancelled', unexpected: true },
       })
@@ -182,10 +182,10 @@ describe('macOS platform host process transport', () => {
       const request = JSON.parse(chunk.toString('utf8')) as Record<string, unknown>
       firstProcess.emit('exit', 17, null)
       secondProcess.respond({
-        version: 3,
+        version: 4,
         id: request.id,
         result: {
-          contractVersion: 3,
+          contractVersion: 4,
           platform: 'macos',
           hostStatus: 'available',
           captureModes: ['display'],

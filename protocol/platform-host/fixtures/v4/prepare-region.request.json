@@ -1,0 +1,6 @@
+{
+  "version": 4,
+  "id": "prepare-1",
+  "method": "prepareRegion",
+  "params": { "targetId": "target-17" }
+}

@@ -315,7 +315,7 @@ public sealed class WindowsHostOperationsTests
     }
 
     [Fact]
-    public async Task GetCapabilities_AdvertisesRegionWithoutIssuingATargetToken()
+    public async Task GetCapabilities_AdvertisesRegionAndIssuesATargetToken()
     {
         await using var operations = new WindowsHostOperations(
             () => new StubCaptureEngine(),
@@ -327,6 +327,9 @@ public sealed class WindowsHostOperationsTests
 
         Assert.Equal(["region", "display"], capabilities.CaptureModes);
         Assert.Equal("supported", capabilities.HdrCapture);
+        Assert.NotNull(capabilities.ActiveTarget);
+        Assert.Equal(2560, capabilities.ActiveTarget.LogicalSize.Width);
+        Assert.Equal(1440, capabilities.ActiveTarget.LogicalSize.Height);
     }
 
     [Fact]
@@ -343,8 +346,9 @@ public sealed class WindowsHostOperationsTests
             () => "C:\\Pictures\\Lumiere",
             _ => { });
         var capabilities = operations.GetCapabilities();
-
-        var prepared = await operations.PrepareRegionAsync("prepare-region");
+        var prepared = await operations.PrepareRegionAsync(
+            "prepare-region",
+            capabilities.ActiveTarget!.Id);
         var result = await operations.CommitRegionAsync(
             "commit-region",
             new HostCommitRegionRequest(
@@ -359,6 +363,7 @@ public sealed class WindowsHostOperationsTests
                 new HostCaptureGeometry(12.5, 20, 300, 200)));
 
         Assert.Equal(["region", "display"], capabilities.CaptureModes);
+        Assert.NotNull(capabilities.ActiveTarget);
         Assert.Equal("prepared", prepared.Status);
         Assert.Equal(2560, prepared.Preview!.PixelSize.Width);
         Assert.Equal(1440, prepared.Preview.PixelSize.Height);

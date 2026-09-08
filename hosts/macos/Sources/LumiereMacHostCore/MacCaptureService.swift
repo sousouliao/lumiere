@@ -36,7 +36,10 @@ public struct CaptureTiming: Sendable {
 
 public actor MacCaptureService {
   private static let regionLeaseMilliseconds = 60_000
+  private static let issuedRegionTargetLimit = 8
   private var frozenRegion: FrozenRegionSession?
+  private var issuedRegionTargets: [String: ActiveDisplayTarget] = [:]
+  private var issuedRegionTargetOrder: [String] = []
   private var warmedShareableContent: SCShareableContent?
   private var timingLastInstant: [String: ContinuousClock.Instant] = [:]
   private let timingReporter: (@Sendable (CaptureTiming) -> Void)?
@@ -63,7 +66,10 @@ public actor MacCaptureService {
         result: .capture(await captureDisplay(parameters: parameters))
       )
     case .prepareRegion:
-      let result = await prepareRegion(requestID: request.id)
+      guard let targetId = request.targetId else {
+        return invalidRequest(id: request.id, message: "Region target id is required.")
+      }
+      let result = await prepareRegion(requestID: request.id, targetId: targetId)
       switch result {
       case .success(let prepared):
         return .success(id: request.id, result: .preparedRegion(prepared))
@@ -93,6 +99,8 @@ public actor MacCaptureService {
 
   private func capabilities() async -> PlatformCapabilities {
     guard let target = await ActiveDisplayTargetResolver.resolve() else {
+      issuedRegionTargets.removeAll()
+      issuedRegionTargetOrder.removeAll()
       return PlatformCapabilities(
         contractVersion: platformContractVersion,
         platform: "macos",
@@ -104,6 +112,8 @@ public actor MacCaptureService {
       )
     }
     await warmScreenCaptureKitIfAuthorized()
+    let issued = IssuedRegionTarget(id: UUID().uuidString, target: target)
+    issueRegionTarget(issued)
     return PlatformCapabilities(
       contractVersion: platformContractVersion,
       platform: "macos",
@@ -111,7 +121,11 @@ public actor MacCaptureService {
       captureModes: [.region, .display],
       deliveryTargets: [.clipboard, .folder],
       hdrCapture: target.supportsHDR ? "supported" : "unavailable",
-      outputProfiles: ["srgb-visual-match"]
+      outputProfiles: ["srgb-visual-match"],
+      activeTarget: CaptureTarget(
+        id: issued.id,
+        logicalSize: LogicalSize(width: target.logicalWidth, height: target.logicalHeight)
+      )
     )
   }
 
@@ -144,10 +158,21 @@ public actor MacCaptureService {
     }
   }
 
-  private func prepareRegion(requestID: String) async -> PrepareOutcome {
+  private func prepareRegion(requestID: String, targetId: String) async -> PrepareOutcome {
     let startedAt = ContinuousClock.now
     releaseFrozenRegion()
-    guard let target = await ActiveDisplayTargetResolver.resolve() else {
+    guard let issuedTarget = issuedRegionTargets.removeValue(forKey: targetId) else {
+      return .failure(
+        HostFailure(
+          code: .captureUnavailable, message: "The capture target changed.", retryable: true
+        )
+      )
+    }
+    issuedRegionTargetOrder.removeAll { $0 == targetId }
+    guard
+      let target = await ActiveDisplayTargetResolver.resolve(displayID: issuedTarget.displayID),
+      target.hasSameTopology(as: issuedTarget)
+    else {
       return .failure(
         HostFailure(
           code: .captureUnavailable,
@@ -230,6 +255,14 @@ public actor MacCaptureService {
       )
     } catch {
       return .failure(mapCaptureError(error))
+    }
+  }
+
+  private func issueRegionTarget(_ issued: IssuedRegionTarget) {
+    issuedRegionTargets[issued.id] = issued.target
+    issuedRegionTargetOrder.append(issued.id)
+    while issuedRegionTargetOrder.count > Self.issuedRegionTargetLimit {
+      issuedRegionTargets.removeValue(forKey: issuedRegionTargetOrder.removeFirst())
     }
   }
 
@@ -631,6 +664,11 @@ private struct FrozenRegionSession {
   let frame: FrozenFrame
   let previewURL: URL
   let expiration: Task<Void, Never>
+}
+
+private struct IssuedRegionTarget {
+  let id: String
+  let target: ActiveDisplayTarget
 }
 
 private struct ActiveDisplayTarget: Sendable {

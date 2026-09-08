@@ -33,7 +33,9 @@ import { SettingsStore } from './settings-store'
 import { ShortcutRegistrationError, ShortcutService } from './shortcut-service'
 import { applyAfterCaptureBehavior } from './after-capture'
 import { RegionPreviewRegistry, regionPreviewScheme } from './region-preview-registry'
+import { RegionDisplayWatcher } from './region-display-watcher'
 import { RegionOverlayController } from './region-overlay-controller'
+import { resolveRegionTargetWithRetry } from './region-target-resolver'
 import { captureCommandChannels, type CaptureCommandResult } from '../shared/capture-command'
 import {
   availableOutputDeliveries,
@@ -93,10 +95,14 @@ const captureFailureNotifier = new CaptureFailureNotifier((id) => {
 
 interface RegionOverlaySession {
   generation: number
+  activeDisplayId: number | null
+  desiredDisplayId: number
   targetSize: LogicalSize
   previewToken: string
   previewUrl: string
   leaseTimeout: NodeJS.Timeout
+  displayWatcher: RegionDisplayWatcher
+  switchPromise: Promise<void> | null
   ready: boolean
   submitted: boolean
   resolve(result: CaptureCommandResult): void
@@ -398,7 +404,7 @@ function registerIpc(): void {
       const generation = parseGeneration(args[0])
       if (generation !== regionOverlaySession?.generation) return
       const geometry = parseCaptureGeometry(args[1])
-      submitRegionSelection(router, geometry)
+      submitRegionSelection(router, generation, geometry)
     } catch {
       return
     }
@@ -524,14 +530,20 @@ async function captureRegion(router: CaptureCommandRouter): Promise<CaptureComma
     if (restoreMainWindow) showMainWindow()
     return captureFailedResult()
   }
+  const overlayReadyPromise = overlay.ensureReady().then(
+    () => true,
+    () => false,
+  )
+  const target = await router.resolveRegionTarget()
+  if (!target || !displayMatchesTarget(initialDisplay.bounds, target.logicalSize)) {
+    if (restoreMainWindow) showMainWindow()
+    return displayChangedResult()
+  }
   const [preparation, overlayReady] = await Promise.all([
-    router.beginRegionCapture((stage) => {
+    router.beginRegionCapture(target.id, (stage) => {
       reportTiming(stage)
     }),
-    overlay.ensureReady().then(
-      () => true,
-      () => false,
-    ),
+    overlayReadyPromise,
   ])
   if (preparation.status === 'failed') {
     if (restoreMainWindow) showMainWindow()
@@ -575,8 +587,19 @@ async function captureRegion(router: CaptureCommandRouter): Promise<CaptureComma
       screen.removeListener('display-metrics-changed', handleDisplayChange)
     }
 
+    const displayWatcher = new RegionDisplayWatcher({
+      readDisplayId: () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id,
+      onDisplayChanged: (displayId) => {
+        const session = regionOverlaySession
+        if (!session || session.submitted) return
+        session.desiredDisplayId = displayId
+        queueRegionDisplaySwitch(router, session)
+      },
+    })
     regionOverlaySession = {
       generation,
+      activeDisplayId: display.id,
+      desiredDisplayId: display.id,
       targetSize: preparation.targetSize,
       previewToken: preview.token,
       previewUrl: preview.url,
@@ -591,6 +614,8 @@ async function captureRegion(router: CaptureCommandRouter): Promise<CaptureComma
           },
         })
       }, preparation.leaseMilliseconds),
+      displayWatcher,
+      switchPromise: null,
       ready: false,
       submitted: false,
       resolve,
@@ -599,6 +624,7 @@ async function captureRegion(router: CaptureCommandRouter): Promise<CaptureComma
       timingStartedAt,
       timingLastAt,
     }
+    displayWatcher.start(display.id)
   })
   try {
     await overlay.activate(
@@ -625,9 +651,148 @@ async function captureRegion(router: CaptureCommandRouter): Promise<CaptureComma
   return result
 }
 
-function submitRegionSelection(router: CaptureCommandRouter, geometry: CaptureGeometry): void {
+function queueRegionDisplaySwitch(
+  router: CaptureCommandRouter,
+  session: RegionOverlaySession,
+): void {
+  if (session.switchPromise || !isActiveRegionSession(session)) return
+  const switching = switchRegionDisplay(router, session)
+  session.switchPromise = switching
+  const finish = (): void => {
+    if (session.switchPromise !== switching) return
+    session.switchPromise = null
+    if (isActiveRegionSession(session) && session.desiredDisplayId !== session.activeDisplayId) {
+      queueRegionDisplaySwitch(router, session)
+    }
+  }
+  void switching.then(finish, finish)
+}
+
+async function switchRegionDisplay(
+  router: CaptureCommandRouter,
+  session: RegionOverlaySession,
+): Promise<void> {
+  while (
+    regionOverlaySession === session &&
+    !session.submitted &&
+    session.desiredDisplayId !== session.activeDisplayId
+  ) {
+    regionOverlayController?.reset(session.generation)
+    clearTimeout(session.leaseTimeout)
+    regionPreviewRegistry.revoke(session.previewToken)
+    session.activeDisplayId = null
+    await router.cancelRegionCapture()
+    if (!isActiveRegionSession(session)) return
+
+    const targetDisplayId = session.desiredDisplayId
+    const resolution = await resolveRegionTargetWithRetry({
+      expectedDisplayId: targetDisplayId,
+      readDisplay: () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint()),
+      readTarget: () => router.resolveRegionTarget(),
+      isActive: () => isActiveRegionSession(session),
+      matchesTarget: (display, target) => displayMatchesTarget(display.bounds, target.logicalSize),
+    })
+    if (resolution.status === 'cancelled') return
+    if (resolution.status === 'display-changed') {
+      session.desiredDisplayId = resolution.displayId
+      continue
+    }
+    if (resolution.status === 'unavailable') {
+      session.submitted = true
+      finishRegionOverlay(session, displayChangedResult())
+      return
+    }
+    const preparation = await router.beginRegionCapture(resolution.target.id)
+    if (!isActiveRegionSession(session)) {
+      if (preparation.status === 'ready') await router.cancelRegionCapture()
+      return
+    }
+    if (preparation.status === 'failed') {
+      session.submitted = true
+      finishRegionOverlay(session, preparation.result)
+      return
+    }
+
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    if (
+      display.id !== targetDisplayId ||
+      !displayMatchesTarget(display.bounds, preparation.targetSize)
+    ) {
+      await router.cancelRegionCapture()
+      session.desiredDisplayId = display.id
+      continue
+    }
+
+    let preview: { token: string; url: string }
+    try {
+      preview = regionPreviewRegistry.grant(preparation.previewPath)
+    } catch {
+      await router.cancelRegionCapture()
+      session.submitted = true
+      finishRegionOverlay(session, captureFailedResult())
+      return
+    }
+
+    session.generation = ++nextRegionOverlayGeneration
+    session.activeDisplayId = display.id
+    session.targetSize = preparation.targetSize
+    session.previewToken = preview.token
+    session.previewUrl = preview.url
+    session.ready = false
+    session.leaseTimeout = createRegionLeaseTimeout(router, preparation.leaseMilliseconds)
+    try {
+      await regionOverlayController?.activate(
+        {
+          generation: session.generation,
+          targetSize: preparation.targetSize,
+          previewPixelSize: preparation.previewPixelSize,
+          previewUrl: preview.url,
+        },
+        display.bounds,
+      )
+    } catch {
+      await router.cancelRegionCapture()
+      session.submitted = true
+      finishRegionOverlay(session, captureFailedResult())
+      return
+    }
+  }
+}
+
+function isActiveRegionSession(session: RegionOverlaySession): boolean {
+  return regionOverlaySession === session && !session.submitted
+}
+
+function createRegionLeaseTimeout(
+  router: CaptureCommandRouter,
+  leaseMilliseconds: number,
+): NodeJS.Timeout {
+  return setTimeout(() => {
+    void failRegionOverlay(router, {
+      status: 'failed',
+      feedback: 'Capture timed out',
+      notice: {
+        tone: 'caution',
+        title: 'Capture timed out',
+        detail: 'Start a new capture and select a region sooner.',
+      },
+    })
+  }, leaseMilliseconds)
+}
+
+function submitRegionSelection(
+  router: CaptureCommandRouter,
+  generation: number,
+  geometry: CaptureGeometry,
+): void {
   const session = regionOverlaySession
-  if (!session || session.submitted) {
+  if (
+    !session ||
+    session.submitted ||
+    session.switchPromise ||
+    session.generation !== generation ||
+    session.activeDisplayId === null
+  ) {
     return
   }
   if (!geometryFitsTarget(geometry, session.targetSize)) {
@@ -648,6 +813,7 @@ async function cancelRegionOverlay(router: CaptureCommandRouter): Promise<void> 
     return
   }
   session.submitted = true
+  await session.switchPromise
   await router.cancelRegionCapture()
   finishRegionOverlay(session, { status: 'cancelled', feedback: 'Capture cancelled' })
 }
@@ -661,6 +827,7 @@ async function failRegionOverlay(
     return
   }
   session.submitted = true
+  await session.switchPromise
   await router.cancelRegionCapture()
   finishRegionOverlay(session, result)
 }
@@ -672,6 +839,7 @@ function finishRegionOverlay(session: RegionOverlaySession, result: CaptureComma
   regionOverlaySession = null
   clearTimeout(session.leaseTimeout)
   regionPreviewRegistry.revoke(session.previewToken)
+  session.displayWatcher.dispose()
   session.stopWatchingDisplays()
   regionOverlayController?.reset(session.generation)
   if (session.restoreMainWindow) showMainWindow()
@@ -742,6 +910,7 @@ function disposeRegionOverlay(router: CaptureCommandRouter): void {
   regionOverlaySession = null
   clearTimeout(session.leaseTimeout)
   regionPreviewRegistry.revoke(session.previewToken)
+  session.displayWatcher.dispose()
   void router.cancelRegionCapture()
   session.stopWatchingDisplays()
   regionOverlayController?.reset(session.generation)

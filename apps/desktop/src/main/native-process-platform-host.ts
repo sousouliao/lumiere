@@ -65,9 +65,12 @@ export class NativeProcessPlatformHost implements PlatformHost {
     }
   }
 
-  public async prepareRegion(): Promise<PrepareRegionResult> {
+  public async prepareRegion(targetId: string): Promise<PrepareRegionResult> {
     try {
-      return parsePrepareRegionResult(await this.request('prepareRegion', {}), this.platform)
+      return parsePrepareRegionResult(
+        await this.request('prepareRegion', { targetId }),
+        this.platform,
+      )
     } catch (error) {
       return { status: 'failed', failure: failureFromError(error, this.platform) }
     }
@@ -336,6 +339,7 @@ function parseCapabilities(value: unknown, platform: LumierePlatform): PlatformC
   const captureModes = value.captureModes
   const deliveryTargets = value.deliveryTargets
   const outputProfiles = value.outputProfiles
+  const activeTarget = value.activeTarget
   if (
     value.contractVersion !== PLATFORM_CONTRACT_VERSION ||
     value.platform !== platform ||
@@ -363,7 +367,7 @@ function parseCapabilities(value: unknown, platform: LumierePlatform): PlatformC
         'hdrCapture',
         'outputProfiles',
       ],
-      ['unavailableReason'],
+      ['activeTarget', 'unavailableReason'],
     ) ||
     (value.hostStatus === 'unavailable' && value.unavailableReason === undefined)
   ) {
@@ -372,6 +376,16 @@ function parseCapabilities(value: unknown, platform: LumierePlatform): PlatformC
 
   if (value.unavailableReason !== undefined) {
     parseFailure(value.unavailableReason)
+  }
+  if (
+    activeTarget !== undefined &&
+    (!isRecord(activeTarget) ||
+      typeof activeTarget.id !== 'string' ||
+      activeTarget.id.length === 0 ||
+      !isLogicalSize(activeTarget.logicalSize) ||
+      !hasExactKeys(activeTarget, ['id', 'logicalSize']))
+  ) {
+    throw new Error(`The ${platform} host returned an invalid active capture target.`)
   }
   return value as unknown as PlatformCapabilities
 }

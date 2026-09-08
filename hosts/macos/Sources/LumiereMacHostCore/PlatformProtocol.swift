@@ -1,6 +1,6 @@
 import Foundation
 
-public let platformContractVersion = 3
+public let platformContractVersion = 4
 
 public enum HostFailureCode: String, Codable, Sendable {
   case hostUnavailable = "host-unavailable"
@@ -60,6 +60,11 @@ public struct PixelSize: Codable, Equatable, Sendable {
   }
 }
 
+public struct CaptureTarget: Codable, Equatable, Sendable {
+  public let id: String
+  public let logicalSize: LogicalSize
+}
+
 public struct CaptureGeometry: Codable, Equatable, Sendable {
   public let coordinateSpace: String
   public let x: Double
@@ -114,6 +119,7 @@ public struct PlatformRequest: Equatable, Sendable {
   public let displayCapture: DisplayCaptureParameters?
   public let commitRegion: CommitRegionParameters?
   public let sessionId: String?
+  public let targetId: String?
 }
 
 public struct PlatformCapabilities: Codable, Equatable, Sendable {
@@ -124,6 +130,7 @@ public struct PlatformCapabilities: Codable, Equatable, Sendable {
   public let deliveryTargets: [DeliveryTarget]
   public let hdrCapture: String
   public let outputProfiles: [String]
+  public let activeTarget: CaptureTarget?
   public let unavailableReason: HostFailure?
 
   public init(
@@ -134,6 +141,7 @@ public struct PlatformCapabilities: Codable, Equatable, Sendable {
     deliveryTargets: [DeliveryTarget],
     hdrCapture: String,
     outputProfiles: [String],
+    activeTarget: CaptureTarget? = nil,
     unavailableReason: HostFailure? = nil
   ) {
     self.contractVersion = contractVersion
@@ -143,6 +151,7 @@ public struct PlatformCapabilities: Codable, Equatable, Sendable {
     self.deliveryTargets = deliveryTargets
     self.hdrCapture = hdrCapture
     self.outputProfiles = outputProfiles
+    self.activeTarget = activeTarget
     self.unavailableReason = unavailableReason
   }
 }
@@ -294,7 +303,7 @@ public enum PlatformRequestDecoder {
 
     try requireExactKeys(envelope, expected: ["version", "id", "method", "params"])
     guard let version = envelope["version"] as? Int, version == platformContractVersion else {
-      throw PlatformProtocolError.invalidEnvelope("Protocol version must be 3.")
+      throw PlatformProtocolError.invalidEnvelope("Protocol version must be 4.")
     }
     guard let id = envelope["id"] as? String, !id.isEmpty else {
       throw PlatformProtocolError.invalidEnvelope("Request id must be a non-empty string.")
@@ -305,7 +314,7 @@ public enum PlatformRequestDecoder {
     else { throw PlatformProtocolError.invalidEnvelope("Unknown platform-host method.") }
 
     switch method {
-    case .getCapabilities, .prepareRegion:
+    case .getCapabilities:
       try requireExactKeys(parameters, expected: [])
       return PlatformRequest(
         version: version,
@@ -313,7 +322,17 @@ public enum PlatformRequestDecoder {
         method: method,
         displayCapture: nil,
         commitRegion: nil,
-        sessionId: nil
+        sessionId: nil,
+        targetId: nil
+      )
+    case .prepareRegion:
+      try requireExactKeys(parameters, expected: ["targetId"])
+      guard let targetId = parameters["targetId"] as? String, !targetId.isEmpty else {
+        throw PlatformProtocolError.invalidEnvelope("Region target id must be non-empty.")
+      }
+      return PlatformRequest(
+        version: version, id: id, method: method, displayCapture: nil, commitRegion: nil,
+        sessionId: nil, targetId: targetId
       )
     case .captureDisplay:
       return PlatformRequest(
@@ -322,7 +341,8 @@ public enum PlatformRequestDecoder {
         method: method,
         displayCapture: try decodeDisplayCapture(parameters),
         commitRegion: nil,
-        sessionId: nil
+        sessionId: nil,
+        targetId: nil
       )
     case .commitRegion:
       return PlatformRequest(
@@ -331,7 +351,8 @@ public enum PlatformRequestDecoder {
         method: method,
         displayCapture: nil,
         commitRegion: try decodeCommitRegion(parameters),
-        sessionId: nil
+        sessionId: nil,
+        targetId: nil
       )
     case .cancelRegion:
       try requireExactKeys(parameters, expected: ["sessionId"])
@@ -346,7 +367,8 @@ public enum PlatformRequestDecoder {
         method: method,
         displayCapture: nil,
         commitRegion: nil,
-        sessionId: sessionId
+        sessionId: sessionId,
+        targetId: nil
       )
     }
   }

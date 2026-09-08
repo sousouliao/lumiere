@@ -1,0 +1,376 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumiere.local/protocol/platform-host/v4.schema.json",
+  "title": "Lumiere platform host protocol v4",
+  "oneOf": [
+    { "$ref": "#/$defs/getCapabilitiesRequest" },
+    { "$ref": "#/$defs/captureDisplayRequest" },
+    { "$ref": "#/$defs/prepareRegionRequest" },
+    { "$ref": "#/$defs/commitRegionRequest" },
+    { "$ref": "#/$defs/cancelRegionRequest" },
+    { "$ref": "#/$defs/successResponse" },
+    { "$ref": "#/$defs/errorResponse" }
+  ],
+  "$defs": {
+    "requestEnvelope": {
+      "type": "object",
+      "required": ["version", "id", "method", "params"],
+      "properties": {
+        "version": { "const": 4 },
+        "id": { "type": "string", "minLength": 1 },
+        "method": {},
+        "params": {}
+      }
+    },
+    "getCapabilitiesRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "getCapabilities" },
+            "params": { "type": "object", "maxProperties": 0 }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "captureDisplayRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "captureDisplay" },
+            "params": { "$ref": "#/$defs/displayCaptureParams" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "prepareRegionRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "prepareRegion" },
+            "params": {
+              "type": "object",
+              "required": ["targetId"],
+              "properties": { "targetId": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "commitRegionRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "commitRegion" },
+            "params": { "$ref": "#/$defs/commitRegionParams" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "cancelRegionRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "cancelRegion" },
+            "params": {
+              "type": "object",
+              "required": ["sessionId"],
+              "properties": {
+                "sessionId": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "displayCaptureParams": {
+      "type": "object",
+      "required": ["delivery"],
+      "properties": {
+        "delivery": { "$ref": "#/$defs/outputDelivery" },
+        "saveDirectory": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [{ "$ref": "#/$defs/saveDirectoryRule" }],
+      "additionalProperties": false
+    },
+    "commitRegionParams": {
+      "type": "object",
+      "required": ["sessionId", "delivery", "geometry"],
+      "properties": {
+        "sessionId": { "type": "string", "minLength": 1 },
+        "delivery": { "$ref": "#/$defs/outputDelivery" },
+        "saveDirectory": { "type": "string", "minLength": 1 },
+        "geometry": { "$ref": "#/$defs/captureGeometry" }
+      },
+      "allOf": [{ "$ref": "#/$defs/saveDirectoryRule" }],
+      "additionalProperties": false
+    },
+    "outputDelivery": {
+      "enum": ["clipboard", "folder", "both"]
+    },
+    "saveDirectoryRule": {
+      "if": {
+        "type": "object",
+        "properties": { "delivery": { "const": "clipboard" } },
+        "required": ["delivery"]
+      },
+      "then": {
+        "type": "object",
+        "properties": { "saveDirectory": false }
+      }
+    },
+    "captureGeometry": {
+      "type": "object",
+      "required": ["coordinateSpace", "x", "y", "width", "height"],
+      "properties": {
+        "coordinateSpace": { "const": "target-logical" },
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "logicalSize": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "captureTarget": {
+      "type": "object",
+      "required": ["id", "logicalSize"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "logicalSize": { "$ref": "#/$defs/logicalSize" }
+      },
+      "additionalProperties": false
+    },
+    "pixelSize": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "failure": {
+      "type": "object",
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "enum": [
+            "host-unavailable",
+            "permission-denied",
+            "capture-unavailable",
+            "delivery-unavailable",
+            "delivery-failed",
+            "invalid-request",
+            "unexpected-failure"
+          ]
+        },
+        "message": { "type": "string", "minLength": 1 },
+        "retryable": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "contractVersion",
+        "platform",
+        "hostStatus",
+        "captureModes",
+        "deliveryTargets",
+        "hdrCapture",
+        "outputProfiles"
+      ],
+      "properties": {
+        "contractVersion": { "const": 4 },
+        "platform": { "enum": ["macos", "windows"] },
+        "hostStatus": { "enum": ["available", "unavailable"] },
+        "captureModes": {
+          "type": "array",
+          "items": { "enum": ["region", "display"] },
+          "uniqueItems": true
+        },
+        "deliveryTargets": {
+          "type": "array",
+          "items": { "enum": ["clipboard", "folder"] },
+          "uniqueItems": true
+        },
+        "hdrCapture": { "enum": ["supported", "unavailable", "unvalidated"] },
+        "outputProfiles": {
+          "type": "array",
+          "prefixItems": [{ "const": "srgb-visual-match" }],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "activeTarget": { "$ref": "#/$defs/captureTarget" },
+        "unavailableReason": { "$ref": "#/$defs/failure" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "hostStatus": { "const": "unavailable" } },
+            "required": ["hostStatus"]
+          },
+          "then": {
+            "properties": { "unavailableReason": { "$ref": "#/$defs/failure" } },
+            "required": ["unavailableReason"]
+          }
+        }
+      ]
+    },
+    "preparedRegion": {
+      "type": "object",
+      "required": ["status", "sessionId", "targetLogicalSize", "preview", "leaseMilliseconds"],
+      "properties": {
+        "status": { "const": "prepared" },
+        "sessionId": { "type": "string", "minLength": 1 },
+        "targetLogicalSize": { "$ref": "#/$defs/logicalSize" },
+        "preview": {
+          "type": "object",
+          "required": ["filePath", "mediaType", "pixelSize"],
+          "properties": {
+            "filePath": { "type": "string", "minLength": 1 },
+            "mediaType": { "const": "image/png" },
+            "pixelSize": { "$ref": "#/$defs/pixelSize" }
+          },
+          "additionalProperties": false
+        },
+        "leaseMilliseconds": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "deliveryResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["target", "status"],
+          "properties": {
+            "target": { "const": "clipboard" },
+            "status": { "const": "success" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["target", "status", "filePath"],
+          "properties": {
+            "target": { "const": "folder" },
+            "status": { "const": "success" },
+            "filePath": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["target", "status", "failure"],
+          "properties": {
+            "target": { "enum": ["clipboard", "folder"] },
+            "status": { "const": "failed" },
+            "failure": { "$ref": "#/$defs/failure" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "captureResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "sourceDynamicRange", "outputProfile", "deliveries"],
+          "properties": {
+            "status": { "const": "completed" },
+            "sourceDynamicRange": { "enum": ["sdr", "hdr"] },
+            "outputProfile": { "const": "srgb-visual-match" },
+            "deliveries": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/deliveryResult" },
+              "minItems": 1,
+              "maxItems": 2
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["status"],
+          "properties": { "status": { "const": "cancelled" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["status", "failure"],
+          "properties": {
+            "status": { "const": "failed" },
+            "failure": { "$ref": "#/$defs/failure" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "releasedRegion": {
+      "type": "object",
+      "required": ["status"],
+      "properties": { "status": { "const": "released" } },
+      "additionalProperties": false
+    },
+    "successResponse": {
+      "type": "object",
+      "required": ["version", "id", "result"],
+      "properties": {
+        "version": { "const": 4 },
+        "id": { "type": "string", "minLength": 1 },
+        "result": {
+          "oneOf": [
+            { "$ref": "#/$defs/capabilities" },
+            { "$ref": "#/$defs/preparedRegion" },
+            { "$ref": "#/$defs/captureResult" },
+            { "$ref": "#/$defs/releasedRegion" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "errorResponse": {
+      "type": "object",
+      "required": ["version", "id", "error"],
+      "properties": {
+        "version": { "const": 4 },
+        "id": { "type": "string", "minLength": 1 },
+        "error": { "$ref": "#/$defs/failure" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

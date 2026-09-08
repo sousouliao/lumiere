@@ -1,0 +1,8 @@
+{
+  "version": 4,
+  "id": "display-1",
+  "method": "captureDisplay",
+  "params": {
+    "delivery": "both"
+  }
+}

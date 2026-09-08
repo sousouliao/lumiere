@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 const protocolDirectory = resolve(process.cwd(), '../../protocol/platform-host')
 
-describe.each([1, 2, 3])('platform host protocol v%i', (version) => {
+describe.each([1, 2, 3, 4])('platform host protocol v%i', (version) => {
   it('keeps every checked-in fixture conformant with its language-neutral schema', async () => {
     const validate = await validatorFor(version)
     const fixtureDirectory = `${protocolDirectory}/fixtures/v${String(version)}`
@@ -29,7 +29,7 @@ describe.each([1, 2, 3])('platform host protocol v%i', (version) => {
 
     expect(
       validate(
-        version === 3
+        version >= 3
           ? {
               version,
               id: 'invalid-1',

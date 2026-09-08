@@ -9,10 +9,10 @@ import Testing
 @Test
 func decodesGetCapabilitiesRequest() throws {
   let request = try PlatformRequestDecoder.decode(
-    line: #"{"version":3,"id":"capabilities-1","method":"getCapabilities","params":{}}"#
+    line: #"{"version":4,"id":"capabilities-1","method":"getCapabilities","params":{}}"#
   )
 
-  #expect(request.version == 3)
+  #expect(request.version == 4)
   #expect(request.id == "capabilities-1")
   #expect(request.method == .getCapabilities)
   #expect(request.displayCapture == nil)
@@ -23,7 +23,7 @@ func decodesGetCapabilitiesRequest() throws {
 func decodesDisplayFolderCaptureRequest() throws {
   let request = try PlatformRequestDecoder.decode(
     line:
-      #"{"version":3,"id":"capture-1","method":"captureDisplay","params":{"delivery":"folder"}}"#
+      #"{"version":4,"id":"capture-1","method":"captureDisplay","params":{"delivery":"folder"}}"#
   )
 
   #expect(request.displayCapture == DisplayCaptureParameters(delivery: .folder))
@@ -33,7 +33,7 @@ func decodesDisplayFolderCaptureRequest() throws {
 func decodesCustomSaveDirectoryForFolderCapture() throws {
   let request = try PlatformRequestDecoder.decode(
     line:
-      #"{"version":3,"id":"capture-custom","method":"captureDisplay","params":{"delivery":"folder","saveDirectory":"/tmp/custom-captures"}}"#
+      #"{"version":4,"id":"capture-custom","method":"captureDisplay","params":{"delivery":"folder","saveDirectory":"/tmp/custom-captures"}}"#
   )
 
   #expect(request.displayCapture?.saveDirectory == "/tmp/custom-captures")
@@ -44,7 +44,7 @@ func rejectsSaveDirectoryForClipboardOnlyCapture() {
   #expect(throws: PlatformProtocolError.self) {
     try PlatformRequestDecoder.decode(
       line:
-        #"{"version":3,"id":"capture-invalid-directory","method":"captureDisplay","params":{"delivery":"clipboard","saveDirectory":"/tmp/custom-captures"}}"#
+        #"{"version":4,"id":"capture-invalid-directory","method":"captureDisplay","params":{"delivery":"clipboard","saveDirectory":"/tmp/custom-captures"}}"#
     )
   }
 }
@@ -52,17 +52,19 @@ func rejectsSaveDirectoryForClipboardOnlyCapture() {
 @Test
 func decodesPrepareRegionRequest() throws {
   let request = try PlatformRequestDecoder.decode(
-    line: #"{"version":3,"id":"prepare-1","method":"prepareRegion","params":{}}"#
+    line:
+      #"{"version":4,"id":"prepare-1","method":"prepareRegion","params":{"targetId":"target-17"}}"#
   )
 
   #expect(request.method == .prepareRegion)
+  #expect(request.targetId == "target-17")
 }
 
 @Test
 func decodesCommitRegionRequest() throws {
   let request = try PlatformRequestDecoder.decode(
     line:
-      #"{"version":3,"id":"commit-1","method":"commitRegion","params":{"sessionId":"region-session-17","delivery":"both","geometry":{"coordinateSpace":"target-logical","x":10.5,"y":20,"width":640,"height":360}}}"#
+      #"{"version":4,"id":"commit-1","method":"commitRegion","params":{"sessionId":"region-session-17","delivery":"both","geometry":{"coordinateSpace":"target-logical","x":10.5,"y":20,"width":640,"height":360}}}"#
   )
 
   #expect(request.commitRegion?.sessionId == "region-session-17")
@@ -75,7 +77,7 @@ func decodesCommitRegionRequest() throws {
 func decodesCancelRegionRequest() throws {
   let request = try PlatformRequestDecoder.decode(
     line:
-      #"{"version":3,"id":"cancel-1","method":"cancelRegion","params":{"sessionId":"region-session-17"}}"#
+      #"{"version":4,"id":"cancel-1","method":"cancelRegion","params":{"sessionId":"region-session-17"}}"#
   )
 
   #expect(request.method == .cancelRegion)
@@ -86,7 +88,7 @@ func decodesCancelRegionRequest() throws {
 func rejectsUnknownFields() {
   #expect(throws: PlatformProtocolError.self) {
     try PlatformRequestDecoder.decode(
-      line: #"{"version":3,"id":"bad-1","method":"getCapabilities","params":{},"extra":true}"#
+      line: #"{"version":4,"id":"bad-1","method":"getCapabilities","params":{},"extra":true}"#
     )
   }
 }
@@ -106,7 +108,7 @@ func encodesCapabilitiesResponseWithoutOptionalNulls() throws {
     id: "capabilities-1",
     result: .capabilities(
       PlatformCapabilities(
-        contractVersion: 3,
+        contractVersion: 4,
         platform: "macos",
         hostStatus: "available",
         captureModes: [.display],
@@ -122,7 +124,7 @@ func encodesCapabilitiesResponseWithoutOptionalNulls() throws {
     JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
   )
 
-  #expect(object["version"] as? Int == 3)
+  #expect(object["version"] as? Int == 4)
   #expect(object["id"] as? String == "capabilities-1")
   #expect(object["error"] == nil)
   let result = try #require(object["result"] as? [String: Any])

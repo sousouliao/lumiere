@@ -1,0 +1,21 @@
+{
+  "version": 4,
+  "id": "prepare-1",
+  "result": {
+    "status": "prepared",
+    "sessionId": "region-session-17",
+    "targetLogicalSize": {
+      "width": 2560,
+      "height": 1440
+    },
+    "preview": {
+      "filePath": "/tmp/lumiere-region/session-17.png",
+      "mediaType": "image/png",
+      "pixelSize": {
+        "width": 2560,
+        "height": 1440
+      }
+    },
+    "leaseMilliseconds": 60000
+  }
+}

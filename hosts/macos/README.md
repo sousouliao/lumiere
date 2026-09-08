@@ -19,7 +19,7 @@ swift build --package-path hosts/macos
 swift test --package-path hosts/macos
 ```
 
-The executable reads platform-host v3 JSON Lines requests from standard input, writes
+The executable reads platform-host v4 JSON Lines requests from standard input, writes
 protocol responses to standard output, and reserves standard error for structured
 diagnostics correlated by request ID. The current implementation supports display and
 target-local region capture with clipboard, folder, or both-target delivery from one

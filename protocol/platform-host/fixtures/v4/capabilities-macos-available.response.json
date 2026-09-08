@@ -1,0 +1,17 @@
+{
+  "version": 4,
+  "id": "capabilities-1",
+  "result": {
+    "contractVersion": 4,
+    "platform": "macos",
+    "hostStatus": "available",
+    "captureModes": ["region", "display"],
+    "deliveryTargets": ["clipboard", "folder"],
+    "hdrCapture": "supported",
+    "outputProfiles": ["srgb-visual-match"],
+    "activeTarget": {
+      "id": "target-17",
+      "logicalSize": { "width": 1512, "height": 982 }
+    }
+  }
+}

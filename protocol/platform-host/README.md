@@ -17,9 +17,21 @@ Every response echoes `version` and `id`, and contains exactly one of `result` o
 
 Unknown versions, methods, fields, or enum values are protocol errors. Additive
 changes require a new schema version when an older host cannot safely reject or ignore
-them. Version 1 is frozen in [`v1.schema.json`](v1.schema.json). Version 2 is frozen in
-[`v2.schema.json`](v2.schema.json). Version 3 is the current shared contract in
-[`v3.schema.json`](v3.schema.json).
+them. Versions 1–3 are frozen in their matching schemas. Version 4 is the current
+shared contract in [`v4.schema.json`](v4.schema.json).
+
+## Version 4
+
+Version 4 retains the frozen Region session model and adds stable target identity for
+multi-display switching. `getCapabilities` may issue an opaque, short-lived
+`activeTarget` token with its logical size. `prepareRegion` receives that token and
+consumes the matching native target snapshot exactly once. The Shell never interprets
+the token as an Electron display id or a native display handle.
+
+Electron therefore uses its own display ids and DIP bounds only for Overlay placement,
+while macOS and Windows retain authoritative display snapshots inside their Hosts. A
+stale token or changed topology returns `capture-unavailable`; it never silently falls
+back to the current pointer target.
 
 ## Version 3
 
@@ -87,7 +99,7 @@ are retained in v3. Region timing is superseded by
 
 ## Fixtures
 
-[`fixtures/v1`](fixtures/v1), [`fixtures/v2`](fixtures/v2), and
-[`fixtures/v3`](fixtures/v3) are executable examples. The desktop protocol tests
+[`fixtures/v1`](fixtures/v1), [`fixtures/v2`](fixtures/v2),
+[`fixtures/v3`](fixtures/v3), and [`fixtures/v4`](fixtures/v4) are executable examples. The desktop protocol tests
 validate every fixture against its owning schema. Fixtures illustrate wire shape; they
 do not replace the cross-field checks described above.

@@ -47,7 +47,7 @@ describe('platform handlers', () => {
     const result = await handlers.captureDisplay({ delivery: 'clipboard' })
 
     expect(capabilities).toMatchObject({
-      contractVersion: 3,
+      contractVersion: 4,
       platform: 'macos',
       hostStatus: 'unavailable',
       hdrCapture: 'unavailable',
@@ -93,10 +93,11 @@ class RecordingPlatformHost implements PlatformHost {
     })
   }
 
-  public prepareRegion(): Promise<{
+  public prepareRegion(targetId: string): Promise<{
     status: 'failed'
     failure: { code: 'capture-unavailable'; message: string; retryable: true }
   }> {
+    void targetId
     return Promise.resolve({
       status: 'failed',
       failure: { code: 'capture-unavailable', message: 'Unavailable', retryable: true },
