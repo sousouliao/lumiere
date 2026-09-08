@@ -66,6 +66,13 @@ then confirm **Open**. Only make this exception when the checksum matches the of
 Apple documents the same manual override and its security implications in
 [Open a Mac app from an unknown developer](https://support.apple.com/guide/mac-help/mh40616/mac).
 
+After an update, macOS may require Screen Recording permission again because the app is
+ad-hoc signed. Quit all running copies before replacing the app. If capture still reports
+missing permission while Lumiere is enabled in System Settings, quit Lumiere, run
+`tccutil reset ScreenCapture io.github.sousouliao.lumiere`, then reopen the copy in Applications
+and grant Screen Recording permission again. This resets only Lumiere's screen-recording
+grant; it does not reset other applications' permissions.
+
 ## Repository Layout
 
 ```text

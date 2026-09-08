@@ -4,6 +4,33 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.2.0`
+
+Release platforms: macOS
+
+### Added
+
+- Move between displays during Region selection; the preview and captured region follow the pointer to the new display.
+- Recover from screenshot failures in the main window, with silent system notifications for background failures and partial delivery.
+
+### Changed
+
+- Open Region selection faster with a smaller preview while retaining full-resolution output from the same frozen frame.
+- Download separate, smaller disk images for Apple Silicon (`arm64`) and Intel (`x64`) Macs.
+- Keep successful captures and cancellation quiet, with a shared busy state across capture buttons, shortcuts, and the menu bar.
+
+### Fixed
+
+- Refresh HDR availability when the pointer moves between displays.
+- Keep failure details and recovery controls within the main window's fixed size.
+
+### Known limitations
+
+- The app is ad-hoc signed and not notarized, so first launch requires the documented manual Gatekeeper exception.
+- HDR-preserved export is not supported; the official output is sRGB Visual Match.
+- This release includes macOS artifacts only; Windows signing and runtime verification remain in progress.
+- Updating the ad-hoc-signed app may require granting Screen Recording permission again; see the macOS installation guide for recovery steps.
+
 ## [0.2.0-preview.1] - 2026-09-04
 
 Release platforms: Windows
