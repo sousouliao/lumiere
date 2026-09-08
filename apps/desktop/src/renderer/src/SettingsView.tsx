@@ -79,22 +79,40 @@ export function SettingsView({
   const selectedDelivery = snapshot?.outputDelivery ?? 'both'
 
   return (
-    <main className="settings-shell">
+    <main className={`settings-shell settings-shell--${platform}`}>
       <header
         className={`settings-title-bar settings-title-bar--${platform}`}
         aria-label="Lumiere settings window"
       >
+        {platform === 'windows' ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            hoverScale={1}
+            pressScale={0.98}
+            className="settings-back"
+            aria-label="Back to capture"
+            title="Back to capture"
+            onClick={onDone}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M13 8H3M7 4L3 8L7 12" />
+            </svg>
+          </Button>
+        ) : null}
         <h1>Settings</h1>
-        <Button
-          variant="ghost"
-          size="sm"
-          hoverScale={1}
-          pressScale={0.98}
-          className="settings-done"
-          onClick={onDone}
-        >
-          Done
-        </Button>
+        {platform !== 'windows' ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            hoverScale={1}
+            pressScale={0.98}
+            className="settings-done"
+            onClick={onDone}
+          >
+            Done
+          </Button>
+        ) : null}
       </header>
 
       <nav className="settings-dock-slot" aria-label="Settings sections">

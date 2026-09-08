@@ -188,6 +188,10 @@ button {
   background: var(--surface-window);
 }
 
+.app-shell:has(> .title-bar--windows) {
+  grid-template-rows: 47px minmax(0, 1fr) 41px;
+}
+
 .title-bar {
   position: relative;
   display: flex;
@@ -538,9 +542,57 @@ button {
   line-height: 1;
 }
 
+.settings-shell--windows {
+  grid-template-rows: 47px 72px minmax(0, 1fr);
+}
+
 .settings-title-bar--windows {
   justify-content: flex-start;
-  padding-left: 16px;
+  gap: 9px;
+  padding: 0 138px 0 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-window);
+}
+
+.settings-title-bar--windows h1 {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.settings-back {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--Lumiere-Dark-radiusChip);
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.settings-back svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settings-back:hover {
+  background: var(--surface-hover);
+}
+
+.settings-back:active {
+  background: var(--surface-raised);
+}
+
+.settings-back:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 1px;
 }
 
 .settings-done {
@@ -558,10 +610,6 @@ button {
   cursor: pointer;
   transition: color 120ms ease;
   -webkit-app-region: no-drag;
-}
-
-.settings-title-bar--windows .settings-done {
-  right: 146px;
 }
 
 .settings-done:hover {
