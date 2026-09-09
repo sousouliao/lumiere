@@ -34,7 +34,7 @@ if (process.platform === 'darwin' && !process.env.LUMIERE_MAC_HOST_PATH) {
 async function discoverXcodeDeveloperDirectory() {
   const entries = await readdir('/Applications', { withFileTypes: true })
   const xcodeApplications = entries
-    .filter((entry) => entry.isDirectory() && /^Xcode(?:-.+)?\.app$/.test(entry.name))
+    .filter((entry) => entry.isDirectory() && /^Xcode(?:[-_].+)?\.app$/.test(entry.name))
     .map((entry) => entry.name)
     .sort((left, right) => {
       if (left === 'Xcode.app') return -1

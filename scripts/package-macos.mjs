@@ -291,7 +291,7 @@ function validateConfiguration(desktopPackage, builderConfig) {
 async function discoverXcodeDeveloperDirectory() {
   const entries = await readdir('/Applications', { withFileTypes: true })
   const xcodeApplications = entries
-    .filter((entry) => entry.isDirectory() && /^Xcode(?:-.+)?\.app$/.test(entry.name))
+    .filter((entry) => entry.isDirectory() && isXcodeApplicationName(entry.name))
     .map((entry) => entry.name)
     .sort((left, right) => {
       if (left === 'Xcode.app') return -1
@@ -309,6 +309,10 @@ async function discoverXcodeDeveloperDirectory() {
     }
   }
   return undefined
+}
+
+export function isXcodeApplicationName(name) {
+  return /^Xcode(?:[-_].+)?\.app$/.test(name)
 }
 
 async function readJson(path) {

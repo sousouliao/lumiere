@@ -125,4 +125,17 @@ describe('macOS packaging policy', () => {
       await rm(directory, { force: true, recursive: true })
     }
   })
+
+  it('recognizes the versioned Xcode application names used by hosted macOS runners', async () => {
+    const packagingModule: unknown = await import(
+      // @ts-expect-error Repository packaging scripts intentionally remain plain Node modules.
+      '../../../../scripts/package-macos.mjs'
+    )
+    const { isXcodeApplicationName } = packagingModule as {
+      isXcodeApplicationName: (name: string) => boolean
+    }
+
+    expect(isXcodeApplicationName('Xcode.app')).toBe(true)
+    expect(isXcodeApplicationName('Xcode_26.0.app')).toBe(true)
+  })
 })
