@@ -39,6 +39,13 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
   frozen-frame commit, external-4K backing geometry, and bounded repeat checks pass.
   Region latency on the named SDR target was 607 ms cold and 343.5 ms warm median
   (311–415 ms). Built-in Retina XDR geometry still needs observation after the correction.
+- **macOS manual update check:** System settings checks the latest stable GitHub Release
+  through typed main/preload IPC, reports idle/checking/current/available/failure states,
+  and opens the fixed releases page for manual download. `pnpm check`, `pnpm test:shared`
+  (28 files, 151 tests), `pnpm test:macos` (2 files, 6 tests), the macOS Host suite
+  (34 tests), and `pnpm build` pass on this Mac. The development runtime reported
+  `0.2.0 · Up to date` before `v0.3.0` publication; installed-release behavior is not yet
+  separately observed.
 - **Multi-display Region repository slice:** platform-host v4 target tokens, the shared
   display watcher, switching state, preview/session replacement, and stale-generation guards
   are implemented. `pnpm test:shared` (27 files, 138 tests), `pnpm build`, and the macOS
@@ -47,13 +54,14 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
 - **Windows runtime:** recorded HDR/SDR capture, independent delivery outcomes, settings,
   cancellation, and lifecycle checks pass. Those observations predate the outstanding
   Region performance slice and do not verify its current Windows implementation.
-- **Distribution:** macOS `v0.2.0` was published from `2572710` with separate arm64/x64
-  DMGs. CI checks, both builds, signatures, architecture checks, publication, downloaded
-  checksums, arm64 Display/Region capture, delivery, cancellation, and native notification
-  recovery pass. The x64 app and Host launch under Rosetta; its separate ad-hoc identity
-  still returned permission-required during the agent's capture attempt, and the maintainer
-  accepted that observation boundary for this release. Updating an ad-hoc-signed build may
-  require resetting and granting Lumiere's Screen Recording permission again.
+- **Distribution:** macOS `v0.3.0` was published from `15caeab` with separate arm64/x64
+  DMGs and the manual GitHub update check. CI audit, shared checks, macOS tests, both builds,
+  signatures, architecture checks, publication, and downloaded public-release checksums
+  pass. The prior `v0.2.0` arm64 Display/Region capture, delivery, cancellation, and native
+  notification recovery observations remain the latest installed-artifact evidence. The
+  x64 app and Host launch under Rosetta; its separate ad-hoc identity still returned
+  permission-required during the agent's capture attempt. Updating an ad-hoc-signed build
+  may require resetting and granting Lumiere's Screen Recording permission again.
   Windows unsigned `v0.2.0-preview.1` publication and named-machine installer lifecycle
   are recorded; fresh-machine installation of the published artifact remains unverified.
 - **Fidelity and CI:** named macOS bright/dark fixtures and one Windows HDR-target sRGB
@@ -80,7 +88,7 @@ running history here.
   verify signing, production sparse identity, updates, borderless/fallback behavior,
   and clean-machine lifecycle.
 - **macOS release — [#17](https://github.com/sousouliao/lumiere/issues/17) complete:** retain
-  the published `v0.2.0` split-artifact and verification evidence. Handle later field defects
+  the published `v0.3.0` split-artifact and verification evidence. Handle later field defects
   through their owning Issues.
 - **Milestone exit:** blocked until both distribution lanes satisfy their independent
   criteria. Repository success, artifact delivery, visual match, and HDR preservation
