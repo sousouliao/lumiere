@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { captureCommandChannels, type LumiereRendererApi } from '../shared/capture-command'
 import { settingsCommandChannels, type SettingsSnapshot } from '../shared/settings-command'
 import type { LumierePlatform } from '../shared/platform-contract'
+import { updateCommandChannels } from '../shared/update-command'
 
 const platform: LumierePlatform = process.platform === 'darwin' ? 'macos' : 'windows'
 
@@ -109,6 +110,9 @@ const platformApi: LumiereRendererApi = {
       ipcRenderer.removeListener(settingsCommandChannels.showRequested, handleShowRequested)
     }
   },
+  getUpdateSnapshot: () => ipcRenderer.invoke(updateCommandChannels.getSnapshot),
+  checkForUpdates: () => ipcRenderer.invoke(updateCommandChannels.check),
+  openLatestRelease: () => ipcRenderer.invoke(updateCommandChannels.openLatestRelease),
 }
 
 contextBridge.exposeInMainWorld('lumierePlatform', platformApi)

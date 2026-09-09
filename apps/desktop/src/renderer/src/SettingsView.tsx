@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/motion/select'
 import { Switch } from '@/components/motion/switch'
+import type { UpdateCheckResult } from '../../shared/update-command'
 
 const outputDeliveryLabels: Record<OutputDelivery, string> = {
   clipboard: 'Clipboard',
@@ -40,6 +41,11 @@ const afterCaptureBehaviorLabels: Record<AfterCaptureBehavior, string> = {
 }
 
 export type SettingsSection = 'output' | 'capture' | 'system'
+export type UpdateViewState =
+  | { status: 'loading' }
+  | { status: 'idle'; currentVersion: string }
+  | { status: 'checking'; currentVersion: string }
+  | UpdateCheckResult
 
 interface SettingsViewProps {
   initialSection?: SettingsSection
@@ -49,6 +55,7 @@ interface SettingsViewProps {
   isSaving: boolean
   savingShortcut: CaptureMode | null
   error: string | null
+  updateState: UpdateViewState
   onDone: () => void
   onOutputDeliveryChange: (delivery: OutputDelivery) => void
   onChooseSaveDirectory: () => void
@@ -56,6 +63,8 @@ interface SettingsViewProps {
   onHdrStatusRemindersChange: (enabled: boolean) => void
   onShortcutChange: (update: ShortcutUpdate) => Promise<void>
   onShortcutRecordingChange: (recording: boolean) => Promise<void>
+  onCheckForUpdates: () => void
+  onOpenLatestRelease: () => void
 }
 
 export function SettingsView({
@@ -66,6 +75,7 @@ export function SettingsView({
   isSaving,
   savingShortcut,
   error,
+  updateState,
   onDone,
   onOutputDeliveryChange,
   onChooseSaveDirectory,
@@ -73,6 +83,8 @@ export function SettingsView({
   onHdrStatusRemindersChange,
   onShortcutChange,
   onShortcutRecordingChange,
+  onCheckForUpdates,
+  onOpenLatestRelease,
 }: SettingsViewProps): React.JSX.Element {
   const [section, setSection] = useState<SettingsSection>(initialSection)
   const available = snapshot?.availableOutputDeliveries ?? []
@@ -177,7 +189,15 @@ export function SettingsView({
             onHdrStatusRemindersChange={onHdrStatusRemindersChange}
           />
         ) : null}
-        {section === 'system' ? <SystemSettings snapshot={surfaceSnapshot} /> : null}
+        {section === 'system' ? (
+          <SystemSettings
+            snapshot={surfaceSnapshot}
+            platform={platform}
+            updateState={updateState}
+            onCheckForUpdates={onCheckForUpdates}
+            onOpenLatestRelease={onOpenLatestRelease}
+          />
+        ) : null}
         {error ? (
           <p className="settings-error" role="alert">
             {error}
@@ -422,7 +442,7 @@ function ShortcutRecorder({
           size="sm"
           hoverScale={1}
           pressScale={0.98}
-          className={`shortcut-recorder${recording ? ' shortcut-recorder--recording' : ''}`}
+          className={`settings-inline-action shortcut-recorder${recording ? ' shortcut-recorder--recording' : ''}`}
           disabled={disabled}
           aria-label={`Configure ${label.toLowerCase()}`}
           aria-pressed={recording}
@@ -470,8 +490,16 @@ function ShortcutRecorder({
 
 function SystemSettings({
   snapshot,
+  platform,
+  updateState,
+  onCheckForUpdates,
+  onOpenLatestRelease,
 }: {
   snapshot: CaptureSurfaceSnapshot | null
+  platform: LumierePlatform
+  updateState: UpdateViewState
+  onCheckForUpdates: () => void
+  onOpenLatestRelease: () => void
 }): React.JSX.Element {
   const hostAvailable = snapshot?.hostAvailable === true
   const displayAvailable = snapshot?.captureModes.includes('display') === true
@@ -482,6 +510,25 @@ function SystemSettings({
       : displayAvailable
         ? 'Available'
         : 'Needs attention'
+  const currentVersion = updateState.status === 'loading' ? '…' : updateState.currentVersion
+  const updateHint =
+    updateState.status === 'checking'
+      ? `${currentVersion} · Checking…`
+      : updateState.status === 'available'
+        ? `${currentVersion} · ${updateState.availableVersion} available`
+        : updateState.status === 'up-to-date'
+          ? `${currentVersion} · Up to date`
+          : updateState.status === 'failed'
+            ? `${currentVersion} · Couldn’t check`
+            : currentVersion
+  const updateAction =
+    updateState.status === 'available'
+      ? 'View update'
+      : updateState.status === 'failed'
+        ? 'Try again'
+        : updateState.status === 'up-to-date'
+          ? 'Check again'
+          : 'Check for updates'
 
   return (
     <div className="settings-list settings-list--system">
@@ -495,7 +542,29 @@ function SystemSettings({
         value={!snapshot ? 'Checking…' : hostAvailable ? 'Connected' : 'Unavailable'}
         tone={hostAvailable ? 'ready' : 'muted'}
       />
-      <SettingsRow label="Version" value="0.2.0-preview.1" />
+      {platform === 'macos' ? (
+        <div className="settings-row">
+          <span className="settings-row-copy">
+            <span className="settings-row-label">Version</span>
+            <span className="settings-row-hint" aria-live="polite">
+              {updateHint}
+            </span>
+          </span>
+          <Button
+            variant={updateState.status === 'available' ? 'primary' : 'ghost'}
+            size="sm"
+            hoverScale={1}
+            pressScale={0.98}
+            className={`settings-inline-action update-check-button${updateState.status === 'available' ? ' update-check-button--available' : ''}`}
+            disabled={updateState.status === 'loading' || updateState.status === 'checking'}
+            onClick={updateState.status === 'available' ? onOpenLatestRelease : onCheckForUpdates}
+          >
+            {updateState.status === 'checking' ? 'Checking…' : updateAction}
+          </Button>
+        </div>
+      ) : (
+        <SettingsRow label="Version" value={currentVersion} />
+      )}
       <p className="settings-semantics-note">
         Native HDR-aware capture. Everyday output is sRGB Visual Match. Copied and saved mean
         delivered, not certified.

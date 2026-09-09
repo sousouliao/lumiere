@@ -11,7 +11,7 @@ import type { OutputDelivery } from '../../shared/platform-contract'
 import type { CaptureMode, ShortcutUpdate } from '../../shared/shortcut-command'
 import type { SettingsSnapshot } from '../../shared/settings-command'
 import type { AfterCaptureBehavior } from '../../shared/settings-command'
-import { SettingsView, type SettingsSection } from './SettingsView'
+import { SettingsView, type SettingsSection, type UpdateViewState } from './SettingsView'
 import { RegionOverlay } from './RegionOverlay'
 import { RecoveryActions } from './RecoveryActions'
 import { CAPTURE_LOAD_FAILURE, resolveCaptureNotices } from './capture-notices'
@@ -383,6 +383,7 @@ function SettingsWindow({
   const [isSaving, setIsSaving] = useState(false)
   const [savingShortcut, setSavingShortcut] = useState<CaptureMode | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [updateState, setUpdateState] = useState<UpdateViewState>({ status: 'loading' })
 
   useEffect(() => {
     let isCurrent = true
@@ -408,6 +409,42 @@ function SettingsWindow({
       isCurrent = false
     }
   }, [])
+
+  useEffect(() => {
+    let isCurrent = true
+    void window.lumierePlatform
+      .getUpdateSnapshot()
+      .then((nextSnapshot) => {
+        if (isCurrent) setUpdateState({ status: 'idle', ...nextSnapshot })
+      })
+      .catch(() => {
+        // Keep the update control disabled when local version metadata is unavailable.
+      })
+    return () => {
+      isCurrent = false
+    }
+  }, [])
+
+  const checkForUpdates = async (): Promise<void> => {
+    if (updateState.status === 'loading') return
+    const { currentVersion } = updateState
+    setUpdateState({ status: 'checking', currentVersion })
+    setError(null)
+    try {
+      setUpdateState(await window.lumierePlatform.checkForUpdates())
+    } catch {
+      setUpdateState({ status: 'failed', currentVersion })
+    }
+  }
+
+  const openLatestRelease = async (): Promise<void> => {
+    setError(null)
+    try {
+      await window.lumierePlatform.openLatestRelease()
+    } catch {
+      setError('The release page could not be opened. Try again.')
+    }
+  }
 
   const setOutputDelivery = async (delivery: OutputDelivery): Promise<void> => {
     setIsSaving(true)
@@ -483,6 +520,7 @@ function SettingsWindow({
       isSaving={isSaving}
       savingShortcut={savingShortcut}
       error={error}
+      updateState={updateState}
       onDone={onDone}
       onOutputDeliveryChange={(delivery) => void setOutputDelivery(delivery)}
       onChooseSaveDirectory={() => void chooseSaveDirectory()}
@@ -493,6 +531,8 @@ function SettingsWindow({
         if (recording) setError(null)
         return window.lumierePlatform.setShortcutRecording(recording)
       }}
+      onCheckForUpdates={() => void checkForUpdates()}
+      onOpenLatestRelease={() => void openLatestRelease()}
     />
   )
 }

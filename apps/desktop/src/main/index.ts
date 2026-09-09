@@ -4,6 +4,7 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  net,
   protocol,
   screen,
   shell,
@@ -47,6 +48,8 @@ import {
 } from '../shared/settings-command'
 import { parseShortcutUpdate } from '../shared/shortcut-command'
 import { configureWindowsUpdates } from './windows-updater'
+import { checkLatestRelease } from './manual-update-check'
+import { updateCommandChannels } from '../shared/update-command'
 import {
   parseCaptureGeometry,
   type CaptureGeometry,
@@ -63,6 +66,8 @@ protocol.registerSchemesAsPrivileged([
 
 const regionPreviewDirectory = join(tmpdir(), 'lumiere-region-preview')
 const regionPreviewRegistry = new RegionPreviewRegistry(regionPreviewDirectory)
+const latestReleaseApiUrl = 'https://api.github.com/repos/Mournerliao/lumiere/releases/latest'
+const latestReleasePageUrl = 'https://github.com/Mournerliao/lumiere/releases/latest'
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('io.github.sousouliao.lumiere')
@@ -313,6 +318,9 @@ function registerIpc(): void {
   ipcMain.removeHandler(settingsCommandChannels.setHdrStatusReminders)
   ipcMain.removeHandler(settingsCommandChannels.setOutputDelivery)
   ipcMain.removeHandler(settingsCommandChannels.setShortcutRecording)
+  ipcMain.removeHandler(updateCommandChannels.getSnapshot)
+  ipcMain.removeHandler(updateCommandChannels.check)
+  ipcMain.removeHandler(updateCommandChannels.openLatestRelease)
 
   const assertTrustedWindow = (
     event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent,
@@ -504,6 +512,44 @@ function registerIpc(): void {
       throw new Error('Expected one shortcut-recording state.')
     }
     shortcutService?.setRecording(args[0])
+  })
+
+  ipcMain.handle(updateCommandChannels.getSnapshot, (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    return { currentVersion: app.getVersion() }
+  })
+
+  ipcMain.handle(updateCommandChannels.check, async (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    if (process.platform !== 'darwin') throw new Error('Manual update checks are macOS-only.')
+    return checkLatestRelease(
+      app.getVersion(),
+      () =>
+        net.fetch(latestReleaseApiUrl, {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(10_000),
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+        }),
+      // Electron net.fetch does not expose the final URL after redirects; Node fetch does.
+      () =>
+        fetch(latestReleasePageUrl, {
+          cache: 'no-store',
+          redirect: 'follow',
+          signal: AbortSignal.timeout(10_000),
+        }),
+    )
+  })
+
+  ipcMain.handle(updateCommandChannels.openLatestRelease, async (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    if (process.platform !== 'darwin') throw new Error('Manual updates are macOS-only.')
+    await shell.openExternal(latestReleasePageUrl)
   })
 }
 

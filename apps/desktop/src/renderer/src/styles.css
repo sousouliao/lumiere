@@ -795,8 +795,7 @@ button {
   display: grid;
 }
 
-.shortcut-recorder {
-  min-width: 104px;
+.settings-inline-action {
   height: 30px;
   padding: 0 10px;
   border: 1px solid var(--border-default);
@@ -808,19 +807,34 @@ button {
   -webkit-app-region: no-drag;
 }
 
-.shortcut-recorder:hover:not(:disabled),
+.settings-inline-action:hover:not(:disabled),
 .shortcut-recorder--recording {
   border-color: var(--accent-border);
   background: var(--surface-hover);
 }
 
-.shortcut-recorder:focus-visible {
+.settings-inline-action:focus-visible {
   outline: 2px solid var(--accent-base);
   outline-offset: 2px;
 }
 
 .shortcut-recorder[aria-invalid='true'] {
   border-color: var(--status-caution);
+}
+
+.shortcut-recorder {
+  min-width: 104px;
+}
+
+.update-check-button {
+  min-width: 112px;
+}
+
+.update-check-button--available,
+.update-check-button--available:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--text-on-accent);
+  background: var(--accent-base);
 }
 
 .shortcut-setting-error {

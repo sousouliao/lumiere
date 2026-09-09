@@ -1,6 +1,30 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { SettingsView } from './SettingsView'
+import { SettingsView, type UpdateViewState } from './SettingsView'
+
+function renderSystemSettings(platform: 'macos' | 'windows', updateState: UpdateViewState): string {
+  return renderToStaticMarkup(
+    <SettingsView
+      initialSection="system"
+      snapshot={null}
+      surfaceSnapshot={null}
+      platform={platform}
+      isSaving={false}
+      savingShortcut={null}
+      error={null}
+      updateState={updateState}
+      onDone={() => undefined}
+      onOutputDeliveryChange={() => undefined}
+      onChooseSaveDirectory={() => undefined}
+      onAfterCaptureBehaviorChange={() => undefined}
+      onHdrStatusRemindersChange={() => undefined}
+      onShortcutChange={() => Promise.resolve()}
+      onShortcutRecordingChange={() => Promise.resolve()}
+      onCheckForUpdates={() => undefined}
+      onOpenLatestRelease={() => undefined}
+    />,
+  )
+}
 
 describe('SettingsView', () => {
   it.each(['macos', 'windows'] as const)(
@@ -34,6 +58,7 @@ describe('SettingsView', () => {
           isSaving={false}
           savingShortcut={null}
           error={null}
+          updateState={{ status: 'idle', currentVersion: '0.2.0' }}
           onDone={() => undefined}
           onOutputDeliveryChange={() => undefined}
           onChooseSaveDirectory={() => undefined}
@@ -41,6 +66,8 @@ describe('SettingsView', () => {
           onHdrStatusRemindersChange={() => undefined}
           onShortcutChange={() => Promise.resolve()}
           onShortcutRecordingChange={() => Promise.resolve()}
+          onCheckForUpdates={() => undefined}
+          onOpenLatestRelease={() => undefined}
         />,
       )
 
@@ -81,4 +108,38 @@ describe('SettingsView', () => {
       expect(markup).toContain('Lumiere-2026-08-25-162345.png')
     },
   )
+
+  it('offers the Ardot-designed manual update action only on macOS', () => {
+    const markup = renderSystemSettings('macos', {
+      status: 'available',
+      currentVersion: '0.2.0',
+      availableVersion: '0.3.0',
+    })
+
+    expect(markup).toContain('0.2.0 · 0.3.0 available')
+    expect(markup).toContain('View update')
+    expect(markup).toContain('aria-live="polite"')
+  })
+
+  it('shows the real version without update actions on Windows', () => {
+    const markup = renderSystemSettings('windows', {
+      status: 'idle',
+      currentVersion: '0.2.0',
+    })
+
+    expect(markup).toContain('settings-row-value--muted">0.2.0')
+    expect(markup).not.toContain('Check for updates')
+  })
+
+  it.each([
+    [{ status: 'idle', currentVersion: '0.2.0' }, '0.2.0', 'Check for updates'],
+    [{ status: 'checking', currentVersion: '0.2.0' }, '0.2.0 · Checking…', 'Checking…'],
+    [{ status: 'up-to-date', currentVersion: '0.2.0' }, '0.2.0 · Up to date', 'Check again'],
+    [{ status: 'failed', currentVersion: '0.2.0' }, '0.2.0 · Couldn’t check', 'Try again'],
+  ] as const)('renders the macOS %s update state', (updateState, statusText, actionText) => {
+    const markup = renderSystemSettings('macos', updateState)
+
+    expect(markup).toContain(statusText)
+    expect(markup).toContain(actionText)
+  })
 })
