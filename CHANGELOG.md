@@ -4,6 +4,21 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.3.0`
+
+Release platforms: macOS
+
+### Added
+
+- Check for a newer Lumiere version from System settings and open the latest GitHub Release for manual download.
+
+### Known limitations
+
+- Update checks and downloads require access to GitHub; downloading and installing updates remain manual.
+- The app is ad-hoc signed and not notarized, so first launch requires the documented manual Gatekeeper exception.
+- HDR-preserved export is not supported; the official output is sRGB Visual Match.
+- Updating the ad-hoc-signed app may require granting Screen Recording permission again; see the macOS installation guide for recovery steps.
+
 ## [0.2.0] - 2026-09-09
 
 Release platforms: macOS
