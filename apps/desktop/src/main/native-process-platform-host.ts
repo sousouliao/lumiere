@@ -12,6 +12,7 @@ import type {
   PlatformHost,
   PrepareRegionResult,
   ReleasedRegionCapture,
+  ScreenCapturePermissionRequestResult,
   LumierePlatform,
 } from '../shared/platform-contract'
 import { deliveryTargetsFor, PLATFORM_CONTRACT_VERSION } from '../shared/platform-contract'
@@ -92,6 +93,15 @@ export class NativeProcessPlatformHost implements PlatformHost {
     } catch {
       return { status: 'released' }
     }
+  }
+
+  public async requestScreenCapturePermission(): Promise<ScreenCapturePermissionRequestResult> {
+    if (this.platform !== 'macos') {
+      throw new Error('Screen Capture permission requests are macOS-only.')
+    }
+    return parseScreenCapturePermissionRequestResult(
+      await this.request('requestScreenCapturePermission', {}),
+    )
   }
 
   public dispose(): void {
@@ -394,7 +404,12 @@ function parseHostResult(
   method: HostMethod,
   value: unknown,
   platform: LumierePlatform,
-): PlatformCapabilities | CaptureResult | PrepareRegionResult | ReleasedRegionCapture {
+):
+  | PlatformCapabilities
+  | CaptureResult
+  | PrepareRegionResult
+  | ReleasedRegionCapture
+  | ScreenCapturePermissionRequestResult {
   switch (method) {
     case 'getCapabilities':
       return parseCapabilities(value, platform)
@@ -405,7 +420,24 @@ function parseHostResult(
       return parsePrepareRegionResult(value, platform)
     case 'cancelRegion':
       return parseReleasedRegion(value, platform)
+    case 'requestScreenCapturePermission':
+      return parseScreenCapturePermissionRequestResult(value)
   }
+}
+
+function parseScreenCapturePermissionRequestResult(
+  value: unknown,
+): ScreenCapturePermissionRequestResult {
+  if (
+    !isRecord(value) ||
+    (value.status !== 'granted' &&
+      value.status !== 'restart-required' &&
+      value.status !== 'not-granted') ||
+    !hasExactKeys(value, ['status'])
+  ) {
+    throw new Error('The macOS host returned an invalid Screen Capture permission result.')
+  }
+  return { status: value.status }
 }
 
 function parsePrepareRegionResult(value: unknown, platform: LumierePlatform): PrepareRegionResult {

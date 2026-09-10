@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 const protocolDirectory = resolve(process.cwd(), '../../protocol/platform-host')
 
-describe.each([1, 2, 3, 4])('platform host protocol v%i', (version) => {
+describe.each([1, 2, 3, 4, 5])('platform host protocol v%i', (version) => {
   it('keeps every checked-in fixture conformant with its language-neutral schema', async () => {
     const validate = await validatorFor(version)
     const fixtureDirectory = `${protocolDirectory}/fixtures/v${String(version)}`
@@ -48,8 +48,15 @@ describe.each([1, 2, 3, 4])('platform host protocol v%i', (version) => {
 })
 
 async function validatorFor(version: number): Promise<ReturnType<Ajv2020['compile']>> {
+  const ajv = new Ajv2020({ allErrors: true, strict: true })
+  if (version === 5) {
+    const priorSchema = JSON.parse(
+      await readFile(`${protocolDirectory}/v4.schema.json`, 'utf8'),
+    ) as object
+    ajv.addSchema(priorSchema)
+  }
   const schema = JSON.parse(
     await readFile(`${protocolDirectory}/v${String(version)}.schema.json`, 'utf8'),
   ) as object
-  return new Ajv2020({ allErrors: true, strict: true }).compile(schema)
+  return ajv.compile(schema)
 }

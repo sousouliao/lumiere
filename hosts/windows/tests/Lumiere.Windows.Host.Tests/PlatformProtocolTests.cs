@@ -12,13 +12,13 @@ public sealed class PlatformProtocolTests
     {
         await using var operations = CreateOperations();
         var response = await PlatformProtocol.ProcessLineAsync(
-            """{"version":4,"id":"capabilities-1","method":"getCapabilities","params":{}}""",
+            """{"version":5,"id":"capabilities-1","method":"getCapabilities","params":{}}""",
             operations);
 
         using var document = JsonDocument.Parse(response.ResponseLine);
         var root = document.RootElement;
         var result = root.GetProperty("result");
-        Assert.Equal(4, root.GetProperty("version").GetInt32());
+        Assert.Equal(5, root.GetProperty("version").GetInt32());
         Assert.Equal("capabilities-1", root.GetProperty("id").GetString());
         Assert.Equal("windows", result.GetProperty("platform").GetString());
         Assert.Equal("available", result.GetProperty("hostStatus").GetString());
@@ -40,7 +40,7 @@ public sealed class PlatformProtocolTests
         };
         await using var operations = CreateOperations(engine);
         var response = await PlatformProtocol.ProcessLineAsync(
-            """{"version":4,"id":"capture-1","method":"captureDisplay","params":{"delivery":"folder"}}""",
+            """{"version":5,"id":"capture-1","method":"captureDisplay","params":{"delivery":"folder"}}""",
             operations);
 
         using var document = JsonDocument.Parse(response.ResponseLine);
@@ -65,7 +65,7 @@ public sealed class PlatformProtocolTests
         await using var operations = CreateOperations(engine);
 
         var response = await PlatformProtocol.ProcessLineAsync(
-            """{"version":4,"id":"capture-custom","method":"captureDisplay","params":{"delivery":"folder","saveDirectory":"D:\\Screenshots"}}""",
+            """{"version":5,"id":"capture-custom","method":"captureDisplay","params":{"delivery":"folder","saveDirectory":"D:\\Screenshots"}}""",
             operations);
 
         using var document = JsonDocument.Parse(response.ResponseLine);
@@ -78,7 +78,7 @@ public sealed class PlatformProtocolTests
     {
         await using var operations = CreateOperations();
         var response = await PlatformProtocol.ProcessLineAsync(
-            """{"version":4,"id":"capture-invalid-directory","method":"captureDisplay","params":{"delivery":"clipboard","saveDirectory":"D:\\Screenshots"}}""",
+            """{"version":5,"id":"capture-invalid-directory","method":"captureDisplay","params":{"delivery":"clipboard","saveDirectory":"D:\\Screenshots"}}""",
             operations);
 
         using var document = JsonDocument.Parse(response.ResponseLine);
@@ -97,7 +97,7 @@ public sealed class PlatformProtocolTests
         };
         await using var operations = CreateOperations(engine);
         var response = await PlatformProtocol.ProcessLineAsync(
-            """{"version":4,"id":"capture-both","method":"captureDisplay","params":{"delivery":"both"}}""",
+            """{"version":5,"id":"capture-both","method":"captureDisplay","params":{"delivery":"both"}}""",
             operations);
 
         using var document = JsonDocument.Parse(response.ResponseLine);
@@ -123,7 +123,7 @@ public sealed class PlatformProtocolTests
                 WindowsTargetHdrState.Active,
                 new WindowsTargetLogicalSize(2560, 1440)));
         var response = await PlatformProtocol.ProcessLineAsync(
-            """{"version":4,"id":"capabilities-2","method":"getCapabilities","params":{}}""",
+            """{"version":5,"id":"capabilities-2","method":"getCapabilities","params":{}}""",
             operations);
 
         using var document = JsonDocument.Parse(response.ResponseLine);
@@ -144,7 +144,7 @@ public sealed class PlatformProtocolTests
             engine,
             WindowsHostOperationsTests.CreateRegionCapability());
         var capabilitiesResponse = await PlatformProtocol.ProcessLineAsync(
-            """{"version":4,"id":"capabilities-region","method":"getCapabilities","params":{}}""",
+            """{"version":5,"id":"capabilities-region","method":"getCapabilities","params":{}}""",
             operations);
         using var capabilitiesDocument = JsonDocument.Parse(capabilitiesResponse.ResponseLine);
         var activeTarget = capabilitiesDocument.RootElement
@@ -153,7 +153,7 @@ public sealed class PlatformProtocolTests
         Assert.Equal("target-17", activeTarget.GetProperty("id").GetString());
 
         var preparedResponse = await PlatformProtocol.ProcessLineAsync(
-            """{"version":4,"id":"prepare-region","method":"prepareRegion","params":{"targetId":"target-17"}}""",
+            """{"version":5,"id":"prepare-region","method":"prepareRegion","params":{"targetId":"target-17"}}""",
             operations);
         using var preparedDocument = JsonDocument.Parse(preparedResponse.ResponseLine);
         var prepared = preparedDocument.RootElement.GetProperty("result");
@@ -163,7 +163,7 @@ public sealed class PlatformProtocolTests
         Assert.Equal("image/png", prepared.GetProperty("preview").GetProperty("mediaType").GetString());
 
         var commitRequest =
-            """{"version":4,"id":"commit-region","method":"commitRegion","params":{"sessionId":"__SESSION_ID__","delivery":"clipboard","geometry":{"coordinateSpace":"target-logical","x":12.5,"y":20,"width":300,"height":200}}}"""
+            """{"version":5,"id":"commit-region","method":"commitRegion","params":{"sessionId":"__SESSION_ID__","delivery":"clipboard","geometry":{"coordinateSpace":"target-logical","x":12.5,"y":20,"width":300,"height":200}}}"""
                 .Replace("__SESSION_ID__", sessionId, StringComparison.Ordinal);
         var response = await PlatformProtocol.ProcessLineAsync(commitRequest, operations);
 
@@ -177,7 +177,7 @@ public sealed class PlatformProtocolTests
     {
         await using var operations = CreateOperations();
         var response = await PlatformProtocol.ProcessLineAsync(
-            """{"version":4,"id":"cancel-1","method":"cancelRegion","params":{"sessionId":"missing-session"}}""",
+            """{"version":5,"id":"cancel-1","method":"cancelRegion","params":{"sessionId":"missing-session"}}""",
             operations);
 
         using var document = JsonDocument.Parse(response.ResponseLine);
@@ -189,7 +189,7 @@ public sealed class PlatformProtocolTests
     {
         await using var operations = CreateOperations();
         var response = await PlatformProtocol.ProcessLineAsync(
-            """{"version":4,"id":"bad-1","method":"getCapabilities","params":{},"extra":true}""",
+            """{"version":5,"id":"bad-1","method":"getCapabilities","params":{},"extra":true}""",
             operations);
 
         using var document = JsonDocument.Parse(response.ResponseLine);

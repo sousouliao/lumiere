@@ -123,7 +123,7 @@ describe('SettingsStore', () => {
     await writeFile(
       filePath,
       JSON.stringify({
-        version: 4,
+        version: 5,
         outputDelivery: 'both',
         captureShortcuts: { region: null, display: null },
         afterCaptureBehavior: 'do-nothing',

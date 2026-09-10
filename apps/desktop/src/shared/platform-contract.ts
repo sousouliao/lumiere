@@ -1,4 +1,4 @@
-export const PLATFORM_CONTRACT_VERSION = 4 as const
+export const PLATFORM_CONTRACT_VERSION = 5 as const
 
 export type LumierePlatform = 'macos' | 'windows'
 export type CaptureMode = 'region' | 'display'
@@ -88,6 +88,10 @@ export type CaptureResult =
   | { status: 'cancelled' }
   | FailedCaptureResult
 
+export interface ScreenCapturePermissionRequestResult {
+  status: 'granted' | 'restart-required' | 'not-granted'
+}
+
 export interface PlatformFailure {
   code:
     | 'host-unavailable'
@@ -109,8 +113,17 @@ export interface PlatformHost {
   cancelRegion(sessionId: string): Promise<ReleasedRegionCapture>
 }
 
+export interface MacOSScreenCapturePermissionHost {
+  requestScreenCapturePermission(): Promise<ScreenCapturePermissionRequestResult>
+}
+
 export type HostMethod =
-  'getCapabilities' | 'captureDisplay' | 'prepareRegion' | 'commitRegion' | 'cancelRegion'
+  | 'getCapabilities'
+  | 'captureDisplay'
+  | 'prepareRegion'
+  | 'commitRegion'
+  | 'cancelRegion'
+  | 'requestScreenCapturePermission'
 
 export type PlatformRequestEnvelope =
   | {
@@ -143,12 +156,23 @@ export type PlatformRequestEnvelope =
       method: 'cancelRegion'
       params: { sessionId: string }
     }
+  | {
+      version: typeof PLATFORM_CONTRACT_VERSION
+      id: string
+      method: 'requestScreenCapturePermission'
+      params: Record<string, never>
+    }
 
 export type PlatformResponseEnvelope =
   | {
       version: typeof PLATFORM_CONTRACT_VERSION
       id: string
-      result: PlatformCapabilities | CaptureResult | PreparedRegionCapture | ReleasedRegionCapture
+      result:
+        | PlatformCapabilities
+        | CaptureResult
+        | PreparedRegionCapture
+        | ReleasedRegionCapture
+        | ScreenCapturePermissionRequestResult
     }
   | {
       version: typeof PLATFORM_CONTRACT_VERSION

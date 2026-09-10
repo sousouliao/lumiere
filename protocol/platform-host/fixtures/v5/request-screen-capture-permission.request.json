@@ -1,0 +1,6 @@
+{
+  "version": 5,
+  "id": "permission-1",
+  "method": "requestScreenCapturePermission",
+  "params": {}
+}

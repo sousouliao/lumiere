@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lumiere.local/protocol/platform-host/v5.schema.json",
+  "title": "Lumiere platform host protocol v5",
+  "oneOf": [
+    { "$ref": "#/$defs/getCapabilitiesRequest" },
+    { "$ref": "#/$defs/requestScreenCapturePermissionRequest" },
+    { "$ref": "#/$defs/captureDisplayRequest" },
+    { "$ref": "#/$defs/prepareRegionRequest" },
+    { "$ref": "#/$defs/commitRegionRequest" },
+    { "$ref": "#/$defs/cancelRegionRequest" },
+    { "$ref": "#/$defs/successResponse" },
+    { "$ref": "#/$defs/errorResponse" }
+  ],
+  "$defs": {
+    "requestEnvelope": {
+      "type": "object",
+      "required": ["version", "id", "method", "params"],
+      "properties": {
+        "version": { "const": 5 },
+        "id": { "type": "string", "minLength": 1 },
+        "method": {},
+        "params": {}
+      }
+    },
+    "getCapabilitiesRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "method": { "const": "getCapabilities" },
+            "params": { "type": "object", "maxProperties": 0 }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "requestScreenCapturePermissionRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "method": { "const": "requestScreenCapturePermission" },
+            "params": { "type": "object", "maxProperties": 0 }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "captureDisplayRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "method": { "const": "captureDisplay" },
+            "params": {
+              "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/displayCaptureParams"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "prepareRegionRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "method": { "const": "prepareRegion" },
+            "params": {
+              "type": "object",
+              "required": ["targetId"],
+              "properties": { "targetId": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "commitRegionRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "method": { "const": "commitRegion" },
+            "params": {
+              "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/commitRegionParams"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "cancelRegionRequest": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "method": { "const": "cancelRegion" },
+            "params": {
+              "type": "object",
+              "required": ["sessionId"],
+              "properties": { "sessionId": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "contractVersion",
+        "platform",
+        "hostStatus",
+        "captureModes",
+        "deliveryTargets",
+        "hdrCapture",
+        "outputProfiles"
+      ],
+      "properties": {
+        "contractVersion": { "const": 5 },
+        "platform": { "enum": ["macos", "windows"] },
+        "hostStatus": { "enum": ["available", "unavailable"] },
+        "captureModes": {
+          "type": "array",
+          "items": { "enum": ["region", "display"] },
+          "uniqueItems": true
+        },
+        "deliveryTargets": {
+          "type": "array",
+          "items": { "enum": ["clipboard", "folder"] },
+          "uniqueItems": true
+        },
+        "hdrCapture": { "enum": ["supported", "unavailable", "unvalidated"] },
+        "outputProfiles": {
+          "type": "array",
+          "prefixItems": [{ "const": "srgb-visual-match" }],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "activeTarget": {
+          "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/captureTarget"
+        },
+        "unavailableReason": {
+          "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/failure"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "hostStatus": { "const": "unavailable" } },
+            "required": ["hostStatus"]
+          },
+          "then": {
+            "properties": {
+              "unavailableReason": {
+                "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/failure"
+              }
+            },
+            "required": ["unavailableReason"]
+          }
+        }
+      ]
+    },
+    "screenCapturePermissionResult": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["granted", "restart-required", "not-granted"] }
+      },
+      "additionalProperties": false
+    },
+    "successResponse": {
+      "type": "object",
+      "required": ["version", "id", "result"],
+      "properties": {
+        "version": { "const": 5 },
+        "id": { "type": "string", "minLength": 1 },
+        "result": {
+          "oneOf": [
+            { "$ref": "#/$defs/capabilities" },
+            { "$ref": "#/$defs/screenCapturePermissionResult" },
+            {
+              "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/preparedRegion"
+            },
+            {
+              "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/captureResult"
+            },
+            {
+              "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/releasedRegion"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "errorResponse": {
+      "type": "object",
+      "required": ["version", "id", "error"],
+      "properties": {
+        "version": { "const": 5 },
+        "id": { "type": "string", "minLength": 1 },
+        "error": {
+          "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/failure"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

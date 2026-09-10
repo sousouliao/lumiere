@@ -10,6 +10,29 @@ afterEach(() => {
 })
 
 describe('macOS platform host process transport', () => {
+  it('requests Screen Capture permission through the macOS host', async () => {
+    const process = new FakeNativeProcess()
+    process.stdin.once('data', (chunk: Buffer) => {
+      const request = JSON.parse(chunk.toString('utf8')) as Record<string, unknown>
+      expect(request).toMatchObject({
+        version: 5,
+        method: 'requestScreenCapturePermission',
+        params: {},
+      })
+      process.respond({
+        version: 5,
+        id: request.id,
+        result: { status: 'restart-required' },
+      })
+    })
+    const host = new MacOSPlatformHost([execPath], () => process.asChildProcess())
+
+    await expect(host.requestScreenCapturePermission()).resolves.toEqual({
+      status: 'restart-required',
+    })
+    host.dispose()
+  })
+
   it('correlates concurrent JSON Lines responses by request id', async () => {
     const process = new FakeNativeProcess()
     let spawnCount = 0
@@ -24,7 +47,7 @@ describe('macOS platform host process transport', () => {
 
       const [capabilitiesRequest, captureRequest] = requests
       process.respond({
-        version: 4,
+        version: 5,
         id: captureRequest.id,
         result: {
           status: 'completed',
@@ -34,10 +57,10 @@ describe('macOS platform host process transport', () => {
         },
       })
       process.respond({
-        version: 4,
+        version: 5,
         id: capabilitiesRequest.id,
         result: {
-          contractVersion: 4,
+          contractVersion: 5,
           platform: 'macos',
           hostStatus: 'available',
           captureModes: ['display'],
@@ -98,10 +121,10 @@ describe('macOS platform host process transport', () => {
     secondProcess.stdin.once('data', (chunk: Buffer) => {
       const request = JSON.parse(chunk.toString('utf8')) as Record<string, unknown>
       secondProcess.respond({
-        version: 4,
+        version: 5,
         id: request.id,
         result: {
-          contractVersion: 4,
+          contractVersion: 5,
           platform: 'macos',
           hostStatus: 'available',
           captureModes: ['display'],
@@ -120,7 +143,7 @@ describe('macOS platform host process transport', () => {
     process.stdin.once('data', (chunk: Buffer) => {
       const request = JSON.parse(chunk.toString('utf8')) as Record<string, unknown>
       process.respond({
-        version: 4,
+        version: 5,
         id: request.id,
         result: { status: 'cancelled' },
         error: {
@@ -144,7 +167,7 @@ describe('macOS platform host process transport', () => {
     process.stdin.once('data', (chunk: Buffer) => {
       const request = JSON.parse(chunk.toString('utf8')) as Record<string, unknown>
       process.respond({
-        version: 4,
+        version: 5,
         id: request.id,
         result: { status: 'cancelled', unexpected: true },
       })
@@ -182,10 +205,10 @@ describe('macOS platform host process transport', () => {
       const request = JSON.parse(chunk.toString('utf8')) as Record<string, unknown>
       firstProcess.emit('exit', 17, null)
       secondProcess.respond({
-        version: 4,
+        version: 5,
         id: request.id,
         result: {
-          contractVersion: 4,
+          contractVersion: 5,
           platform: 'macos',
           hostStatus: 'available',
           captureModes: ['display'],

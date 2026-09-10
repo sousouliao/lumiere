@@ -6,11 +6,11 @@ import { macOSPermissionRecoveryContent } from './macos-permission-recovery-cont
 describe('macOS permission recovery surface', () => {
   it.each([
     ['reset-required', 'Reset and restart', 'Not now', 'Capture paused for update'],
-    ['grant-required', 'Open System Settings', 'Check again', 'Waiting for permission'],
+    ['grant-required', 'Allow screen recording', 'Open System Settings', 'Waiting for permission'],
     ['restart-required', 'Restart now', 'Check again', 'Restart required'],
     ['reset-failed', 'Copy Terminal command', 'Try again', 'Permission reset failed'],
   ] as const)(
-    'renders the %s step with its two bounded actions',
+    'renders the %s step with its primary recovery actions',
     (phase, first, second, status) => {
       const markup = renderToStaticMarkup(
         <MacOSPermissionRecovery snapshot={{ phase }} disabled={false} />,
@@ -18,6 +18,7 @@ describe('macOS permission recovery surface', () => {
 
       expect(markup).toContain(first)
       expect(markup).toContain(second)
+      if (phase === 'grant-required') expect(markup).toContain('Check again')
       expect(macOSPermissionRecoveryContent(phase)?.status).toBe(status)
     },
   )

@@ -47,7 +47,7 @@ describe('platform handlers', () => {
     const result = await handlers.captureDisplay({ delivery: 'clipboard' })
 
     expect(capabilities).toMatchObject({
-      contractVersion: 4,
+      contractVersion: 5,
       platform: 'macos',
       hostStatus: 'unavailable',
       hdrCapture: 'unavailable',

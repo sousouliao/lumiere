@@ -5,6 +5,7 @@ import type {
   MacOSPermissionRecoveryPhase,
   MacOSPermissionRecoverySnapshot,
 } from '../shared/macos-permission-recovery-command'
+import type { ScreenCapturePermissionRequestResult } from '../shared/platform-contract'
 
 const STATE_VERSION = 1 as const
 
@@ -20,6 +21,7 @@ interface MacOSPermissionRecoveryOptions {
   currentVersion: string
   hasPriorInstallation: boolean
   resetPermission(): Promise<void>
+  requestPermission(): Promise<ScreenCapturePermissionRequestResult>
   permissionIsGranted(): boolean
   relaunch(): void
   changed(snapshot: MacOSPermissionRecoverySnapshot): void
@@ -43,7 +45,10 @@ export class MacOSPermissionRecovery {
       ? persisted.lastLaunchedVersion !== this.options.currentVersion
       : this.options.hasPriorInstallation
     const continuingCurrentRecovery = persisted?.recoveryVersion === this.options.currentVersion
-    const restoredPhase = continuingCurrentRecovery ? persisted.phase : 'inactive'
+    let restoredPhase = continuingCurrentRecovery ? persisted.phase : 'inactive'
+    if (restoredPhase === 'grant-required' || restoredPhase === 'restart-required') {
+      restoredPhase = this.options.permissionIsGranted() ? 'inactive' : 'grant-required'
+    }
 
     this.state = {
       version: STATE_VERSION,
@@ -51,7 +56,7 @@ export class MacOSPermissionRecovery {
       ...(updated || continuingCurrentRecovery
         ? { recoveryVersion: this.options.currentVersion }
         : {}),
-      phase: restoredPhase === 'restart-required' ? 'inactive' : restoredPhase,
+      phase: restoredPhase,
     }
     await this.persist()
   }
@@ -98,6 +103,22 @@ export class MacOSPermissionRecovery {
     this.assertPhase('grant-required', 'restart-required')
     if (this.options.permissionIsGranted()) {
       await this.transition('restart-required')
+    }
+    return this.getSnapshot()
+  }
+
+  public async requestPermission(): Promise<MacOSPermissionRecoverySnapshot> {
+    this.assertPhase('grant-required')
+    const result = await this.options.requestPermission()
+    switch (result.status) {
+      case 'granted':
+        await this.transition('inactive')
+        break
+      case 'restart-required':
+        await this.transition('restart-required')
+        break
+      case 'not-granted':
+        break
     }
     return this.getSnapshot()
   }

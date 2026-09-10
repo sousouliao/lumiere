@@ -57,6 +57,11 @@ public actor MacCaptureService {
     switch request.method {
     case .getCapabilities:
       return .success(id: request.id, result: .capabilities(await capabilities()))
+    case .requestScreenCapturePermission:
+      return .success(
+        id: request.id,
+        result: .screenCapturePermission(ScreenRecordingPermission.request())
+      )
     case .captureDisplay:
       guard let parameters = request.displayCapture else {
         return invalidRequest(id: request.id, message: "Display capture parameters are required.")
@@ -929,6 +934,18 @@ enum ScreenRecordingPermission: Equatable {
       return .granted
     }
     return requestAccess() ? .granted : .deniedOrRestricted
+  }
+
+  static func request(
+    preflightGranted: Bool = CGPreflightScreenCaptureAccess(),
+    requestAccess: () -> Bool = CGRequestScreenCaptureAccess
+  ) -> ScreenCapturePermissionRequestResult {
+    if preflightGranted {
+      return ScreenCapturePermissionRequestResult(status: "granted")
+    }
+    return ScreenCapturePermissionRequestResult(
+      status: requestAccess() ? "restart-required" : "not-granted"
+    )
   }
 }
 

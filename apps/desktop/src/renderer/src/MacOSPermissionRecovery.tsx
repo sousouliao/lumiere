@@ -12,7 +12,10 @@ export function MacOSPermissionRecovery({
 }): React.JSX.Element | null {
   const content = macOSPermissionRecoveryContent(snapshot.phase)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<{
+    phase: MacOSPermissionRecoverySnapshot['phase']
+    text: string
+  } | null>(null)
   if (!content) return null
 
   const run = async (action: string, operation: () => Promise<unknown>): Promise<void> => {
@@ -20,18 +23,23 @@ export function MacOSPermissionRecovery({
     setMessage(null)
     try {
       const result = await operation()
-      if (action === 'copy') setMessage('Terminal command copied.')
+      if (action === 'copy') {
+        setMessage({ phase: snapshot.phase, text: 'Terminal command copied.' })
+      }
       if (
-        action === 'check' &&
+        (action === 'request' || action === 'check') &&
         typeof result === 'object' &&
         result !== null &&
         'phase' in result &&
         result.phase === 'grant-required'
       ) {
-        setMessage('Permission is not available yet. Turn on Lumiere, then check again.')
+        setMessage({
+          phase: snapshot.phase,
+          text: 'Permission is still off. Turn on Lumiere in System Settings, then return here.',
+        })
       }
     } catch {
-      setMessage('That action didn’t finish. Try again.')
+      setMessage({ phase: snapshot.phase, text: 'That action didn’t finish. Try again.' })
     } finally {
       setPendingAction(null)
     }
@@ -63,6 +71,15 @@ export function MacOSPermissionRecovery({
       case 'grant-required':
         return (
           <>
+            <RecoveryButton
+              label={pendingAction === 'request' ? 'Requesting…' : 'Allow screen recording'}
+              disabled={disabled || pendingAction !== null}
+              onClick={() =>
+                void run('request', () =>
+                  window.lumierePlatform.requestMacOSScreenCapturePermission(),
+                )
+              }
+            />
             <RecoveryButton
               label="Open System Settings"
               disabled={disabled || pendingAction !== null}
@@ -132,7 +149,11 @@ export function MacOSPermissionRecovery({
       </div>
       <div className="capture-recovery">
         <div className="capture-recovery-actions">{controls}</div>
-        {message ? <p className="capture-recovery-error">{message}</p> : null}
+        {message?.phase === snapshot.phase ? (
+          <p className="capture-recovery-error" role="alert">
+            {message.text}
+          </p>
+        ) : null}
       </div>
     </div>
   )

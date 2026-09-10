@@ -134,6 +134,8 @@ const platformApi: LumiereRendererApi = {
     ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.defer),
   openMacOSScreenCaptureSettings: () =>
     ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.openSettings),
+  requestMacOSScreenCapturePermission: () =>
+    ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.requestPermission),
   checkMacOSScreenCapturePermission: () =>
     ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.checkAgain),
   restartAfterMacOSScreenCapturePermission: () =>

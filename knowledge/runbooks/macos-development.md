@@ -93,10 +93,10 @@ non-development Mac is optional follow-up evidence, not an MVP gate.
 
 ## Protocol Smoke Test
 
-Build the host, then send exactly one platform-host v4 JSON Lines request:
+Build the host, then send exactly one platform-host v5 JSON Lines request:
 
 ```sh
-printf '%s\n' '{"version":4,"id":"capabilities-smoke","method":"getCapabilities","params":{}}' \
+printf '%s\n' '{"version":5,"id":"capabilities-smoke","method":"getCapabilities","params":{}}' \
   | hosts/macos/.build/debug/LumiereMacHost
 ```
 
@@ -146,9 +146,12 @@ Packaged replacement upgrades use a narrower product recovery path. After an
 upgrade-associated permission failure, the user may explicitly choose `Reset and restart`;
 Lumiere then runs only
 `/usr/bin/tccutil reset ScreenCapture io.github.sousouliao.lumiere`, persists the recovery
-step, and relaunches. It never resets another bundle or TCC service. The next surface opens
-Screen Recording settings, checks the system permission state, and requests one final
-restart after the grant is observed. If the reset command fails, the UI offers the same
+step, and relaunches. It never resets another bundle or TCC service. The next surface asks
+the user to explicitly request access through the Native Host so macOS can register and
+prompt for Lumiere; System Settings and a manual check remain fallbacks, and returning to
+the app checks again automatically. A grant observed in the running process requests one
+restart, while a newly launched process that already sees the grant returns directly to
+ready. If the reset command fails, the UI offers the same
 exact command for manual copying. This flow is packaged-macOS-only and must not be treated
 as Windows behavior.
 

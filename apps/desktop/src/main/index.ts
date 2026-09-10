@@ -84,6 +84,7 @@ if (process.platform === 'win32') {
 let mainWindow: BrowserWindow | null = null
 let applicationTray: ApplicationTray | null = null
 let platformHost: PlatformHost | null = null
+let macOSPlatformHost: MacOSPlatformHost | null = null
 let captureRouter: CaptureCommandRouter | null = null
 let captureSurfaceMonitor: CaptureSurfaceMonitor | null = null
 let settingsStore: SettingsStore | null = null
@@ -221,6 +222,17 @@ function bindCaptureSurfaceMonitoring(window: BrowserWindow): void {
   window.on('focus', () => {
     captureFailureNotifier.clear()
     void captureSurfaceMonitor?.refresh()
+    if (macOSPermissionRecovery?.getSnapshot().phase === 'grant-required') {
+      void macOSPermissionRecovery.checkAgain().catch((error: unknown) => {
+        process.stderr.write(
+          `${JSON.stringify({
+            level: 'error',
+            event: 'screen-capture-permission-refresh-failed',
+            message: error instanceof Error ? error.message : String(error),
+          })}\n`,
+        )
+      })
+    }
   })
   window.on('restore', () => {
     captureSurfaceMonitor?.start()
@@ -334,6 +346,7 @@ function registerIpc(): void {
   ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.resetAndRestart)
   ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.defer)
   ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.openSettings)
+  ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.requestPermission)
   ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.checkAgain)
   ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.restart)
   ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.copyResetCommand)
@@ -596,6 +609,15 @@ function registerIpc(): void {
       'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
     )
   })
+
+  ipcMain.handle(
+    macOSPermissionRecoveryCommandChannels.requestPermission,
+    async (event, ...args) => {
+      assertTrustedWindow(event, mainWindow)
+      assertNoArguments(args)
+      return requireMacOSPermissionRecovery().requestPermission()
+    },
+  )
 
   ipcMain.handle(macOSPermissionRecoveryCommandChannels.checkAgain, async (event, ...args) => {
     assertTrustedWindow(event, mainWindow)
@@ -1240,7 +1262,7 @@ async function refreshApplicationTray(): Promise<void> {
 function createPlatformHost(): PlatformHost {
   const platform = currentLumierePlatform()
   if (platform === 'macos') {
-    return new MacOSPlatformHost(
+    macOSPlatformHost = new MacOSPlatformHost(
       macOSHostCandidates({
         appPath: app.getAppPath(),
         isPackaged: app.isPackaged,
@@ -1248,6 +1270,7 @@ function createPlatformHost(): PlatformHost {
         overridePath: process.env.LUMIERE_MAC_HOST_PATH,
       }),
     )
+    return macOSPlatformHost
   }
 
   return new WindowsPlatformHost(
@@ -1272,6 +1295,12 @@ void app.whenReady().then(async () => {
       currentVersion: app.getVersion(),
       hasPriorInstallation: await userDataPredatesCurrentLaunch(userDataPath),
       resetPermission: resetMacOSScreenCapturePermission,
+      requestPermission: () => {
+        if (!macOSPlatformHost) {
+          throw new Error('The macOS native capture host is unavailable.')
+        }
+        return macOSPlatformHost.requestScreenCapturePermission()
+      },
       permissionIsGranted: () => systemPreferences.getMediaAccessStatus('screen') === 'granted',
       relaunch: relaunchApplication,
       changed: broadcastMacOSPermissionRecoveryChanged,

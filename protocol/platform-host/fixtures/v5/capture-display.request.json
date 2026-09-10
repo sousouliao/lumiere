@@ -1,0 +1,6 @@
+{
+  "version": 5,
+  "id": "display-1",
+  "method": "captureDisplay",
+  "params": { "delivery": "both" }
+}

@@ -303,8 +303,10 @@ macOS 的替换升级可能使旧的 Screen Recording 授权不再匹配当前�
 
 1. `Screen recording access needs a reset`：主操作 `Reset and restart`，次操作 `Not now`。
 2. 用户确认后，只执行 `/usr/bin/tccutil reset ScreenCapture io.github.sousouliao.lumiere`，成功后重启应用。
-3. `Allow screen recording again`：提供 `Open System Settings` 与 `Check again`。
-4. 检测到授权后显示 `Restart Lumiere to finish`，提供 `Restart now` 与 `Check again`；重启后回到普通就绪表面。
+3. `Allow screen recording again`：主操作 `Allow screen recording` 通过 Native Host
+   显式请求权限，另提供 `Open System Settings` 与 `Check again`；从系统设置返回应用时自动重新检测。
+4. 运行中的进程检测到授权后显示 `Restart Lumiere to finish`，提供 `Restart now` 与
+   `Check again`；无论使用系统退出重开还是应用按钮，新进程启动时检测到授权都直接回到普通就绪表面，不再请求第二次重启。
 5. 重置失败时显示 `Permission reset didn’t finish`，提供复制上述精确 Terminal 命令与重试。不得重置其他应用或其他 TCC 服务。
 
 `Not now` 返回常规权限恢复，不清除本版本的恢复资格；同一版本再次发生权限失败时可以重新显示升级恢复。一次真实截图成功后，结束本版本的升级恢复资格。首次安装继续使用普通首次授权流程。

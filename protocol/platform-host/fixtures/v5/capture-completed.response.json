@@ -1,0 +1,13 @@
+{
+  "version": 5,
+  "id": "display-1",
+  "result": {
+    "status": "completed",
+    "sourceDynamicRange": "hdr",
+    "outputProfile": "srgb-visual-match",
+    "deliveries": [
+      { "target": "clipboard", "status": "success" },
+      { "target": "folder", "status": "success", "filePath": "/tmp/lumiere.png" }
+    ]
+  }
+}

@@ -75,8 +75,50 @@ describe('MacOSPermissionRecovery', () => {
     granted = true
     expect(await recovery.checkAgain()).toEqual({ phase: 'restart-required' })
 
-    const relaunched = await createRecovery({ filePath })
+    const relaunched = await createRecovery({ filePath, permissionIsGranted: () => true })
     expect(relaunched.getSnapshot()).toEqual({ phase: 'inactive' })
+  })
+
+  it.each([
+    ['granted', 'inactive'],
+    ['restart-required', 'restart-required'],
+    ['not-granted', 'grant-required'],
+  ] as const)('maps a native %s request result to %s', async (status, phase) => {
+    const recovery = await createRecovery({
+      hasPriorInstallation: true,
+      requestPermission: vi.fn(() => Promise.resolve({ status })),
+    })
+    await recovery.observeCaptureResult(permissionDenied)
+    await recovery.resetAndRestart()
+
+    expect(await recovery.requestPermission()).toEqual({ phase })
+  })
+
+  it('treats a granted launch as the restart macOS already required', async () => {
+    const filePath = await statePath()
+    const recovery = await createRecovery({ filePath, hasPriorInstallation: true })
+    await recovery.observeCaptureResult(permissionDenied)
+    await recovery.resetAndRestart()
+
+    const relaunched = await createRecovery({ filePath, permissionIsGranted: () => true })
+
+    expect(relaunched.getSnapshot()).toEqual({ phase: 'inactive' })
+  })
+
+  it('returns an ungranted restart step to the grant surface', async () => {
+    const filePath = await statePath()
+    const recovery = await createRecovery({
+      filePath,
+      hasPriorInstallation: true,
+      requestPermission: () => Promise.resolve({ status: 'restart-required' }),
+    })
+    await recovery.observeCaptureResult(permissionDenied)
+    await recovery.resetAndRestart()
+    await recovery.requestPermission()
+
+    const relaunched = await createRecovery({ filePath, permissionIsGranted: () => false })
+
+    expect(relaunched.getSnapshot()).toEqual({ phase: 'grant-required' })
   })
 
   it('keeps the reset available after deferring and exposes a bounded failure state', async () => {
@@ -106,12 +148,16 @@ async function createRecovery({
   filePath,
   hasPriorInstallation = false,
   resetPermission = vi.fn(() => Promise.resolve()),
+  requestPermission = vi.fn(() => Promise.resolve({ status: 'not-granted' as const })),
   permissionIsGranted = () => false,
   relaunch = vi.fn(),
 }: {
   filePath?: string
   hasPriorInstallation?: boolean
   resetPermission?: () => Promise<void>
+  requestPermission?: () => Promise<{
+    status: 'granted' | 'restart-required' | 'not-granted'
+  }>
   permissionIsGranted?: () => boolean
   relaunch?: () => void
 } = {}): Promise<MacOSPermissionRecovery> {
@@ -120,6 +166,7 @@ async function createRecovery({
     currentVersion: '0.4.0',
     hasPriorInstallation,
     resetPermission,
+    requestPermission,
     permissionIsGranted,
     relaunch,
     changed: vi.fn(),

@@ -1,6 +1,6 @@
 import Foundation
 
-public let platformContractVersion = 4
+public let platformContractVersion = 5
 
 public enum HostFailureCode: String, Codable, Sendable {
   case hostUnavailable = "host-unavailable"
@@ -106,6 +106,7 @@ public struct CommitRegionParameters: Equatable, Sendable {
 
 public enum PlatformMethod: String, Codable, Sendable {
   case getCapabilities
+  case requestScreenCapturePermission
   case captureDisplay
   case prepareRegion
   case commitRegion
@@ -234,8 +235,13 @@ public struct ReleasedRegionResult: Codable, Equatable, Sendable {
   public static let released = ReleasedRegionResult(status: "released")
 }
 
+public struct ScreenCapturePermissionRequestResult: Codable, Equatable, Sendable {
+  public let status: String
+}
+
 public enum PlatformResult: Equatable, Sendable {
   case capabilities(PlatformCapabilities)
+  case screenCapturePermission(ScreenCapturePermissionRequestResult)
   case capture(CaptureResult)
   case preparedRegion(PreparedRegionResult)
   case releasedRegion(ReleasedRegionResult)
@@ -267,6 +273,7 @@ public struct PlatformResponse: Encodable, Sendable {
     }
     switch result {
     case .capabilities(let value): try container.encode(value, forKey: .result)
+    case .screenCapturePermission(let value): try container.encode(value, forKey: .result)
     case .capture(let value): try container.encode(value, forKey: .result)
     case .preparedRegion(let value): try container.encode(value, forKey: .result)
     case .releasedRegion(let value): try container.encode(value, forKey: .result)
@@ -303,7 +310,7 @@ public enum PlatformRequestDecoder {
 
     try requireExactKeys(envelope, expected: ["version", "id", "method", "params"])
     guard let version = envelope["version"] as? Int, version == platformContractVersion else {
-      throw PlatformProtocolError.invalidEnvelope("Protocol version must be 4.")
+      throw PlatformProtocolError.invalidEnvelope("Protocol version must be 5.")
     }
     guard let id = envelope["id"] as? String, !id.isEmpty else {
       throw PlatformProtocolError.invalidEnvelope("Request id must be a non-empty string.")
@@ -314,7 +321,7 @@ public enum PlatformRequestDecoder {
     else { throw PlatformProtocolError.invalidEnvelope("Unknown platform-host method.") }
 
     switch method {
-    case .getCapabilities:
+    case .getCapabilities, .requestScreenCapturePermission:
       try requireExactKeys(parameters, expected: [])
       return PlatformRequest(
         version: version,

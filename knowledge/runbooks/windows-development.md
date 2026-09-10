@@ -1,6 +1,6 @@
 # Windows Engine Development Runbook
 
-Windows host adaptation is active. The repository contains a platform-host v4 executable
+Windows host adaptation is active. The repository contains a platform-host v5 executable
 with a capability handshake plus the three retained native libraries. Windows is required
 for .NET restore, Release build, tests, formatting, WGC/D3D11/DXGI runtime behavior,
 clipboard behavior, and HDR hardware checks.

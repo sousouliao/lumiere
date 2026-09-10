@@ -23,7 +23,8 @@ export function macOSPermissionRecoveryContent(
     case 'grant-required':
       return {
         title: 'Allow screen recording again',
-        detail: 'Open System Settings, turn on Lumiere, then return here.',
+        detail:
+          'Choose Allow screen recording. If macOS sends you to System Settings, turn on Lumiere there, then return.',
         status: 'Waiting for permission',
         tone: 'caution',
       }

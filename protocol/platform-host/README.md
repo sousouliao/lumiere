@@ -17,8 +17,19 @@ Every response echoes `version` and `id`, and contains exactly one of `result` o
 
 Unknown versions, methods, fields, or enum values are protocol errors. Additive
 changes require a new schema version when an older host cannot safely reject or ignore
-them. Versions 1–3 are frozen in their matching schemas. Version 4 is the current
-shared contract in [`v4.schema.json`](v4.schema.json).
+them. Versions 1–4 are frozen in their matching schemas. Version 5 is the current
+shared contract in [`v5.schema.json`](v5.schema.json).
+
+## Version 5
+
+Version 5 adds the macOS-only `requestScreenCapturePermission` operation. It has empty
+parameters and returns `granted` when access was already usable, `restart-required` when
+the explicit native request granted access for the next process, or `not-granted` when
+the user must use System Settings. The Shell never sends this operation to Windows.
+
+The operation is user initiated and may call `CGRequestScreenCaptureAccess()`.
+`getCapabilities` remains a pure query and must never prompt. Version 5 otherwise retains
+the Version 4 target-token and frozen Region behavior unchanged.
 
 ## Version 4
 
@@ -100,6 +111,7 @@ are retained in v3. Region timing is superseded by
 ## Fixtures
 
 [`fixtures/v1`](fixtures/v1), [`fixtures/v2`](fixtures/v2),
-[`fixtures/v3`](fixtures/v3), and [`fixtures/v4`](fixtures/v4) are executable examples. The desktop protocol tests
+[`fixtures/v3`](fixtures/v3), [`fixtures/v4`](fixtures/v4), and
+[`fixtures/v5`](fixtures/v5) are executable examples. The desktop protocol tests
 validate every fixture against its owning schema. Fixtures illustrate wire shape; they
 do not replace the cross-field checks described above.

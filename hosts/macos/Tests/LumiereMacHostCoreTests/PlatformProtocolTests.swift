@@ -9,10 +9,10 @@ import Testing
 @Test
 func decodesGetCapabilitiesRequest() throws {
   let request = try PlatformRequestDecoder.decode(
-    line: #"{"version":4,"id":"capabilities-1","method":"getCapabilities","params":{}}"#
+    line: #"{"version":5,"id":"capabilities-1","method":"getCapabilities","params":{}}"#
   )
 
-  #expect(request.version == 4)
+  #expect(request.version == 5)
   #expect(request.id == "capabilities-1")
   #expect(request.method == .getCapabilities)
   #expect(request.displayCapture == nil)
@@ -20,10 +20,30 @@ func decodesGetCapabilitiesRequest() throws {
 }
 
 @Test
+func decodesScreenCapturePermissionRequest() throws {
+  let request = try PlatformRequestDecoder.decode(
+    line:
+      #"{"version":5,"id":"permission-1","method":"requestScreenCapturePermission","params":{}}"#
+  )
+
+  #expect(request.method == .requestScreenCapturePermission)
+}
+
+@Test
+func rejectsScreenCapturePermissionRequestParameters() {
+  #expect(throws: PlatformProtocolError.self) {
+    try PlatformRequestDecoder.decode(
+      line:
+        #"{"version":5,"id":"permission-1","method":"requestScreenCapturePermission","params":{"prompt":true}}"#
+    )
+  }
+}
+
+@Test
 func decodesDisplayFolderCaptureRequest() throws {
   let request = try PlatformRequestDecoder.decode(
     line:
-      #"{"version":4,"id":"capture-1","method":"captureDisplay","params":{"delivery":"folder"}}"#
+      #"{"version":5,"id":"capture-1","method":"captureDisplay","params":{"delivery":"folder"}}"#
   )
 
   #expect(request.displayCapture == DisplayCaptureParameters(delivery: .folder))
@@ -33,7 +53,7 @@ func decodesDisplayFolderCaptureRequest() throws {
 func decodesCustomSaveDirectoryForFolderCapture() throws {
   let request = try PlatformRequestDecoder.decode(
     line:
-      #"{"version":4,"id":"capture-custom","method":"captureDisplay","params":{"delivery":"folder","saveDirectory":"/tmp/custom-captures"}}"#
+      #"{"version":5,"id":"capture-custom","method":"captureDisplay","params":{"delivery":"folder","saveDirectory":"/tmp/custom-captures"}}"#
   )
 
   #expect(request.displayCapture?.saveDirectory == "/tmp/custom-captures")
@@ -44,7 +64,7 @@ func rejectsSaveDirectoryForClipboardOnlyCapture() {
   #expect(throws: PlatformProtocolError.self) {
     try PlatformRequestDecoder.decode(
       line:
-        #"{"version":4,"id":"capture-invalid-directory","method":"captureDisplay","params":{"delivery":"clipboard","saveDirectory":"/tmp/custom-captures"}}"#
+        #"{"version":5,"id":"capture-invalid-directory","method":"captureDisplay","params":{"delivery":"clipboard","saveDirectory":"/tmp/custom-captures"}}"#
     )
   }
 }
@@ -53,7 +73,7 @@ func rejectsSaveDirectoryForClipboardOnlyCapture() {
 func decodesPrepareRegionRequest() throws {
   let request = try PlatformRequestDecoder.decode(
     line:
-      #"{"version":4,"id":"prepare-1","method":"prepareRegion","params":{"targetId":"target-17"}}"#
+      #"{"version":5,"id":"prepare-1","method":"prepareRegion","params":{"targetId":"target-17"}}"#
   )
 
   #expect(request.method == .prepareRegion)
@@ -64,7 +84,7 @@ func decodesPrepareRegionRequest() throws {
 func decodesCommitRegionRequest() throws {
   let request = try PlatformRequestDecoder.decode(
     line:
-      #"{"version":4,"id":"commit-1","method":"commitRegion","params":{"sessionId":"region-session-17","delivery":"both","geometry":{"coordinateSpace":"target-logical","x":10.5,"y":20,"width":640,"height":360}}}"#
+      #"{"version":5,"id":"commit-1","method":"commitRegion","params":{"sessionId":"region-session-17","delivery":"both","geometry":{"coordinateSpace":"target-logical","x":10.5,"y":20,"width":640,"height":360}}}"#
   )
 
   #expect(request.commitRegion?.sessionId == "region-session-17")
@@ -77,7 +97,7 @@ func decodesCommitRegionRequest() throws {
 func decodesCancelRegionRequest() throws {
   let request = try PlatformRequestDecoder.decode(
     line:
-      #"{"version":4,"id":"cancel-1","method":"cancelRegion","params":{"sessionId":"region-session-17"}}"#
+      #"{"version":5,"id":"cancel-1","method":"cancelRegion","params":{"sessionId":"region-session-17"}}"#
   )
 
   #expect(request.method == .cancelRegion)
@@ -88,7 +108,7 @@ func decodesCancelRegionRequest() throws {
 func rejectsUnknownFields() {
   #expect(throws: PlatformProtocolError.self) {
     try PlatformRequestDecoder.decode(
-      line: #"{"version":4,"id":"bad-1","method":"getCapabilities","params":{},"extra":true}"#
+      line: #"{"version":5,"id":"bad-1","method":"getCapabilities","params":{},"extra":true}"#
     )
   }
 }
@@ -108,7 +128,7 @@ func encodesCapabilitiesResponseWithoutOptionalNulls() throws {
     id: "capabilities-1",
     result: .capabilities(
       PlatformCapabilities(
-        contractVersion: 4,
+        contractVersion: 5,
         platform: "macos",
         hostStatus: "available",
         captureModes: [.display],
@@ -124,7 +144,7 @@ func encodesCapabilitiesResponseWithoutOptionalNulls() throws {
     JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
   )
 
-  #expect(object["version"] as? Int == 4)
+  #expect(object["version"] as? Int == 5)
   #expect(object["id"] as? String == "capabilities-1")
   #expect(object["error"] == nil)
   let result = try #require(object["result"] as? [String: Any])
@@ -550,6 +570,30 @@ func resolvesExplicitScreenRecordingPermissionPaths() {
     return false
   }
   #expect(deniedOrRestricted == .deniedOrRestricted)
+  #expect(requestCount == 2)
+}
+
+@Test
+func reportsScreenRecordingPermissionRequestOutcomes() {
+  var requestCount = 0
+  let granted = ScreenRecordingPermission.request(preflightGranted: true) {
+    requestCount += 1
+    return false
+  }
+  #expect(granted.status == "granted")
+  #expect(requestCount == 0)
+
+  let restartRequired = ScreenRecordingPermission.request(preflightGranted: false) {
+    requestCount += 1
+    return true
+  }
+  #expect(restartRequired.status == "restart-required")
+
+  let notGranted = ScreenRecordingPermission.request(preflightGranted: false) {
+    requestCount += 1
+    return false
+  }
+  #expect(notGranted.status == "not-granted")
   #expect(requestCount == 2)
 }
 

@@ -15,7 +15,7 @@ describe('Windows platform host process transport', () => {
       const result =
         request.method === 'getCapabilities'
           ? {
-              contractVersion: 4,
+              contractVersion: 5,
               platform: 'windows',
               hostStatus: 'available',
               captureModes: ['display'],
@@ -35,7 +35,7 @@ describe('Windows platform host process transport', () => {
                 },
               ],
             }
-      process.respond({ version: 4, id: request.id, result })
+      process.respond({ version: 5, id: request.id, result })
     })
 
     const host = new WindowsPlatformHost([execPath], () => {

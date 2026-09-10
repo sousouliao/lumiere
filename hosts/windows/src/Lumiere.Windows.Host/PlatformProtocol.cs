@@ -89,7 +89,7 @@ public interface IWindowsHostOperations : IAsyncDisposable
 
 public static class PlatformProtocol
 {
-    public const int ContractVersion = 4;
+    public const int ContractVersion = 5;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -334,7 +334,7 @@ public static class PlatformProtocol
             || !version.TryGetInt32(out var value)
             || value != ContractVersion)
         {
-            throw new PlatformProtocolException("Protocol version must be 4.");
+            throw new PlatformProtocolException("Protocol version must be 5.");
         }
     }
 
