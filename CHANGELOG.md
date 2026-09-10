@@ -4,6 +4,15 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.3.2`
+
+Release platforms: macOS
+
+### Fixed
+
+- Request Screen Recording access directly after a permission reset, so Lumiere appears in System Settings without requiring a screenshot shortcut.
+- Recognize the first post-grant relaunch as the required restart instead of asking users to restart Lumiere twice.
+
 ## [0.3.1] - 2026-09-10
 
 Release platforms: macOS
