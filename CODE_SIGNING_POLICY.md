@@ -6,9 +6,10 @@ project did not yet have the public adoption and external trust signals required
 Foundation program. The project may reapply later or evaluate a paid provider through a
 separate decision, but neither route is currently planned.
 
-Current Windows preview installers are unsigned, publish their SHA-256 digest alongside
-the artifact, and do not enable production sparse identity or automatic updates. Private
-keys are not stored in this repository or in GitHub Actions.
+Current Windows stable and prerelease installers are unsigned, publish their SHA-256 digest
+alongside the artifact, and do not enable production sparse identity or automatic updates.
+Stable status describes the application release rather than a verified publisher identity.
+Private keys are not stored in this repository or in GitHub Actions.
 
 ## Team roles
 

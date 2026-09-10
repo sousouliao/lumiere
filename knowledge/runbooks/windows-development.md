@@ -57,35 +57,28 @@ The Windows distribution lane advances in this order:
    code-signing policy, and accurate repository/download documentation.
 2. Run repository, Windows Host, installer, and packaged-runtime verification as a
    separate phase.
-3. Publish a clearly labeled unsigned preview GitHub Release using the same assisted
-   NSIS artifact form intended for production signing. Its release page must document
-   functionality, installation, uninstall, and expected unsigned-publisher warnings.
-4. The SignPath Foundation application was declined on 2026-09-09. Keep Windows
-   distribution explicitly unsigned and preview-only until a later decision approves a
-   viable signing provider.
-5. Do not configure production Publisher, sparse identity, or updater metadata without
-   that decision. A future signed lane must open a new Issue and repeat its signing,
-   identity, update, checksum, provenance, and clean-machine verification.
+3. Publish the assisted unsigned NSIS installer in stable or prerelease GitHub Releases.
+   The release page must document functionality, installation, uninstall, checksum
+   verification, and expected unknown-publisher or SmartScreen warnings.
+4. Do not configure production Publisher, sparse identity, or updater metadata without a
+   later decision. A future signed lane must open a new ADR and Issue and repeat its
+   signing, identity, update, checksum, provenance, and clean-machine verification.
 
-The unsigned preview is an application prerequisite. It is not a production release
-and does not verify signing or borderless capture.
+An unsigned stable release represents the verified application posture, not a signed
+publisher identity. It does not verify signing or borderless capture.
 
-Build an unsigned local preview installer from the repository root:
+Build the unsigned Windows installer from the repository root:
 
 ```powershell
 pnpm package:windows
 ```
 
-This produces `artifacts/windows/build/Lumiere-Setup-<version>-x64.exe`. Preview installers
+This produces `artifacts/windows/build/Lumiere-Setup-<version>-x64.exe`. Unsigned installers
 deliberately omit the production sparse identity and updater configuration, so WGC keeps
-the system capture border.
+the system capture border and automatic updates remain disabled.
 
-The dormant signed Windows jobs in `.github/workflows/release.yml` remain implementation
-scaffolding, not an available publication route. Do not select Windows for a stable release
-or add signing variables/secrets until a future ADR and Issue establish a provider and
+The active release workflow always uses this unsigned path for Windows, adds the installer
+to the unified checksum manifest, and does not generate `latest.yml`. Dormant SignPath,
+sparse-identity, and updater code remains unavailable to the workflow. Do not reconnect it
+or add signing variables or secrets until a future ADR and Issue establish a provider and
 verification plan.
-
-The workflow generates `latest.yml` only after final signing, attests the signed Setup, and
-adds the installer to the unified checksum manifest and GitHub Release. Installer registration of
-the sparse identity is non-fatal; a failed registration or denied borderless consent falls
-back to the normal WGC system border.

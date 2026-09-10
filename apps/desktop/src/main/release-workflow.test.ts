@@ -35,17 +35,18 @@ describe('unified release workflow', () => {
     expect(workflow).not.toContain('--generate-notes')
   })
 
-  it('publishes unsigned Windows previews without entering the SignPath lane', async () => {
+  it('publishes every Windows release through the unsigned installer lane', async () => {
     const workflow = await readFile(
       resolve(repositoryRoot, '.github', 'workflows', 'release.yml'),
       'utf8',
     )
 
-    expect(workflow).toContain("if: needs.audit.outputs.prerelease == 'true'")
     expect(workflow).toContain('run: pnpm package:windows')
     expect(workflow).toContain('path: artifacts/windows/build/Lumiere-Setup-*-x64.exe')
-    expect(workflow).toContain("if: needs.audit.outputs.prerelease == 'false'")
-    expect(workflow).toContain('uses: signpath/github-action-submit-signing-request@v2')
+    expect(workflow).not.toContain('signpath/github-action-submit-signing-request')
+    expect(workflow).not.toContain('pnpm release:windows:finalize')
+    expect(workflow).not.toContain('latest.yml')
+    expect(workflow).not.toContain('SIGNPATH_')
   })
 
   it('replaces the tag-triggered Windows publisher', async () => {

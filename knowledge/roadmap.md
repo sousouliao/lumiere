@@ -90,10 +90,11 @@ including the documented manual Gatekeeper first-launch step; a second clean Mac
 an MVP exit requirement.
 The macOS and Windows distribution implementations may advance independently; evidence
 from either platform neither completes nor blocks implementation work owned by the other.
-The current Windows setup may remain an explicitly unsigned preview and therefore keeps
-the normal WGC system border. Signed sparse identity, borderless Graphics Capture consent,
-and automatic updates are deferred until a viable code-signing route is approved through a
-new decision. They are not Milestone 1 exit criteria while no certificate is available.
+The Windows setup may ship in stable or prerelease form while remaining explicitly unsigned,
+and therefore keeps the normal WGC system border. Signed sparse identity, borderless Graphics
+Capture consent, and automatic updates are deferred until a viable code-signing route is
+approved through a new decision. They are not Milestone 1 exit criteria while no certificate
+is available.
 
 Release only after independent Windows and macOS repository, runtime, fixed-scene
 Visual Match, receiving-app, repeat-loop, and clean-exit verification passes. One platform's

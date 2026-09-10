@@ -50,6 +50,15 @@ single version and GitHub Release may contain one or both platforms, while each 
 retains its independent build and verification truth. Never project one platform's result
 onto the other.
 
+## Signing Posture
+
+Stable and prerelease status describe product maturity and are independent of platform
+code-signing status. Windows releases may use the unsigned NSIS distribution selected by
+ADR 0018 when no signing provider is configured. Such releases must publish a checksum and
+disclose the unknown-publisher warning, retained WGC system capture border, and absence of
+automatic updates. They must not claim publisher identity, sparse identity, or borderless
+capture consent.
+
 ## Changelog
 
 Root [`../../CHANGELOG.md`](../../CHANGELOG.md) is the public, chronological record of
@@ -75,5 +84,5 @@ to `main`.
 
 The workflow may publish only after every selected platform artifact succeeds. The public
 release must contain release notes derived from the matching changelog entry, the selected
-installers, Windows updater metadata when applicable, and one checksum manifest covering
-all installer or disk-image bytes.
+installers, Windows updater metadata only when an active signed route requires it, and one
+checksum manifest covering all installer or disk-image bytes.

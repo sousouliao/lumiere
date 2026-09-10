@@ -34,7 +34,7 @@ require runtime and hardware verification on its owning platform.
 
 ## Install on Windows
 
-The Windows preview is an unsigned x64 installer for Windows 10 or newer. Download the Setup
+The Windows release is an unsigned x64 installer for Windows 10 or newer. Download the Setup
 executable and `SHA256SUMS` from the same official release, then compare the installer's SHA-256
 digest before running it:
 
@@ -42,11 +42,12 @@ digest before running it:
 Get-FileHash .\Lumiere-Setup-<version>-x64.exe -Algorithm SHA256
 ```
 
-Windows will show an unknown-publisher warning because the preview is not code signed. Continue
+Windows may show a SmartScreen or unknown-publisher warning because the installer is not code signed. Continue
 only when the digest matches `SHA256SUMS` from the official release. The assisted installer runs
 per user, allows a custom destination, and can create desktop and Start menu shortcuts. Uninstall
-Lumiere through Windows Settings or its Start menu shortcut. This preview intentionally excludes
-the production borderless-capture identity and automatic updates.
+Lumiere through Windows Settings or its Start menu shortcut. Windows releases intentionally exclude
+the production borderless-capture identity and automatic updates, so Windows Graphics Capture keeps
+its system capture border.
 
 ## Install on macOS
 

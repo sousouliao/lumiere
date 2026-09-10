@@ -1,6 +1,6 @@
 # ADR 0017: Defer signed Windows distribution
 
-- Status: Accepted
+- Status: Superseded by ADR 0018
 - Date: 2026-09-11
 
 ## Context

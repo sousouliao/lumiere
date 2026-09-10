@@ -22,8 +22,9 @@ clipboard and folder workflows without claiming HDR preservation.
 - Local output, path, timestamp, shortcut, after-capture, and HDR-alert settings.
 - Target-aware HDR readiness states: ready, unavailable, degraded, or unvalidated.
 - One official MVP output path: **sRGB Visual Match**.
-- Installable application artifacts for Windows and macOS. The Windows MVP retains the
-  signed traditional setup executable and custom install-path direction. The macOS MVP is
+- Installable application artifacts for Windows and macOS. The Windows MVP uses an unsigned
+  traditional setup executable with a custom install path, published checksum, and explicit
+  unknown-publisher guidance. The macOS MVP is
   distributed directly as an ad-hoc-signed application with an explicit manual Gatekeeper
   first-launch step; Developer ID signing and notarization are not MVP requirements.
 

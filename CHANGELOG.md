@@ -4,6 +4,24 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.5.0`
+Release platforms: macOS, Windows
+
+### Added
+
+- Download an official unsigned x64 Windows installer alongside the existing Apple Silicon and Intel macOS disk images.
+
+### Changed
+
+- On Windows, start silently in the system tray, move Region selection between displays, prepare Region previews faster, and surface capture failures without interrupting successful captures.
+
+### Known limitations
+
+- The Windows installer is not code signed, so Windows may show a SmartScreen or unknown-publisher warning; verify it against `SHA256SUMS` before running it.
+- Windows retains the system capture border and does not enable automatic updates because the unsigned installer omits production package identity and updater metadata.
+- The macOS app is ad-hoc signed and not notarized, so first launch requires the documented manual Gatekeeper exception.
+- HDR-preserved export is not supported; the official output is sRGB Visual Match.
+
 ## [0.4.0] - 2026-09-10
 
 Release platforms: macOS
