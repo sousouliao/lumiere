@@ -3,6 +3,7 @@ import { captureCommandChannels, type LumiereRendererApi } from '../shared/captu
 import { settingsCommandChannels, type SettingsSnapshot } from '../shared/settings-command'
 import type { LumierePlatform } from '../shared/platform-contract'
 import { updateCommandChannels } from '../shared/update-command'
+import { macOSPermissionRecoveryCommandChannels } from '../shared/macos-permission-recovery-command'
 
 const platform: LumierePlatform = process.platform === 'darwin' ? 'macos' : 'windows'
 
@@ -113,6 +114,32 @@ const platformApi: LumiereRendererApi = {
   getUpdateSnapshot: () => ipcRenderer.invoke(updateCommandChannels.getSnapshot),
   checkForUpdates: () => ipcRenderer.invoke(updateCommandChannels.check),
   openLatestRelease: () => ipcRenderer.invoke(updateCommandChannels.openLatestRelease),
+  getMacOSPermissionRecoverySnapshot: () =>
+    ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.getSnapshot),
+  onMacOSPermissionRecoveryChanged: (listener) => {
+    const handleChanged = (
+      _event: Electron.IpcRendererEvent,
+      snapshot: Parameters<typeof listener>[0],
+    ): void => {
+      listener(snapshot)
+    }
+    ipcRenderer.on(macOSPermissionRecoveryCommandChannels.changed, handleChanged)
+    return () => {
+      ipcRenderer.removeListener(macOSPermissionRecoveryCommandChannels.changed, handleChanged)
+    }
+  },
+  resetMacOSScreenCapturePermission: () =>
+    ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.resetAndRestart),
+  deferMacOSScreenCapturePermissionReset: () =>
+    ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.defer),
+  openMacOSScreenCaptureSettings: () =>
+    ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.openSettings),
+  checkMacOSScreenCapturePermission: () =>
+    ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.checkAgain),
+  restartAfterMacOSScreenCapturePermission: () =>
+    ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.restart),
+  copyMacOSScreenCaptureResetCommand: () =>
+    ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.copyResetCommand),
 }
 
 contextBridge.exposeInMainWorld('lumierePlatform', platformApi)

@@ -15,6 +15,9 @@ import { SettingsView, type SettingsSection, type UpdateViewState } from './Sett
 import { RegionOverlay } from './RegionOverlay'
 import { RecoveryActions } from './RecoveryActions'
 import { CAPTURE_LOAD_FAILURE, resolveCaptureNotices } from './capture-notices'
+import type { MacOSPermissionRecoverySnapshot } from '../../shared/macos-permission-recovery-command'
+import { MacOSPermissionRecovery } from './MacOSPermissionRecovery'
+import { macOSPermissionRecoveryContent } from './macos-permission-recovery-content'
 
 export function App(): React.JSX.Element {
   if (new URLSearchParams(window.location.search).get('surface') === 'region-overlay') {
@@ -34,6 +37,9 @@ function ApplicationSurface(): React.JSX.Element {
   const [captureResult, setCaptureResult] = useState<CaptureCommandResult | null>(null)
   const [surfaceSnapshot, setSurfaceSnapshot] = useState<CaptureSurfaceSnapshot | null>(null)
   const [surfaceLoadFailed, setSurfaceLoadFailed] = useState(false)
+  const [permissionRecovery, setPermissionRecovery] = useState<MacOSPermissionRecoverySnapshot>({
+    phase: 'inactive',
+  })
 
   useEffect(() => {
     let isCurrent = true
@@ -45,6 +51,14 @@ function ApplicationSurface(): React.JSX.Element {
     const stopCaptureViewListening = window.lumierePlatform.onShowCaptureRequested(() => {
       setView('capture')
     })
+    const stopPermissionRecoveryListening =
+      window.lumierePlatform.onMacOSPermissionRecoveryChanged(setPermissionRecovery)
+    void window.lumierePlatform
+      .getMacOSPermissionRecoverySnapshot()
+      .then((snapshot) => {
+        if (isCurrent) setPermissionRecovery(snapshot)
+      })
+      .catch(() => undefined)
     let receivedActivity = false
     const stopCaptureListening = window.lumierePlatform.onCaptureActivityChanged((next) => {
       receivedActivity = true
@@ -87,6 +101,7 @@ function ApplicationSurface(): React.JSX.Element {
       stopSettingsListening()
       stopCaptureListening()
       stopCaptureViewListening()
+      stopPermissionRecoveryListening()
       stopSurfaceListening()
     }
   }, [])
@@ -105,6 +120,7 @@ function ApplicationSurface(): React.JSX.Element {
       loadFailed={surfaceLoadFailed}
       result={captureResult ?? activity.lastCompletion?.result ?? null}
       activity={activity}
+      permissionRecovery={permissionRecovery}
       onResultChange={setCaptureResult}
       onOpenSettings={(section = 'output') => {
         setSettingsSection(section)
@@ -119,6 +135,7 @@ function MainWindow({
   loadFailed,
   result,
   activity,
+  permissionRecovery,
   onResultChange,
   onOpenSettings,
 }: {
@@ -126,6 +143,7 @@ function MainWindow({
   loadFailed: boolean
   result: CaptureCommandResult | null
   activity: CaptureActivity
+  permissionRecovery: MacOSPermissionRecoverySnapshot
   onResultChange: (result: CaptureCommandResult | null) => void
   onOpenSettings: (section?: SettingsSection) => void
 }): React.JSX.Element {
@@ -166,11 +184,22 @@ function MainWindow({
     snapshot?.hostAvailable === true && snapshot.captureModes.includes('region')
   const supportsDisplayCapture =
     snapshot?.hostAvailable === true && snapshot.captureModes.includes('display')
-  const { activeNotice, blockingNotice, detailNotice } = resolveCaptureNotices({
+  const resolvedNotices = resolveCaptureNotices({
     loadFailed,
     result,
     snapshot,
   })
+  const permissionRecoveryContent = macOSPermissionRecoveryContent(permissionRecovery.phase)
+  const permissionRecoveryNotice = permissionRecoveryContent
+    ? {
+        tone: permissionRecoveryContent.tone,
+        title: permissionRecoveryContent.title,
+        detail: permissionRecoveryContent.detail,
+      }
+    : undefined
+  const activeNotice = permissionRecoveryNotice ?? resolvedNotices.activeNotice
+  const blockingNotice = permissionRecoveryNotice ?? resolvedNotices.blockingNotice
+  const detailNotice = permissionRecoveryNotice ? undefined : resolvedNotices.detailNotice
   const resultCompletion =
     activity.lastCompletion?.result === result ? activity.lastCompletion : null
   const completionNotice =
@@ -229,7 +258,12 @@ function MainWindow({
           />
         ) : (
           <>
-            {blockingNotice ? (
+            {permissionRecoveryContent ? (
+              <MacOSPermissionRecovery
+                snapshot={permissionRecovery}
+                disabled={capturingMode !== null}
+              />
+            ) : blockingNotice ? (
               <BlockingRecovery
                 notice={blockingNotice}
                 completion={blockingNotice === completionNotice ? resultCompletion : null}
@@ -334,6 +368,7 @@ function MainWindow({
                 capturingMode,
                 result,
                 snapshot,
+                permissionRecoveryStatus: permissionRecoveryContent?.status,
               })}
             </span>
             {!detailsOpen ? <ChevronRightIcon /> : null}
@@ -349,6 +384,7 @@ function MainWindow({
                 capturingMode,
                 result,
                 snapshot,
+                permissionRecoveryStatus: permissionRecoveryContent?.status,
               })}
             </span>
           </div>
@@ -650,6 +686,7 @@ interface StatusMessageInput {
   captureBlocked: boolean
   interactionHint: string | null
   capturingMode: 'region' | 'display' | null
+  permissionRecoveryStatus?: string
 }
 
 function statusMessage({
@@ -657,9 +694,11 @@ function statusMessage({
   captureBlocked,
   interactionHint,
   capturingMode,
+  permissionRecoveryStatus,
   result,
   snapshot,
 }: StatusMessageInput): string {
+  if (permissionRecoveryStatus) return permissionRecoveryStatus
   if (capturingMode) {
     return capturingMode === 'region' ? 'Capturing region' : 'Capturing display'
   }

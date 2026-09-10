@@ -142,6 +142,16 @@ Security → Screen & System Audio Recording. `tccutil reset ScreenCapture` may 
 development permission database, but it also removes Screen Recording grants for other
 applications and should be used only as an explicit recovery action.
 
+Packaged replacement upgrades use a narrower product recovery path. After an
+upgrade-associated permission failure, the user may explicitly choose `Reset and restart`;
+Lumiere then runs only
+`/usr/bin/tccutil reset ScreenCapture io.github.sousouliao.lumiere`, persists the recovery
+step, and relaunches. It never resets another bundle or TCC service. The next surface opens
+Screen Recording settings, checks the system permission state, and requests one final
+restart after the grant is observed. If the reset command fails, the UI offers the same
+exact command for manual copying. This flow is packaged-macOS-only and must not be treated
+as Windows behavior.
+
 Command-line host, development Electron, and the packaged ad-hoc-signed application may be
 treated as different identities by TCC. One identity's permission result does not
 verify another.

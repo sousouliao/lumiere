@@ -7,6 +7,7 @@ import type {
 } from './platform-contract'
 import type { LumiereSettingsApi } from './settings-command'
 import type { LumiereUpdateApi } from './update-command'
+import type { LumiereMacOSPermissionRecoveryApi } from './macos-permission-recovery-command'
 
 export const captureCommandChannels = {
   captureDisplay: 'capture:display',
@@ -123,7 +124,8 @@ export type CaptureCommandResult =
       notice: CaptureNotice
     }
 
-export interface LumiereRendererApi extends LumiereSettingsApi, LumiereUpdateApi {
+export interface LumiereRendererApi
+  extends LumiereSettingsApi, LumiereUpdateApi, LumiereMacOSPermissionRecoveryApi {
   readonly platform: LumierePlatform
   getCaptureSurfaceSnapshot(): Promise<CaptureSurfaceSnapshot>
   onCaptureSurfaceChanged(listener: (snapshot: CaptureSurfaceSnapshot) => void): () => void

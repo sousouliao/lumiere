@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   globalShortcut,
   ipcMain,
@@ -8,8 +9,10 @@ import {
   protocol,
   screen,
   shell,
+  systemPreferences,
 } from 'electron'
-import { readFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -50,6 +53,8 @@ import { parseShortcutUpdate } from '../shared/shortcut-command'
 import { configureWindowsUpdates } from './windows-updater'
 import { checkLatestRelease } from './manual-update-check'
 import { updateCommandChannels } from '../shared/update-command'
+import { macOSPermissionRecoveryCommandChannels } from '../shared/macos-permission-recovery-command'
+import { MacOSPermissionRecovery } from './macos-permission-recovery'
 import {
   parseCaptureGeometry,
   type CaptureGeometry,
@@ -68,6 +73,9 @@ const regionPreviewDirectory = join(tmpdir(), 'lumiere-region-preview')
 const regionPreviewRegistry = new RegionPreviewRegistry(regionPreviewDirectory)
 const latestReleaseApiUrl = 'https://api.github.com/repos/Mournerliao/lumiere/releases/latest'
 const latestReleasePageUrl = 'https://github.com/Mournerliao/lumiere/releases/latest'
+const macOSBundleIdentifier = 'io.github.sousouliao.lumiere'
+const macOSPermissionResetCommand = `/usr/bin/tccutil reset ScreenCapture ${macOSBundleIdentifier}`
+const processStartedAt = Date.now() - process.uptime() * 1_000
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('io.github.sousouliao.lumiere')
@@ -79,6 +87,7 @@ let platformHost: PlatformHost | null = null
 let captureRouter: CaptureCommandRouter | null = null
 let captureSurfaceMonitor: CaptureSurfaceMonitor | null = null
 let settingsStore: SettingsStore | null = null
+let macOSPermissionRecovery: MacOSPermissionRecovery | null = null
 let shortcutService: ShortcutService | null = null
 let regionOverlaySession: RegionOverlaySession | null = null
 let regionOverlayController: RegionOverlayController | null = null
@@ -321,6 +330,13 @@ function registerIpc(): void {
   ipcMain.removeHandler(updateCommandChannels.getSnapshot)
   ipcMain.removeHandler(updateCommandChannels.check)
   ipcMain.removeHandler(updateCommandChannels.openLatestRelease)
+  ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.getSnapshot)
+  ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.resetAndRestart)
+  ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.defer)
+  ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.openSettings)
+  ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.checkAgain)
+  ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.restart)
+  ipcMain.removeHandler(macOSPermissionRecoveryCommandChannels.copyResetCommand)
 
   const assertTrustedWindow = (
     event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent,
@@ -550,6 +566,56 @@ function registerIpc(): void {
     assertNoArguments(args)
     if (process.platform !== 'darwin') throw new Error('Manual updates are macOS-only.')
     await shell.openExternal(latestReleasePageUrl)
+  })
+
+  ipcMain.handle(macOSPermissionRecoveryCommandChannels.getSnapshot, (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    return macOSPermissionRecovery?.getSnapshot() ?? { phase: 'inactive' as const }
+  })
+
+  ipcMain.handle(macOSPermissionRecoveryCommandChannels.resetAndRestart, async (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    return requireMacOSPermissionRecovery().resetAndRestart()
+  })
+
+  ipcMain.handle(macOSPermissionRecoveryCommandChannels.defer, async (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    return requireMacOSPermissionRecovery().defer()
+  })
+
+  ipcMain.handle(macOSPermissionRecoveryCommandChannels.openSettings, async (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    if (requireMacOSPermissionRecovery().getSnapshot().phase !== 'grant-required') {
+      throw new Error('The macOS permission recovery action is unavailable.')
+    }
+    await shell.openExternal(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+    )
+  })
+
+  ipcMain.handle(macOSPermissionRecoveryCommandChannels.checkAgain, async (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    return requireMacOSPermissionRecovery().checkAgain()
+  })
+
+  ipcMain.handle(macOSPermissionRecoveryCommandChannels.restart, (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    requireMacOSPermissionRecovery().restart()
+  })
+
+  ipcMain.handle(macOSPermissionRecoveryCommandChannels.copyResetCommand, (event, ...args) => {
+    assertTrustedWindow(event, mainWindow)
+    assertNoArguments(args)
+    if (requireMacOSPermissionRecovery().getSnapshot().phase !== 'reset-failed') {
+      throw new Error('The macOS permission recovery action is unavailable.')
+    }
+    clipboard.writeText(macOSPermissionResetCommand)
   })
 }
 
@@ -1005,11 +1071,54 @@ async function runCapture(mode: 'region' | 'display'): Promise<CaptureCommandRes
     },
     (completion) => {
       if (quitting) return
+      void macOSPermissionRecovery?.observeCaptureResult(completion.result)
       captureFailureNotifier.notify(completion, mainWindow?.isFocused() === true)
       void captureSurfaceMonitor?.invalidate()
       void refreshApplicationTray()
     },
   )
+}
+
+function requireMacOSPermissionRecovery(): MacOSPermissionRecovery {
+  if (!macOSPermissionRecovery) {
+    throw new Error('macOS permission recovery is unavailable.')
+  }
+  return macOSPermissionRecovery
+}
+
+function broadcastMacOSPermissionRecoveryChanged(): void {
+  if (!mainWindow || mainWindow.isDestroyed() || !macOSPermissionRecovery) return
+  mainWindow.webContents.send(
+    macOSPermissionRecoveryCommandChannels.changed,
+    macOSPermissionRecovery.getSnapshot(),
+  )
+}
+
+async function userDataPredatesCurrentLaunch(userDataPath: string): Promise<boolean> {
+  try {
+    return (await stat(userDataPath)).birthtimeMs < processStartedAt - 1_000
+  } catch {
+    return false
+  }
+}
+
+function resetMacOSScreenCapturePermission(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      '/usr/bin/tccutil',
+      ['reset', 'ScreenCapture', macOSBundleIdentifier],
+      { windowsHide: true },
+      (error) => {
+        if (error) reject(error instanceof Error ? error : new Error('tccutil failed.'))
+        else resolve()
+      },
+    )
+  })
+}
+
+function relaunchApplication(): void {
+  app.relaunch()
+  app.exit(0)
 }
 
 async function runExternalCapture(mode: 'region' | 'display'): Promise<void> {
@@ -1154,8 +1263,21 @@ function createPlatformHost(): PlatformHost {
 void app.whenReady().then(async () => {
   registerRegionPreviewProtocol()
   platformHost = createPlatformHost()
-  settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'))
+  const userDataPath = app.getPath('userData')
+  settingsStore = new SettingsStore(join(userDataPath, 'settings.json'))
   await settingsStore.load()
+  if (process.platform === 'darwin' && app.isPackaged) {
+    macOSPermissionRecovery = new MacOSPermissionRecovery({
+      filePath: join(userDataPath, 'macos-permission-recovery.json'),
+      currentVersion: app.getVersion(),
+      hasPriorInstallation: await userDataPredatesCurrentLaunch(userDataPath),
+      resetPermission: resetMacOSScreenCapturePermission,
+      permissionIsGranted: () => systemPreferences.getMediaAccessStatus('screen') === 'granted',
+      relaunch: relaunchApplication,
+      changed: broadcastMacOSPermissionRecoveryChanged,
+    })
+    await macOSPermissionRecovery.load()
+  }
   mainWindow = createRendererWindow()
   registerIpc()
   screen.on('display-added', refreshCaptureSurfaceForDisplayChange)

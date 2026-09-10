@@ -299,6 +299,16 @@ HDR 状态提醒只承载当前目标的非阻断状态。开启时，`unvalidat
 - 权限已授予
 - 权限仍不可用
 
+macOS 的替换升级可能使旧的 Screen Recording 授权不再匹配当前应用身份。Lumiere 只在“已识别为升级安装”且一次真实截图返回权限失败后，使用同一阻断式权限表面提供恢复；不在后台静默重置，也不把此流程带到 Windows：
+
+1. `Screen recording access needs a reset`：主操作 `Reset and restart`，次操作 `Not now`。
+2. 用户确认后，只执行 `/usr/bin/tccutil reset ScreenCapture io.github.sousouliao.lumiere`，成功后重启应用。
+3. `Allow screen recording again`：提供 `Open System Settings` 与 `Check again`。
+4. 检测到授权后显示 `Restart Lumiere to finish`，提供 `Restart now` 与 `Check again`；重启后回到普通就绪表面。
+5. 重置失败时显示 `Permission reset didn’t finish`，提供复制上述精确 Terminal 命令与重试。不得重置其他应用或其他 TCC 服务。
+
+`Not now` 返回常规权限恢复，不清除本版本的恢复资格；同一版本再次发生权限失败时可以重新显示升级恢复。一次真实截图成功后，结束本版本的升级恢复资格。首次安装继续使用普通首次授权流程。
+
 ### 7.6 捕获结果反馈
 
 结果反馈应回答三个问题：
