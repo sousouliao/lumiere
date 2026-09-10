@@ -14,6 +14,11 @@ settings. Region uses a logical-resolution preview and crops the retained backin
 the reusable Overlay and native preparation run in parallel. During Region selection,
 pointer display changes serially replace the native frozen session, preview, and Overlay
 bounds through Host-issued opaque target tokens.
+The desktop shell starts resident without showing its main window: macOS runs as a
+menu-bar-only accessory app, while Windows retains the corresponding tray behavior in
+source pending current runtime verification. Explicit open/settings actions reveal the
+prewarmed window; missing macOS Screen Recording permission is the startup exception and
+shows guidance without automatically triggering the system prompt.
 
 Foundation and milestone 1A–1C are recorded complete in
 [#1](https://github.com/Mournerliao/lumiere/issues/1),
@@ -54,14 +59,15 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
 - **Windows runtime:** recorded HDR/SDR capture, independent delivery outcomes, settings,
   cancellation, and lifecycle checks pass. Those observations predate the outstanding
   Region performance slice and do not verify its current Windows implementation.
-- **Distribution:** macOS `v0.3.2` was published from `588e57a` with separate arm64/x64
-  DMGs and repaired Screen Recording permission recovery. CI audit, shared checks, macOS
-  and Swift Host tests, both builds, signatures, architecture checks, publication, and
-  downloaded public-release checksums pass. On the packaged arm64 candidate, requesting
-  permission registered Lumiere in System Settings; the first post-grant relaunch returned
-  directly to ready state, and Display/Region capture both completed. The x64 app and Host
-  passed build, signing, and architecture checks but did not receive a separate permission
-  runtime observation.
+- **Distribution:** macOS `v0.4.0` was published from `0ac3eaa` with separate arm64/x64
+  DMGs and menu-bar-only silent startup. CI audit, shared checks, macOS and Swift Host
+  tests, both builds, signatures, architecture checks, publication, and downloaded
+  public-release checksums pass. The packaged arm64 candidate showed permission guidance
+  without an automatic system prompt when Screen Recording access was missing and remained
+  resident after its window closed. The prior `v0.3.2` arm64 permission grant, one-relaunch
+  recovery, and Display/Region observations remain the latest granted-state runtime
+  evidence. The x64 app and Host passed build, signing, and architecture checks but did not
+  receive a separate permission or resident-lifecycle runtime observation.
   Windows unsigned `v0.2.0-preview.1` publication and named-machine installer lifecycle
   are recorded; fresh-machine installation of the published artifact remains unverified.
 - **Fidelity and CI:** named macOS bright/dark fixtures and one Windows HDR-target sRGB
@@ -88,9 +94,9 @@ running history here.
   verify signing, production sparse identity, updates, borderless/fallback behavior,
   and clean-machine lifecycle.
 - **macOS permission recovery — [#18](https://github.com/sousouliao/lumiere/issues/18)
-  complete:** retain the published `v0.3.2` split-artifact, one-relaunch permission recovery,
-  and Display/Region verification evidence. Handle later field defects through their owning
-  Issues.
+  complete:** retain the published `v0.4.0` split artifacts and the `v0.3.2` one-relaunch
+  permission recovery and Display/Region verification evidence. Handle later field defects
+  through their owning Issues.
 - **Milestone exit:** blocked until both distribution lanes satisfy their independent
   criteria. Repository success, artifact delivery, visual match, and HDR preservation
   remain separate claims; one platform never verifies another.
