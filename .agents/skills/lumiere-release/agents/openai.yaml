@@ -1,0 +1,6 @@
+interface:
+  display_name: 'Publish Lumiere'
+  short_description: 'Prepare, publish, and verify a Lumiere release'
+  default_prompt: 'Use $lumiere-release to prepare, publish, and verify the next Lumiere release.'
+policy:
+  allow_implicit_invocation: false
