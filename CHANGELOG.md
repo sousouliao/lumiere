@@ -4,6 +4,22 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.4.0`
+
+Release platforms: macOS
+
+### Changed
+
+- Run Lumiere as a menu-bar app that starts silently without a Dock icon or main window; open the interface explicitly from `Open Lumiere` or `Settings…`.
+- Keep menu-bar capture commands and global shortcuts available after the main window is closed.
+- Show the permission recovery interface on launch whenever Screen Recording access is missing, while leaving the system permission prompt behind an explicit user action.
+
+### Known limitations
+
+- The app is ad-hoc signed and not notarized, so first launch requires the documented manual Gatekeeper exception.
+- HDR-preserved export is not supported; the official output is sRGB Visual Match.
+- This release includes macOS artifacts only; the updated Windows tray behavior has not yet received current runtime verification.
+
 ## [0.3.2] - 2026-09-10
 
 Release platforms: macOS
