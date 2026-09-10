@@ -3,11 +3,11 @@
 - Updated: 2026-09-10
 - Milestone: 1 — Cross-platform HDR-aware MVP with sRGB Visual Match
 - Posture: native capture and shared product surface complete; Windows distribution pending.
-- Frontier Issues #12, #15, #16, and #17 were checked on GitHub on 2026-09-09.
+- Frontier Issues #12, #15, #16, #17, and #18 were checked on GitHub on 2026-09-10.
 
 ## Current Position
 
-Electron/React drives Swift and .NET Hosts through platform-host v4 JSON Lines.
+Electron/React drives Swift and .NET Hosts through platform-host v5 JSON Lines.
 Display and frozen-frame Region capture support Clipboard, Folder, and Both delivery.
 Main owns persisted output, save-directory, shortcut, after-capture, and HDR-reminder
 settings. Region uses a logical-resolution preview and crops the retained backing frame;
@@ -54,15 +54,14 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
 - **Windows runtime:** recorded HDR/SDR capture, independent delivery outcomes, settings,
   cancellation, and lifecycle checks pass. Those observations predate the outstanding
   Region performance slice and do not verify its current Windows implementation.
-- **Distribution:** macOS `v0.3.1` was published from `c9f27fb` with separate arm64/x64
-  DMGs and guided recovery for stale Screen Recording permission after an upgrade. CI audit,
-  shared checks, macOS and Swift Host tests, both builds, signatures, architecture checks,
-  publication, and downloaded public-release checksums pass. The prior `v0.2.0` arm64
-  Display/Region capture, delivery, cancellation, and native
-  notification recovery observations remain the latest installed-artifact evidence. The
-  x64 app and Host launch under Rosetta; its separate ad-hoc identity still returned
-  permission-required during the agent's capture attempt. The `v0.3.1` installed upgrade
-  recovery flow has not yet been separately observed end to end.
+- **Distribution:** macOS `v0.3.2` was published from `588e57a` with separate arm64/x64
+  DMGs and repaired Screen Recording permission recovery. CI audit, shared checks, macOS
+  and Swift Host tests, both builds, signatures, architecture checks, publication, and
+  downloaded public-release checksums pass. On the packaged arm64 candidate, requesting
+  permission registered Lumiere in System Settings; the first post-grant relaunch returned
+  directly to ready state, and Display/Region capture both completed. The x64 app and Host
+  passed build, signing, and architecture checks but did not receive a separate permission
+  runtime observation.
   Windows unsigned `v0.2.0-preview.1` publication and named-machine installer lifecycle
   are recorded; fresh-machine installation of the published artifact remains unverified.
 - **Fidelity and CI:** named macOS bright/dark fixtures and one Windows HDR-target sRGB
@@ -88,9 +87,10 @@ running history here.
   Next: await approval and the assigned certificate Subject/Publisher, then
   verify signing, production sparse identity, updates, borderless/fallback behavior,
   and clean-machine lifecycle.
-- **macOS release — [#17](https://github.com/sousouliao/lumiere/issues/17) complete:** retain
-  the published `v0.3.1` split-artifact and verification evidence. Handle later field defects
-  through their owning Issues.
+- **macOS permission recovery — [#18](https://github.com/sousouliao/lumiere/issues/18)
+  complete:** retain the published `v0.3.2` split-artifact, one-relaunch permission recovery,
+  and Display/Region verification evidence. Handle later field defects through their owning
+  Issues.
 - **Milestone exit:** blocked until both distribution lanes satisfy their independent
   criteria. Repository success, artifact delivery, visual match, and HDR preservation
   remain separate claims; one platform never verifies another.
