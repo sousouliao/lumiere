@@ -4,6 +4,20 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.3.1`
+
+Release platforms: macOS
+
+### Fixed
+
+- Recover Screen Recording access after an app upgrade with a guided, Lumiere-only permission reset and restart flow.
+
+### Known limitations
+
+- The app is ad-hoc signed and not notarized, so first launch requires the documented manual Gatekeeper exception.
+- HDR-preserved export is not supported; the official output is sRGB Visual Match.
+- Updating the ad-hoc-signed app can still require granting Screen Recording permission again; Lumiere now guides the recovery after a failed capture.
+
 ## [0.3.0] - 2026-09-09
 
 Release platforms: macOS
