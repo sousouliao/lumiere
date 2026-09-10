@@ -1,6 +1,6 @@
 # Current Project State
 
-- Updated: 2026-09-09
+- Updated: 2026-09-10
 - Milestone: 1 — Cross-platform HDR-aware MVP with sRGB Visual Match
 - Posture: native capture and shared product surface complete; Windows distribution pending.
 - Frontier Issues #12, #15, #16, and #17 were checked on GitHub on 2026-09-09.
@@ -54,14 +54,15 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
 - **Windows runtime:** recorded HDR/SDR capture, independent delivery outcomes, settings,
   cancellation, and lifecycle checks pass. Those observations predate the outstanding
   Region performance slice and do not verify its current Windows implementation.
-- **Distribution:** macOS `v0.3.0` was published from `15caeab` with separate arm64/x64
-  DMGs and the manual GitHub update check. CI audit, shared checks, macOS tests, both builds,
-  signatures, architecture checks, publication, and downloaded public-release checksums
-  pass. The prior `v0.2.0` arm64 Display/Region capture, delivery, cancellation, and native
+- **Distribution:** macOS `v0.3.1` was published from `c9f27fb` with separate arm64/x64
+  DMGs and guided recovery for stale Screen Recording permission after an upgrade. CI audit,
+  shared checks, macOS and Swift Host tests, both builds, signatures, architecture checks,
+  publication, and downloaded public-release checksums pass. The prior `v0.2.0` arm64
+  Display/Region capture, delivery, cancellation, and native
   notification recovery observations remain the latest installed-artifact evidence. The
   x64 app and Host launch under Rosetta; its separate ad-hoc identity still returned
-  permission-required during the agent's capture attempt. Updating an ad-hoc-signed build
-  may require resetting and granting Lumiere's Screen Recording permission again.
+  permission-required during the agent's capture attempt. The `v0.3.1` installed upgrade
+  recovery flow has not yet been separately observed end to end.
   Windows unsigned `v0.2.0-preview.1` publication and named-machine installer lifecycle
   are recorded; fresh-machine installation of the published artifact remains unverified.
 - **Fidelity and CI:** named macOS bright/dark fixtures and one Windows HDR-target sRGB
@@ -88,7 +89,7 @@ running history here.
   verify signing, production sparse identity, updates, borderless/fallback behavior,
   and clean-machine lifecycle.
 - **macOS release — [#17](https://github.com/sousouliao/lumiere/issues/17) complete:** retain
-  the published `v0.3.0` split-artifact and verification evidence. Handle later field defects
+  the published `v0.3.1` split-artifact and verification evidence. Handle later field defects
   through their owning Issues.
 - **Milestone exit:** blocked until both distribution lanes satisfy their independent
   criteria. Repository success, artifact delivery, visual match, and HDR preservation
