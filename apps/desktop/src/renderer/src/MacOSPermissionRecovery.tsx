@@ -31,7 +31,7 @@ export function MacOSPermissionRecovery({
         typeof result === 'object' &&
         result !== null &&
         'phase' in result &&
-        result.phase === 'grant-required'
+        (result.phase === 'permission-required' || result.phase === 'grant-required')
       ) {
         setMessage({
           phase: snapshot.phase,
@@ -47,6 +47,34 @@ export function MacOSPermissionRecovery({
 
   const controls = (() => {
     switch (snapshot.phase) {
+      case 'permission-required':
+        return (
+          <>
+            <RecoveryButton
+              label={pendingAction === 'request' ? 'Requesting…' : 'Allow screen recording'}
+              disabled={disabled || pendingAction !== null}
+              onClick={() =>
+                void run('request', () =>
+                  window.lumierePlatform.requestMacOSScreenCapturePermission(),
+                )
+              }
+            />
+            <RecoveryButton
+              label="Open System Settings"
+              disabled={disabled || pendingAction !== null}
+              onClick={() =>
+                void run('settings', () => window.lumierePlatform.openMacOSScreenCaptureSettings())
+              }
+            />
+            <RecoveryButton
+              label={pendingAction === 'check' ? 'Checking…' : 'Check again'}
+              disabled={disabled || pendingAction !== null}
+              onClick={() =>
+                void run('check', () => window.lumierePlatform.checkMacOSScreenCapturePermission())
+              }
+            />
+          </>
+        )
       case 'reset-required':
         return (
           <>

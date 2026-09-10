@@ -22,20 +22,62 @@ afterEach(async () => {
 })
 
 describe('MacOSPermissionRecovery', () => {
-  it('does not offer an upgrade reset on a first installation', async () => {
+  it('shows ordinary permission recovery without offering an upgrade reset on a first installation', async () => {
     const recovery = await createRecovery({ hasPriorInstallation: false })
+
+    expect(recovery.getSnapshot()).toEqual({ phase: 'permission-required' })
 
     await recovery.observeCaptureResult(permissionDenied)
 
-    expect(recovery.getSnapshot()).toEqual({ phase: 'inactive' })
+    expect(recovery.getSnapshot()).toEqual({ phase: 'permission-required' })
+    await expect(recovery.resetAndRestart()).rejects.toThrow(
+      'The macOS permission recovery action is unavailable.',
+    )
   })
 
   it('offers a reset to users upgrading from a version without recovery state', async () => {
     const recovery = await createRecovery({ hasPriorInstallation: true })
 
+    expect(recovery.getSnapshot()).toEqual({ phase: 'permission-required' })
+
     await recovery.observeCaptureResult(permissionDenied)
 
     expect(recovery.getSnapshot()).toEqual({ phase: 'reset-required' })
+  })
+
+  it.each([
+    ['granted', 'inactive'],
+    ['restart-required', 'restart-required'],
+    ['not-granted', 'permission-required'],
+  ] as const)('maps an ordinary native %s request result to %s', async (status, phase) => {
+    const recovery = await createRecovery({
+      requestPermission: vi.fn(() => Promise.resolve({ status })),
+    })
+
+    expect(await recovery.requestPermission()).toEqual({ phase })
+  })
+
+  it('keeps every ungranted launch on the ordinary permission surface', async () => {
+    const filePath = await statePath()
+    const firstLaunch = await createRecovery({ filePath })
+    expect(await firstLaunch.checkAgain()).toEqual({ phase: 'permission-required' })
+
+    const secondLaunch = await createRecovery({ filePath })
+
+    expect(secondLaunch.getSnapshot()).toEqual({ phase: 'permission-required' })
+  })
+
+  it('retires ordinary permission recovery after a granted relaunch', async () => {
+    const filePath = await statePath()
+    const recovery = await createRecovery({
+      filePath,
+      requestPermission: () => Promise.resolve({ status: 'restart-required' }),
+    })
+    await recovery.requestPermission()
+
+    const relaunched = await createRecovery({ filePath, permissionIsGranted: () => true })
+
+    expect(relaunched.getSnapshot()).toEqual({ phase: 'inactive' })
   })
 
   it('detects later version changes and carries the grant step across a relaunch', async () => {
@@ -127,7 +169,7 @@ describe('MacOSPermissionRecovery', () => {
       resetPermission: vi.fn(() => Promise.reject(new Error('tccutil failed'))),
     })
     await recovery.observeCaptureResult(permissionDenied)
-    expect(await recovery.defer()).toEqual({ phase: 'inactive' })
+    expect(await recovery.defer()).toEqual({ phase: 'permission-required' })
 
     await recovery.observeCaptureResult(permissionDenied)
     expect(await recovery.resetAndRestart()).toEqual({ phase: 'reset-failed' })
@@ -139,7 +181,7 @@ describe('MacOSPermissionRecovery', () => {
     await recovery.observeCaptureResult({ status: 'success', feedback: 'Copied' })
     await recovery.observeCaptureResult(permissionDenied)
 
-    expect(recovery.getSnapshot()).toEqual({ phase: 'inactive' })
+    expect(recovery.getSnapshot()).toEqual({ phase: 'permission-required' })
     await expect(readFile(filePath, 'utf8')).resolves.not.toContain('recoveryVersion')
   })
 })

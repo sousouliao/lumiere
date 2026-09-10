@@ -162,6 +162,11 @@ async function verifyBundle(appPath, version, architecture) {
     ['-extract', 'LSMinimumSystemVersion', 'raw', infoPlistPath],
     macOSPackagingPolicy.minimumSystemVersion,
   )
+  await expectCommandOutput(
+    '/usr/bin/plutil',
+    ['-extract', 'LSUIElement', 'raw', infoPlistPath],
+    'true',
+  )
   await expectArchitecture(executablePath, architecture)
   await expectArchitecture(hostPath, architecture)
   await expectAllMachOBinaries(contentsPath, architecture)
@@ -230,7 +235,7 @@ async function expectEnglishOnlyLocales(contentsPath) {
 async function expectRuntimeIcons(contentsPath) {
   const iconsPath = join(contentsPath, 'Resources', 'icons', 'mac')
   const actual = (await readdir(iconsPath)).sort()
-  const expected = ['app-icon.png', 'trayTemplate.png', 'trayTemplate@2x.png'].sort()
+  const expected = ['trayTemplate.png', 'trayTemplate@2x.png'].sort()
   if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
     throw new Error(`${iconsPath} contains unexpected runtime icons: ${actual.join(', ')}`)
   }
@@ -275,6 +280,9 @@ function validateConfiguration(desktopPackage, builderConfig) {
   }
   if (builderConfig.mac?.minimumSystemVersion !== macOSPackagingPolicy.minimumSystemVersion) {
     throw new Error('The electron-builder minimum system version does not match the policy.')
+  }
+  if (builderConfig.mac?.extendInfo?.LSUIElement !== true) {
+    throw new Error('The macOS bundle must run as a menu-bar-only application.')
   }
   if (builderConfig.mac?.identity !== '-') {
     throw new Error('The macOS bundle must use an explicit ad-hoc signing identity.')

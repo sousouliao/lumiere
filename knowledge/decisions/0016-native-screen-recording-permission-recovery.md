@@ -15,6 +15,13 @@ running requires a restart. A grant observed while restoring `grant-required` or
 `restart-required` state in a newly launched process means that launch has already
 satisfied macOS's restart requirement and returns the UI to ready.
 
+Lumiere runs as a menu-bar-only application and normally starts without presenting its
+main window. Startup performs a read-only permission check. An ungranted permission enters
+the ordinary `permission-required` state and presents the existing blocking permission
+surface on every launch; an unfinished upgrade-recovery state is restored the same way.
+Neither path requests access until the user explicitly chooses the permission action.
+Non-permission capability and advisory states do not present the window at startup.
+
 ## Context
 
 The v0.3.1 recovery flow reset Lumiere's TCC entry and then only opened System Settings
@@ -26,6 +33,9 @@ from System Settings until a screenshot command happened to call
 ## Consequences
 
 - The user explicitly initiates the system prompt from the blocking recovery surface.
+- Ordinary first-install and denied-permission flows use `permission-required`; the
+  upgrade-only reset remains unavailable until an eligible replacement install records a
+  real permission failure.
 - System Settings and manual checking remain fallbacks, and window focus performs a
   read-only check after the user returns.
 - The persisted state format remains version 1; startup reconciliation changes behavior

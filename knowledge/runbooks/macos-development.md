@@ -51,8 +51,8 @@ pnpm package:macos
 The command produces `artifacts/macos/apps/arm64/Lumiere.app` and
 `artifacts/macos/apps/x64/Lumiere.app`. Both use bundle identifier
 `io.github.sousouliao.lumiere`, the version from `apps/desktop/package.json`, and a minimum
-system version of macOS 15. Each app contains only its matching Swift Host architecture,
-the English Electron locale family, and the three runtime macOS icons. The command verifies
+system version of macOS 15. Each menu-bar-only app contains only its matching Swift Host
+architecture, the English Electron locale family, and the two runtime menu-bar icons. The command verifies
 the bundle signature, identity, version, minimum system version, every Mach-O architecture,
 and the current package-size budgets. It does not produce disk images or notarize the apps.
 

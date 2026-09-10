@@ -235,6 +235,12 @@ Lumiere
 
 Windows 使用系统托盘语义，macOS 使用菜单栏语义；文案、间距、焦点和分隔方式遵循平台惯例。
 
+Lumiere 默认静默驻留：macOS 作为不显示 Dock 和应用菜单的纯菜单栏应用，Windows 仅驻留系统托盘；
+启动和关闭主窗口都不退出后台进程。只有 `Open Lumiere`、`Settings…`、Windows 托盘点击或用户点击
+失败通知等明确操作才显示主窗口，菜单截图与全局快捷键保持后台执行。macOS 启动时只读检查 Screen
+Recording 权限；权限未授予或存在未完成的权限恢复步骤时，每次启动都显示对应的阻断式权限表面，但
+系统授权请求仍必须由用户在该表面显式触发。Host 暂时不可用、HDR 提醒和普通输出问题不触发启动显窗。
+
 ### 7.4 设置
 
 设置是 Lumiere 主窗口内的一种模式，不创建第二个 `BrowserWindow`。Capture 与 Settings 使用相同且稳定的

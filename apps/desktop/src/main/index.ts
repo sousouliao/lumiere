@@ -16,12 +16,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import {
-  applyMacDockIcon,
-  createApplicationTray,
-  desktopIconPaths,
-  type ApplicationTray,
-} from './app-icons'
+import { createApplicationTray, desktopIconPaths, type ApplicationTray } from './app-icons'
 import type { ApplicationTrayState } from './tray-menu'
 import { CaptureSession } from './capture-session'
 import { CaptureFailureNotifier } from './capture-failure-notifier'
@@ -55,6 +50,7 @@ import { checkLatestRelease } from './manual-update-check'
 import { updateCommandChannels } from '../shared/update-command'
 import { macOSPermissionRecoveryCommandChannels } from '../shared/macos-permission-recovery-command'
 import { MacOSPermissionRecovery } from './macos-permission-recovery'
+import { MainWindowPresentation } from './main-window-presentation'
 import {
   parseCaptureGeometry,
   type CaptureGeometry,
@@ -79,9 +75,12 @@ const processStartedAt = Date.now() - process.uptime() * 1_000
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('io.github.sousouliao.lumiere')
+} else if (process.platform === 'darwin') {
+  app.setActivationPolicy('accessory')
 }
 
 let mainWindow: BrowserWindow | null = null
+let mainWindowPresentation: MainWindowPresentation | null = null
 let applicationTray: ApplicationTray | null = null
 let platformHost: PlatformHost | null = null
 let macOSPlatformHost: MacOSPlatformHost | null = null
@@ -178,18 +177,24 @@ function createRendererWindow(): BrowserWindow {
     },
   })
 
-  window.once('ready-to-show', () => {
-    window.show()
-    setImmediate(() => regionOverlayController?.prewarm())
+  mainWindowPresentation = new MainWindowPresentation(window, {
+    isQuitting: () => quitting,
+    becameReady: () => {
+      setImmediate(() => regionOverlayController?.prewarm())
+    },
   })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event) => {
     event.preventDefault()
   })
+  window.on('hide', () => {
+    shortcutService?.setRecording(false)
+  })
   window.once('closed', () => {
     shortcutService?.setRecording(false)
     if (mainWindow === window) {
       mainWindow = null
+      mainWindowPresentation = null
       if (process.platform === 'win32') regionOverlayController?.dispose()
     }
   })
@@ -209,8 +214,7 @@ function showMainWindow(): BrowserWindow {
     mainWindow = createRendererWindow()
   }
 
-  mainWindow.show()
-  mainWindow.focus()
+  mainWindowPresentation?.show()
   return mainWindow
 }
 
@@ -222,7 +226,10 @@ function bindCaptureSurfaceMonitoring(window: BrowserWindow): void {
   window.on('focus', () => {
     captureFailureNotifier.clear()
     void captureSurfaceMonitor?.refresh()
-    if (macOSPermissionRecovery?.getSnapshot().phase === 'grant-required') {
+    if (
+      macOSPermissionRecovery?.getSnapshot().phase === 'permission-required' ||
+      macOSPermissionRecovery?.getSnapshot().phase === 'grant-required'
+    ) {
       void macOSPermissionRecovery.checkAgain().catch((error: unknown) => {
         process.stderr.write(
           `${JSON.stringify({
@@ -602,7 +609,8 @@ function registerIpc(): void {
   ipcMain.handle(macOSPermissionRecoveryCommandChannels.openSettings, async (event, ...args) => {
     assertTrustedWindow(event, mainWindow)
     assertNoArguments(args)
-    if (requireMacOSPermissionRecovery().getSnapshot().phase !== 'grant-required') {
+    const phase = requireMacOSPermissionRecovery().getSnapshot().phase
+    if (phase !== 'permission-required' && phase !== 'grant-required') {
       throw new Error('The macOS permission recovery action is unavailable.')
     }
     await shell.openExternal(
@@ -1289,11 +1297,11 @@ void app.whenReady().then(async () => {
   const userDataPath = app.getPath('userData')
   settingsStore = new SettingsStore(join(userDataPath, 'settings.json'))
   await settingsStore.load()
-  if (process.platform === 'darwin' && app.isPackaged) {
+  if (process.platform === 'darwin') {
     macOSPermissionRecovery = new MacOSPermissionRecovery({
       filePath: join(userDataPath, 'macos-permission-recovery.json'),
       currentVersion: app.getVersion(),
-      hasPriorInstallation: await userDataPredatesCurrentLaunch(userDataPath),
+      hasPriorInstallation: app.isPackaged && (await userDataPredatesCurrentLaunch(userDataPath)),
       resetPermission: resetMacOSScreenCapturePermission,
       requestPermission: () => {
         if (!macOSPlatformHost) {
@@ -1320,7 +1328,6 @@ void app.whenReady().then(async () => {
     display: () => runExternalCapture('display'),
   })
   shortcutService.initialize()
-  applyMacDockIcon()
   lastTrayState = await getApplicationTrayState()
   applicationTray = createApplicationTray(lastTrayState, {
     captureRegion: () => {
@@ -1336,22 +1343,18 @@ void app.whenReady().then(async () => {
     },
   })
   void configureWindowsUpdates()
-
-  app.on('activate', () => {
-    showMainWindow()
-  })
+  if (macOSPermissionRecovery?.getSnapshot().phase !== 'inactive') showCaptureWindow()
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    applicationTray?.destroy()
-    app.quit()
-  }
+  // The menu bar or system tray owns the resident application lifetime.
 })
 
 app.on('before-quit', () => {
   quitting = true
   captureFailureNotifier.clear()
+  applicationTray?.destroy()
+  applicationTray = null
   shortcutService?.dispose()
   screen.removeListener('display-added', refreshCaptureSurfaceForDisplayChange)
   screen.removeListener('display-removed', refreshCaptureSurfaceForDisplayChange)

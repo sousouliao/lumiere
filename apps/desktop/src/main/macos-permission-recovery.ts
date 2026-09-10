@@ -41,13 +41,18 @@ export class MacOSPermissionRecovery {
 
   public async load(): Promise<void> {
     const persisted = await this.readState()
+    const permissionGranted = this.options.permissionIsGranted()
     const updated = persisted
       ? persisted.lastLaunchedVersion !== this.options.currentVersion
       : this.options.hasPriorInstallation
     const continuingCurrentRecovery = persisted?.recoveryVersion === this.options.currentVersion
     let restoredPhase = continuingCurrentRecovery ? persisted.phase : 'inactive'
     if (restoredPhase === 'grant-required' || restoredPhase === 'restart-required') {
-      restoredPhase = this.options.permissionIsGranted() ? 'inactive' : 'grant-required'
+      restoredPhase = permissionGranted ? 'inactive' : 'grant-required'
+    } else if (restoredPhase === 'permission-required') {
+      restoredPhase = permissionGranted ? 'inactive' : 'permission-required'
+    } else if (restoredPhase === 'inactive' && !permissionGranted) {
+      restoredPhase = 'permission-required'
     }
 
     this.state = {
@@ -66,17 +71,24 @@ export class MacOSPermissionRecovery {
   }
 
   public async observeCaptureResult(result: CaptureCommandResult): Promise<void> {
-    if (result.status === 'success' && this.state.recoveryVersion === this.options.currentVersion) {
-      await this.transition('inactive', false)
+    if (result.status === 'success') {
+      const retiringUpgradeRecovery = this.state.recoveryVersion === this.options.currentVersion
+      if (this.state.phase !== 'inactive' || retiringUpgradeRecovery) {
+        await this.transition('inactive', !retiringUpgradeRecovery)
+      }
       return
     }
-    if (
-      result.status === 'failed' &&
-      result.notice.recovery === 'permissions' &&
-      this.state.recoveryVersion === this.options.currentVersion &&
-      (this.state.phase === 'inactive' || this.state.phase === 'reset-required')
-    ) {
-      await this.transition('reset-required')
+    if (result.status === 'failed' && result.notice.recovery === 'permissions') {
+      if (
+        this.state.recoveryVersion === this.options.currentVersion &&
+        (this.state.phase === 'inactive' ||
+          this.state.phase === 'permission-required' ||
+          this.state.phase === 'reset-required')
+      ) {
+        await this.transition('reset-required')
+      } else if (this.state.phase !== 'permission-required') {
+        await this.transition('permission-required')
+      }
     }
   }
 
@@ -95,12 +107,12 @@ export class MacOSPermissionRecovery {
 
   public async defer(): Promise<MacOSPermissionRecoverySnapshot> {
     this.assertPhase('reset-required')
-    await this.transition('inactive')
+    await this.transition('permission-required')
     return this.getSnapshot()
   }
 
   public async checkAgain(): Promise<MacOSPermissionRecoverySnapshot> {
-    this.assertPhase('grant-required', 'restart-required')
+    this.assertPhase('permission-required', 'grant-required', 'restart-required')
     if (this.options.permissionIsGranted()) {
       await this.transition('restart-required')
     }
@@ -108,7 +120,7 @@ export class MacOSPermissionRecovery {
   }
 
   public async requestPermission(): Promise<MacOSPermissionRecoverySnapshot> {
-    this.assertPhase('grant-required')
+    this.assertPhase('permission-required', 'grant-required')
     const result = await this.options.requestPermission()
     switch (result.status) {
       case 'granted':
@@ -196,6 +208,7 @@ function parseState(value: unknown): PersistedState {
 function isPhase(value: unknown): value is MacOSPermissionRecoveryPhase {
   return (
     value === 'inactive' ||
+    value === 'permission-required' ||
     value === 'reset-required' ||
     value === 'grant-required' ||
     value === 'restart-required' ||

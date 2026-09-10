@@ -13,6 +13,14 @@ export function macOSPermissionRecoveryContent(
   switch (phase) {
     case 'inactive':
       return null
+    case 'permission-required':
+      return {
+        title: 'Allow screen recording',
+        detail:
+          'Lumiere needs Screen Recording access to capture your display. Choose Allow screen recording to continue.',
+        status: 'Permission required',
+        tone: 'caution',
+      }
     case 'reset-required':
       return {
         title: 'Screen recording access needs a reset',

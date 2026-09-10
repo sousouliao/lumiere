@@ -10,10 +10,6 @@
   "files": ["out/**/*"],
   "extraResources": [
     {
-      "from": "resources/icons/mac/app-icon.png",
-      "to": "icons/mac/app-icon.png"
-    },
-    {
       "from": "resources/icons/mac/trayTemplate.png",
       "to": "icons/mac/trayTemplate.png"
     },
@@ -31,6 +27,9 @@
     "category": "public.app-category.graphics-design",
     "icon": "resources/icons/mac/app.icns",
     "minimumSystemVersion": "15.0",
+    "extendInfo": {
+      "LSUIElement": true
+    },
     "identity": "-",
     "hardenedRuntime": true,
     "entitlements": "build/entitlements.mac.plist",

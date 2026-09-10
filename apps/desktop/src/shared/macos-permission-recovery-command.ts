@@ -11,7 +11,12 @@ export const macOSPermissionRecoveryCommandChannels = {
 } as const
 
 export type MacOSPermissionRecoveryPhase =
-  'inactive' | 'reset-required' | 'grant-required' | 'restart-required' | 'reset-failed'
+  | 'inactive'
+  | 'permission-required'
+  | 'reset-required'
+  | 'grant-required'
+  | 'restart-required'
+  | 'reset-failed'
 
 export interface MacOSPermissionRecoverySnapshot {
   phase: MacOSPermissionRecoveryPhase

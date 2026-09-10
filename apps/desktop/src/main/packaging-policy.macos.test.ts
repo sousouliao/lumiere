@@ -36,10 +36,6 @@ describe('macOS packaging policy', () => {
     expect(builderConfig.electronLanguages).toEqual(['en'])
     expect(builderConfig.extraResources).toEqual([
       {
-        from: 'resources/icons/mac/app-icon.png',
-        to: 'icons/mac/app-icon.png',
-      },
-      {
         from: 'resources/icons/mac/trayTemplate.png',
         to: 'icons/mac/trayTemplate.png',
       },
@@ -65,6 +61,7 @@ describe('macOS packaging policy', () => {
     expect(builderConfig.mac).toMatchObject({
       target: 'dir',
       minimumSystemVersion: '15.0',
+      extendInfo: { LSUIElement: true },
       identity: '-',
       hardenedRuntime: true,
       binaries: ['Contents/Resources/macos-host/LumiereMacHost'],

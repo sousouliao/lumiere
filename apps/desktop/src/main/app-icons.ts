@@ -5,6 +5,7 @@ import {
   type ApplicationTrayCommands,
   type ApplicationTrayState,
 } from './tray-menu'
+import { opensWindowOnTrayClick } from './main-window-presentation'
 
 function currentIconPlatform(): DesktopIconPlatform {
   if (process.platform === 'darwin' || process.platform === 'win32') {
@@ -21,18 +22,6 @@ export function desktopIconPaths() {
     platform: currentIconPlatform(),
     resourcesPath: process.resourcesPath,
   })
-}
-
-export function applyMacDockIcon(): void {
-  if (process.platform !== 'darwin') {
-    return
-  }
-
-  const icon = nativeImage.createFromPath(desktopIconPaths().appIcon)
-  if (icon.isEmpty()) {
-    throw new Error('The macOS Dock icon could not be loaded.')
-  }
-  app.dock?.setIcon(icon)
 }
 
 export interface ApplicationTray {
@@ -58,9 +47,11 @@ export function createApplicationTray(
     tray.setContextMenu(Menu.buildFromTemplate(applicationTrayMenuTemplate(nextState, commands)))
   }
   update(state)
-  tray.on('click', () => {
-    commands.showWindow()
-  })
+  if (opensWindowOnTrayClick(process.platform)) {
+    tray.on('click', () => {
+      commands.showWindow()
+    })
+  }
   return {
     update,
     destroy: () => {
