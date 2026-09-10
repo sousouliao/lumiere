@@ -2,8 +2,8 @@
 
 - Updated: 2026-09-11
 - Milestone: 1 — Cross-platform HDR-aware MVP with sRGB Visual Match
-- Posture: native capture and shared product surface complete; Windows distribution remains unsigned preview-only.
-- Issues #12, #15, and #16 were resolved on Windows on 2026-09-11; #12 ended as not planned after the signing route failed.
+- Posture: native capture and shared product surface complete; macOS and Windows stable distribution is published, with Windows explicitly unsigned.
+- Issues #12, #15, and #16 were resolved on Windows on 2026-09-11; ADR 0018 makes signing independent of stable release status.
 
 ## Current Position
 
@@ -64,22 +64,18 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
   median across ten samples, versus 1821 ms cold and 2196.5 ms warm median from the installed
   protocol-v3 baseline. Ten prepare/cancel cycles released successfully; a final 100×100
   logical commit produced a 150×150 sRGB Visual Match PNG from the retained HDR frame.
-- **Distribution:** macOS `v0.4.0` was published from `0ac3eaa` with separate arm64/x64
-  DMGs and menu-bar-only silent startup. CI audit, shared checks, macOS and Swift Host
-  tests, both builds, signatures, architecture checks, publication, and downloaded
-  public-release checksums pass. The packaged arm64 candidate showed permission guidance
-  without an automatic system prompt when Screen Recording access was missing and remained
-  resident after its window closed. The prior `v0.3.2` arm64 permission grant, one-relaunch
-  recovery, and Display/Region observations remain the latest granted-state runtime
-  evidence. The x64 app and Host passed build, signing, and architecture checks but did not
-  receive a separate permission or resident-lifecycle runtime observation.
-  Windows unsigned `v0.2.0-preview.1` publication and named-machine installer lifecycle
-  are recorded. A local unsigned `0.4.0` installer also builds successfully. SignPath
-  Foundation declined the application on 2026-09-09, so signed sparse identity, borderless
-  consent, automatic updates, and a stable Windows release are deferred and unclaimed.
+- **Distribution:** `v0.5.0` was published from `9482b1f` as the latest stable release with
+  separate macOS arm64/x64 DMGs and an unsigned Windows x64 NSIS installer. The unified CI
+  audit, shared checks, macOS integration and Swift Host tests, Windows Host verification,
+  all three builds, publication, exact asset-set inspection, and downloaded public-release
+  checksums pass. No additional manual platform runtime observation was performed for this
+  release; the prior recorded macOS and Windows evidence remains current. Windows stable
+  releases deliberately retain SmartScreen or unknown-publisher warnings, the WGC system
+  capture border, and manual updates. Signed sparse identity, borderless consent, verified
+  publisher identity, and automatic updates remain unavailable and unclaimed.
 - **Fidelity and CI:** named macOS bright/dark fixtures and one Windows HDR-target sRGB
-  reference passed. These do not certify broad fidelity or HDR preservation. The last
-  recorded shell/engine CI checkpoint is `fccf812`, not current-HEAD evidence.
+  reference passed. These do not certify broad fidelity or HDR preservation. The current
+  shell and both native Host CI checkpoint is release commit `9482b1f`.
 
 Exact prior commands, measurements, and platform qualifications remain available in the
 [Git version before this condensation](https://github.com/Mournerliao/lumiere/blob/e1b48d1dd691ab567b376d1ba27edf27428ba448/knowledge/state/CURRENT.md#verification-truth).
@@ -88,7 +84,8 @@ running history here.
 
 ## Execution Frontiers
 
-No GitHub implementation Issue is currently open. Signed Windows distribution is deferred
-by ADR 0017 rather than treated as completed. Remaining broad fidelity, multi-display Windows
-observation, fresh-machine preview installation, and HDR-preserved export are not implied by
-the closed slices and should receive new owning Issues when selected.
+No GitHub implementation Issue is currently open. ADR 0018 permits unsigned Windows stable
+distribution while keeping signing, sparse identity, borderless consent, and automatic updates
+deferred. Remaining broad fidelity, multi-display Windows observation, fresh-machine `v0.5.0`
+installation, and HDR-preserved export are not implied by the closed slices and should receive
+new owning Issues when selected.
