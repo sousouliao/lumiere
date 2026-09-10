@@ -1,17 +1,19 @@
 # Code-signing policy
 
-Free code signing provided by [SignPath.io](https://signpath.io/), certificate by
-[SignPath Foundation](https://signpath.org/).
+Lumiere does not currently have a Windows code-signing certificate. The SignPath
+Foundation application submitted on 2026-09-05 was declined on 2026-09-09 because the
+project did not yet have the public adoption and external trust signals required by the
+Foundation program. The project may reapply later or evaluate a paid provider through a
+separate decision, but neither route is currently planned.
 
-Official Lumiere Windows releases are built from public tagged source by GitHub Actions.
-SignPath signs only release artifacts produced by that workflow. Maintainers require
-multi-factor authentication and review signing requests according to the configured
-SignPath policy. Private keys are not stored in this repository or in GitHub Actions.
+Current Windows preview installers are unsigned, publish their SHA-256 digest alongside
+the artifact, and do not enable production sparse identity or automatic updates. Private
+keys are not stored in this repository or in GitHub Actions.
 
 ## Team roles
 
 - Committer and reviewer: [sousouliao](https://github.com/sousouliao)
-- Signing approver: [sousouliao](https://github.com/sousouliao)
+- Signing approver: not assigned while no signing provider is configured
 
 Security-relevant signing or release-workflow changes require maintainer review. If an
 official release is suspected of compromise, publishing stops until the affected

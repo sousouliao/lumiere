@@ -1,9 +1,9 @@
 # Current Project State
 
-- Updated: 2026-09-10
+- Updated: 2026-09-11
 - Milestone: 1 — Cross-platform HDR-aware MVP with sRGB Visual Match
-- Posture: native capture and shared product surface complete; Windows distribution pending.
-- Frontier Issues #12, #15, #16, #17, and #18 were checked on GitHub on 2026-09-10.
+- Posture: native capture and shared product surface complete; Windows distribution remains unsigned preview-only.
+- Issues #12, #15, and #16 were resolved on Windows on 2026-09-11; #12 ended as not planned after the signing route failed.
 
 ## Current Position
 
@@ -29,7 +29,7 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
 
 ## Verification Boundary
 
-- **Current shared-shell slice — [#16](https://github.com/sousouliao/lumiere/issues/16):**
+- **Quiet failure feedback — [#16](https://github.com/sousouliao/lumiere/issues/16):**
   independent Toast removed; success/cancellation stay quiet, background failures use
   silent system notifications, foreground failures use a footer summary with fixed-size
   details, blocking recovery replaces the capture actions, and all recovery shares one
@@ -38,8 +38,10 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
   Electron fixture checks cover notification routing/clicks, closed-window recovery,
   stale actions, folder/permission recovery, and cancellation; renderer unit checks cover
   fixed-size notice placement. Packaged macOS Display/Region output, cancellation, native
-  notification presentation, and notification click recovery pass. The notification
-  observation was maintainer-reported; Windows remains unverified.
+  notification presentation, and notification click recovery pass. On Windows, an isolated
+  packaged `0.4.0` run produced a real background partial result: clipboard delivery passed,
+  folder delivery failed against a deliberately non-directory target, and the app returned
+  the expected folder-recovery notice through the system-notification path.
 - **macOS runtime:** recorded Display/Region delivery, settings persistence, cancellation,
   frozen-frame commit, external-4K backing geometry, and bounded repeat checks pass.
   Region latency on the named SDR target was 607 ms cold and 343.5 ms warm median
@@ -56,9 +58,12 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
   are implemented. `pnpm test:shared` (27 files, 138 tests), `pnpm build`, and the macOS
   Host suite (34 tests) pass on this Mac. The maintainer accepted real dual-display switching;
   Windows build/runtime remains unverified.
-- **Windows runtime:** recorded HDR/SDR capture, independent delivery outcomes, settings,
-  cancellation, and lifecycle checks pass. Those observations predate the outstanding
-  Region performance slice and do not verify its current Windows implementation.
+- **Windows runtime:** `hosts/windows/scripts/verify.ps1` passes with Host 33, Capture 85,
+  Graphics 48, and Interop 35 tests. On the named 3840×2160 HDR display at 150% scaling,
+  optimized Region preparation produced 2560×1440 previews: 950 ms cold and 666 ms warm
+  median across ten samples, versus 1821 ms cold and 2196.5 ms warm median from the installed
+  protocol-v3 baseline. Ten prepare/cancel cycles released successfully; a final 100×100
+  logical commit produced a 150×150 sRGB Visual Match PNG from the retained HDR frame.
 - **Distribution:** macOS `v0.4.0` was published from `0ac3eaa` with separate arm64/x64
   DMGs and menu-bar-only silent startup. CI audit, shared checks, macOS and Swift Host
   tests, both builds, signatures, architecture checks, publication, and downloaded
@@ -69,7 +74,9 @@ HDR-preserved export and broader cross-platform fidelity certification remain un
   evidence. The x64 app and Host passed build, signing, and architecture checks but did not
   receive a separate permission or resident-lifecycle runtime observation.
   Windows unsigned `v0.2.0-preview.1` publication and named-machine installer lifecycle
-  are recorded; fresh-machine installation of the published artifact remains unverified.
+  are recorded. A local unsigned `0.4.0` installer also builds successfully. SignPath
+  Foundation declined the application on 2026-09-09, so signed sparse identity, borderless
+  consent, automatic updates, and a stable Windows release are deferred and unclaimed.
 - **Fidelity and CI:** named macOS bright/dark fixtures and one Windows HDR-target sRGB
   reference passed. These do not certify broad fidelity or HDR preservation. The last
   recorded shell/engine CI checkpoint is `fccf812`, not current-HEAD evidence.
@@ -81,22 +88,7 @@ running history here.
 
 ## Execution Frontiers
 
-- **Quiet failure feedback — [#16](https://github.com/sousouliao/lumiere/issues/16):**
-  shared implementation and packaged macOS notification presentation/click recovery are
-  complete. Next: verify Windows notification, busy, and recovery behavior.
-
-- **Region performance — [#15](https://github.com/sousouliao/lumiere/issues/15):** macOS
-  latency and full-resolution commit are recorded verified. Next: Windows build, runtime,
-  latency, and resource-stability verification for the optimized preview path.
-- **Windows distribution — [#12](https://github.com/sousouliao/lumiere/issues/12):** the
-  [SignPath Foundation application was submitted on 2026-09-05](https://github.com/sousouliao/lumiere/issues/12#issuecomment-5551597700).
-  Next: await approval and the assigned certificate Subject/Publisher, then
-  verify signing, production sparse identity, updates, borderless/fallback behavior,
-  and clean-machine lifecycle.
-- **macOS permission recovery — [#18](https://github.com/sousouliao/lumiere/issues/18)
-  complete:** retain the published `v0.4.0` split artifacts and the `v0.3.2` one-relaunch
-  permission recovery and Display/Region verification evidence. Handle later field defects
-  through their owning Issues.
-- **Milestone exit:** blocked until both distribution lanes satisfy their independent
-  criteria. Repository success, artifact delivery, visual match, and HDR preservation
-  remain separate claims; one platform never verifies another.
+No GitHub implementation Issue is currently open. Signed Windows distribution is deferred
+by ADR 0017 rather than treated as completed. Remaining broad fidelity, multi-display Windows
+observation, fresh-machine preview installation, and HDR-preserved export are not implied by
+the closed slices and should receive new owning Issues when selected.

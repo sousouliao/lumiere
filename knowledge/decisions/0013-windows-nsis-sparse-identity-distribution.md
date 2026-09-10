@@ -1,6 +1,6 @@
 # ADR 0013: Windows NSIS distribution with external-location identity
 
-- Status: Accepted
+- Status: Superseded in part by ADR 0017
 - Date: 2026-09-02
 
 ## Context

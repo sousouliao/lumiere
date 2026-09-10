@@ -60,14 +60,12 @@ The Windows distribution lane advances in this order:
 3. Publish a clearly labeled unsigned preview GitHub Release using the same assisted
    NSIS artifact form intended for production signing. Its release page must document
    functionality, installation, uninstall, and expected unsigned-publisher warnings.
-4. Apply to SignPath Foundation only after that public released/documented-project
-   prerequisite is satisfied.
-5. After approval, configure the assigned Publisher, GitHub trusted build system,
-   SignPath project, roles, signing policy, artifact configurations, repository
-   variables, and API-token secret.
-6. Publish a matching stable tag through the signed workflow, then verify signing,
-   identity registration, borderless/fallback behavior, full-installer update,
-   uninstall, checksums, provenance, and a clean-machine journey.
+4. The SignPath Foundation application was declined on 2026-09-09. Keep Windows
+   distribution explicitly unsigned and preview-only until a later decision approves a
+   viable signing provider.
+5. Do not configure production Publisher, sparse identity, or updater metadata without
+   that decision. A future signed lane must open a new Issue and repeat its signing,
+   identity, update, checksum, provenance, and clean-machine verification.
 
 The unsigned preview is an application prerequisite. It is not a production release
 and does not verify signing or borderless capture.
@@ -82,14 +80,10 @@ This produces `artifacts/windows/build/Lumiere-Setup-<version>-x64.exe`. Preview
 deliberately omit the production sparse identity and updater configuration, so WGC keeps
 the system capture border.
 
-Production releases run `.github/workflows/release.yml` from a finalized release commit on
-`main`; the unified workflow creates the matching `v<package-version>` tag only after all
-selected platform artifacts succeed. Configure the SignPath organization, project, signing policy,
-application artifact configuration, installer artifact configuration, certificate
-Publisher, and Publisher display name as repository variables; store only the SignPath API
-token as a secret. The application artifact configuration must preserve the uploaded
-`windows-host/` and `windows-identity/` paths while signing Lumiere-owned PE files and
-`Lumiere.Identity.msix`. The installer configuration signs the final Setup executable.
+The dormant signed Windows jobs in `.github/workflows/release.yml` remain implementation
+scaffolding, not an available publication route. Do not select Windows for a stable release
+or add signing variables/secrets until a future ADR and Issue establish a provider and
+verification plan.
 
 The workflow generates `latest.yml` only after final signing, attests the signed Setup, and
 adds the installer to the unified checksum manifest and GitHub Release. Installer registration of

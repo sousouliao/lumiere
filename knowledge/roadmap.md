@@ -14,7 +14,7 @@ are explicit.
 | Milestone | Product outcome | Exit gate |
 |---|---|---|
 | 0. Cross-platform foundation | Final platform-owned repository with honest native-host seams | Layout, shell, protocol, and Windows-library gates pass |
-| 1. HDR-aware MVP | Windows and macOS capture to sRGB Visual Match | Both platforms pass runtime, hardware, and distribution verification |
+| 1. HDR-aware MVP | Windows and macOS capture to sRGB Visual Match | Both platforms pass runtime and hardware verification; each available artifact has honest distribution evidence |
 | 2. HDR-preserved export | One narrow, named HDR artifact path | Format/viewer contract and per-platform hardware verification pass |
 | 3. Cross-platform HDR fidelity | Measured consistency across a named support matrix | Published tolerances and fixed-scene verification pass |
 
@@ -90,10 +90,10 @@ including the documented manual Gatekeeper first-launch step; a second clean Mac
 an MVP exit requirement.
 The macOS and Windows distribution implementations may advance independently; evidence
 from either platform neither completes nor blocks implementation work owned by the other.
-The Windows setup must register a signed external-location sparse package for package
-identity, declare and request borderless Graphics Capture consent, suppress the WGC system
-border when allowed, and preserve bordered capture as the denied, unavailable, or
-unsupported fallback. Upgrade must retain a stable identity and uninstall must remove it.
+The current Windows setup may remain an explicitly unsigned preview and therefore keeps
+the normal WGC system border. Signed sparse identity, borderless Graphics Capture consent,
+and automatic updates are deferred until a viable code-signing route is approved through a
+new decision. They are not Milestone 1 exit criteria while no certificate is available.
 
 Release only after independent Windows and macOS repository, runtime, fixed-scene
 Visual Match, receiving-app, repeat-loop, and clean-exit verification passes. One platform's
