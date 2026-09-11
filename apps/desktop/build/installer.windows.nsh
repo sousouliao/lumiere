@@ -1,3 +1,40 @@
+ManifestDPIAware true
+
+!ifndef BUILD_UNINSTALLER
+  !include WinMessages.nsh
+  !include nsDialogs.nsh
+
+  !define MUI_PAGE_CUSTOMFUNCTION_SHOW lumiereDirectoryPageShow
+  !define MUI_PAGE_CUSTOMFUNCTION_LEAVE lumiereDirectoryPageLeave
+
+  Function lumiereDirectoryPageShow
+    Call normalizeLumiereDriveRoot
+    nsDialogs::CreateTimer normalizeLumiereDriveRoot 100
+  FunctionEnd
+
+  Function lumiereDirectoryPageLeave
+    nsDialogs::KillTimer normalizeLumiereDriveRoot
+    Call normalizeLumiereDriveRoot
+  FunctionEnd
+
+  Function normalizeLumiereDriveRoot
+    GetDlgItem $0 $HWNDPARENT 1019
+    ${If} $0 != 0
+      ${NSD_GetText} $0 $1
+      StrLen $2 $1
+      ${If} $2 == 3
+        StrCpy $2 $1 1 1
+        StrCpy $3 $1 1 2
+        ${If} $2 == ":"
+        ${AndIf} $3 == "\"
+          StrCpy $INSTDIR "$1${APP_FILENAME}"
+          ${NSD_SetText} $0 $INSTDIR
+        ${EndIf}
+      ${EndIf}
+    ${EndIf}
+  FunctionEnd
+!endif
+
 !macro customInstall
   IfFileExists "$INSTDIR\resources\windows-identity\Lumiere.Identity.msix" 0 identity_done
   DetailPrint "Registering Lumiere Windows identity"
