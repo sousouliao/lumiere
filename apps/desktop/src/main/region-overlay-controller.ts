@@ -96,6 +96,7 @@ export class RegionOverlayController {
       y: -10_000,
       show: false,
       frame: false,
+      roundedCorners: false,
       transparent: false,
       backgroundColor: '#000000',
       resizable: false,

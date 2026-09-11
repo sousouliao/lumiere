@@ -29,11 +29,13 @@ const electronState = vi.hoisted(() => {
   }
   class FakeWindow extends FakeEmitter {
     public readonly webContents = new FakeWebContents()
+    public readonly options: Record<string, unknown>
     public destroyed = false
     public visible = false
     public bounds: unknown
-    public constructor() {
+    public constructor(options: Record<string, unknown>) {
       super()
+      this.options = options
       windows.push(this)
     }
     public setContentProtection(): void {
@@ -79,6 +81,22 @@ import { RegionOverlayController } from './region-overlay-controller'
 
 describe('RegionOverlayController', () => {
   beforeEach(() => electronState.windows.splice(0))
+
+  it('creates the capture overlay without rounded window corners', () => {
+    const controller = new RegionOverlayController({
+      preloadPath: '/preload.js',
+      rendererDirectory: '/renderer',
+      onSessionFailure: () => undefined,
+      onTiming: () => undefined,
+    })
+
+    void controller.ensureReady()
+
+    expect(electronState.windows[0].options).toMatchObject({
+      frame: false,
+      roundedCorners: false,
+    })
+  })
 
   it('prewarms once, reuses the renderer, and scopes activation by generation', async () => {
     const failures: number[] = []
