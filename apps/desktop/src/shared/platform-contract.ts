@@ -111,6 +111,8 @@ export interface PlatformHost {
   prepareRegion(targetId: string): Promise<PrepareRegionResult>
   commitRegion(request: CommitRegionRequest): Promise<CaptureResult>
   cancelRegion(sessionId: string): Promise<ReleasedRegionCapture>
+  captureRegionNative?(request: DisplayCaptureRequest): Promise<CaptureResult>
+  cancelActiveNativeRegion?(): Promise<ReleasedRegionCapture>
 }
 
 export interface MacOSScreenCapturePermissionHost {
@@ -120,6 +122,7 @@ export interface MacOSScreenCapturePermissionHost {
 export type HostMethod =
   | 'getCapabilities'
   | 'captureDisplay'
+  | 'captureRegion'
   | 'prepareRegion'
   | 'commitRegion'
   | 'cancelRegion'

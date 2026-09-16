@@ -1,0 +1,13 @@
+{
+  "version": 6,
+  "id": "capabilities-1",
+  "result": {
+    "contractVersion": 6,
+    "platform": "macos",
+    "hostStatus": "available",
+    "captureModes": ["region", "display"],
+    "deliveryTargets": ["clipboard", "folder"],
+    "hdrCapture": "supported",
+    "outputProfiles": ["srgb-visual-match"]
+  }
+}

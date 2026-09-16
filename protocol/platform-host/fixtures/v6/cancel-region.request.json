@@ -1,0 +1,8 @@
+{
+  "version": 6,
+  "id": "cancel-1",
+  "method": "cancelRegion",
+  "params": {
+    "requestId": "region-1"
+  }
+}

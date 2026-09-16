@@ -41,6 +41,13 @@ public actor MacCaptureService {
   private var issuedRegionTargets: [String: ActiveDisplayTarget] = [:]
   private var issuedRegionTargetOrder: [String] = []
   private var warmedShareableContent: SCShareableContent?
+  private var nativeRegionRequestID: String?
+  private var nativeRegionReservedID: String?
+  private var nativeRegionPreCancelledID: String?
+  private var nativeRegionCancelled = false
+  private var nativeRegionExpired = false
+  private var nativeSelection: CheckedContinuation<NativeSelectionOutcome, Never>?
+  private var nativeOverlay: NativeRegionOverlay?
   private var timingLastInstant: [String: ContinuousClock.Instant] = [:]
   private let timingReporter: (@Sendable (CaptureTiming) -> Void)?
   private let visualMatchContext = CIContext(options: [
@@ -54,60 +61,313 @@ public actor MacCaptureService {
   }
 
   public func response(for request: PlatformRequest) async -> PlatformResponse {
+    let version = request.version
     switch request.method {
     case .getCapabilities:
-      return .success(id: request.id, result: .capabilities(await capabilities()))
+      return .success(id: request.id, result: .capabilities(await capabilities(version: version)),
+                      version: version)
     case .requestScreenCapturePermission:
       return .success(
         id: request.id,
-        result: .screenCapturePermission(ScreenRecordingPermission.request())
+        result: .screenCapturePermission(ScreenRecordingPermission.request()), version: version
       )
     case .captureDisplay:
       guard let parameters = request.displayCapture else {
-        return invalidRequest(id: request.id, message: "Display capture parameters are required.")
+        return invalidRequest(id: request.id, message: "Display capture parameters are required.",
+                              version: version)
       }
       return .success(
         id: request.id,
-        result: .capture(await captureDisplay(parameters: parameters))
+        result: .capture(await captureDisplay(parameters: parameters)), version: version
+      )
+    case .captureRegion:
+      guard let parameters = request.displayCapture else {
+        return invalidRequest(id: request.id, message: "Region delivery parameters are required.",
+                              version: version)
+      }
+      return .success(
+        id: request.id,
+        result: .capture(await captureRegionNatively(requestID: request.id,
+                                                     parameters: parameters)),
+        version: version
       )
     case .prepareRegion:
       guard let targetId = request.targetId else {
-        return invalidRequest(id: request.id, message: "Region target id is required.")
+        return invalidRequest(id: request.id, message: "Region target id is required.",
+                              version: version)
       }
       let result = await prepareRegion(requestID: request.id, targetId: targetId)
       switch result {
       case .success(let prepared):
-        return .success(id: request.id, result: .preparedRegion(prepared))
+        return .success(id: request.id, result: .preparedRegion(prepared), version: version)
       case .failure(let failure):
-        return .success(id: request.id, result: .capture(.failed(failure)))
+        return .success(id: request.id, result: .capture(.failed(failure)), version: version)
       }
     case .commitRegion:
       guard let parameters = request.commitRegion else {
-        return invalidRequest(id: request.id, message: "Region commit parameters are required.")
+        return invalidRequest(id: request.id, message: "Region commit parameters are required.",
+                              version: version)
       }
       return .success(
         id: request.id,
-        result: .capture(await commitRegion(parameters: parameters))
+        result: .capture(await commitRegion(parameters: parameters)), version: version
       )
     case .cancelRegion:
+      if version == nativeRegionContractVersion {
+        guard let requestId = request.requestId else {
+          return invalidRequest(id: request.id, message: "Region request id is required.",
+                                version: version)
+        }
+        await cancelNativeRegion(requestID: requestId)
+        return .success(id: request.id, result: .releasedRegion(.released), version: version)
+      }
       guard let sessionId = request.sessionId else {
-        return invalidRequest(id: request.id, message: "Region session id is required.")
+        return invalidRequest(id: request.id, message: "Region session id is required.",
+                              version: version)
       }
       cancelRegion(sessionId: sessionId)
-      return .success(id: request.id, result: .releasedRegion(.released))
+      return .success(id: request.id, result: .releasedRegion(.released), version: version)
     }
   }
 
-  public func shutdown() {
+  public func shutdown() async {
     releaseFrozenRegion()
+    nativeRegionCancelled = true
+    nativeRegionPreCancelledID = nativeRegionReservedID
+    nativeRegionReservedID = nil
+    finishNativeSelection(.cancelled)
+    let overlay = nativeOverlay
+    nativeOverlay = nil
+    if let overlay { await overlay.dispose() }
   }
 
-  private func capabilities() async -> PlatformCapabilities {
+  public func prewarmNativeOverlay() async {
+    guard nativeOverlay == nil else { return }
+    let overlay = await MainActor.run { NativeRegionOverlay() }
+    await overlay.prewarm()
+    nativeOverlay = overlay
+    await warmScreenCaptureKitIfAuthorized()
+  }
+
+  public func reserveNativeRegion(requestID: String) -> Bool {
+    guard nativeRegionRequestID == nil, nativeRegionReservedID == nil,
+          frozenRegion == nil else { return false }
+    nativeRegionReservedID = requestID
+    return true
+  }
+
+  public func captureRegionNatively(
+    requestID: String,
+    parameters: DisplayCaptureParameters
+  ) async -> CaptureResult {
+    guard nativeRegionRequestID == nil, frozenRegion == nil,
+          nativeRegionReservedID == nil || nativeRegionReservedID == requestID else {
+      return .failed(
+        HostFailure(code: .captureUnavailable, message: "A Region capture is already in progress.",
+                    retryable: true)
+      )
+    }
+    nativeRegionReservedID = nil
+    if nativeRegionPreCancelledID == requestID {
+      nativeRegionPreCancelledID = nil
+      return .cancelled()
+    }
+    nativeRegionRequestID = requestID
+    nativeRegionCancelled = false
+    nativeRegionExpired = false
+    let expiration = Task { [weak self] in
+      do {
+        try await Task.sleep(for: .milliseconds(Self.regionLeaseMilliseconds))
+        await self?.expireNativeRegion(requestID: requestID)
+      } catch {}
+    }
+    defer {
+      expiration.cancel()
+      nativeRegionRequestID = nil
+      nativeRegionCancelled = false
+      nativeRegionExpired = false
+      nativeSelection = nil
+      timingLastInstant.removeValue(forKey: requestID)
+    }
+
+    var startedAt = ContinuousClock.now
+    guard var target = await ActiveDisplayTargetResolver.resolve() else {
+      return .failed(
+        HostFailure(code: .captureUnavailable, message: "The capture target is unavailable.",
+                    retryable: true)
+      )
+    }
+    reportTiming(requestID: requestID, stage: "target-resolved", startedAt: startedAt)
+
+    while nativeRegionRequestID == requestID && !nativeRegionCancelled {
+      do {
+        let frame = try await acquireFrozenFrame(target: target)
+        Task { await self.warmScreenCaptureKitIfAuthorized() }
+        reportTiming(requestID: requestID, stage: "frame-acquired",
+                     startedAt: startedAt, width: frame.image.width, height: frame.image.height)
+        let preview = try makeVisualMatchImage(
+          frame.image, sourceIsHDR: frame.capturesHDR, outputPixelSize: nil
+        )
+        reportTiming(requestID: requestID, stage: "native-preview-rendered",
+                     startedAt: startedAt, width: preview.width, height: preview.height)
+        guard nativeRegionRequestID == requestID && !nativeRegionCancelled else {
+          return nativeCancellationResult()
+        }
+        let activeTarget = target
+        if nativeOverlay == nil { await prewarmNativeOverlay() }
+        guard let overlay = nativeOverlay else { return .failed(
+          HostFailure(code: .captureUnavailable, message: "The native overlay is unavailable.",
+                      retryable: true)
+        ) }
+        let outcome = await withCheckedContinuation { (continuation: CheckedContinuation<NativeSelectionOutcome, Never>) in
+          nativeSelection = continuation
+          Task { @MainActor in
+            let shown = overlay.present(
+              image: preview,
+              displayID: activeTarget.displayID,
+              logicalSize: frame.targetLogicalSize,
+              onDisplayChange: { displayID in
+                Task { await self.finishNativeSelection(.switchDisplay(displayID)) }
+              },
+              onTopologyChange: {
+                Task { await self.finishNativeSelection(.topologyChanged) }
+              },
+              onSelection: { geometry in
+                Task {
+                  await self.finishNativeSelection(
+                    geometry.map(NativeSelectionOutcome.selected) ?? .cancelled
+                  )
+                }
+              },
+              onOrdered: {
+                Task {
+                  await self.reportNativeWindowOrdered(requestID: requestID, startedAt: startedAt)
+                }
+              },
+              onInteractive: {
+                Task {
+                  await self.reportNativeInteractive(requestID: requestID, startedAt: startedAt)
+                }
+              },
+              onActivationFailure: { detail in
+                Task { await self.finishNativeSelection(.activationFailed(detail)) }
+              }
+            )
+            if !shown { Task { await self.finishNativeSelection(.topologyChanged) } }
+          }
+        }
+        await overlay.dismiss()
+
+        switch outcome {
+        case .cancelled:
+          return nativeCancellationResult()
+        case .topologyChanged:
+          return .failed(HostFailure(
+            code: .captureUnavailable,
+            message: "The target display changed during Region capture.",
+            retryable: true
+          ))
+        case .activationFailed(let detail):
+          return .failed(HostFailure(
+            code: .captureUnavailable,
+            message: "The native Region overlay could not receive input focus (\(detail)).",
+            retryable: true
+          ))
+        case .switchDisplay(let displayID):
+          startedAt = ContinuousClock.now
+          guard let nextTarget = await ActiveDisplayTargetResolver.resolve(displayID: displayID)
+          else {
+            return .failed(
+              HostFailure(code: .captureUnavailable, message: "The target display changed.",
+                          retryable: true)
+            )
+          }
+          target = nextTarget
+          reportTiming(requestID: requestID, stage: "switch-target-resolved", startedAt: startedAt)
+          continue
+        case .selected(let selection):
+          expiration.cancel()
+          guard !nativeRegionCancelled && !nativeRegionExpired else {
+            return nativeCancellationResult()
+          }
+          guard
+            let geometry = CaptureOutputGeometry.resolve(
+              targetLogicalSize: frame.targetLogicalSize,
+              filterLogicalSize: frame.filterLogicalSize,
+              pointPixelScale: frame.pointPixelScale,
+              region: selection
+            ),
+            let croppedImage = geometry.makeOutputImage(from: frame.image)
+          else {
+            return .failed(
+              HostFailure(code: .captureUnavailable, message: "The selection is outside the frozen capture.",
+                          retryable: true)
+            )
+          }
+          let png = try makeVisualMatchPNG(croppedImage, sourceIsHDR: frame.capturesHDR)
+          let deliveries = await MacCaptureDelivery.deliver(
+            png, to: parameters.delivery, saveDirectory: parameters.saveDirectory
+          )
+          return .completed(dynamicRange: frame.capturesHDR ? "hdr" : "sdr", deliveries: deliveries)
+        }
+      } catch let error where CaptureErrorClassification.isCancellation(error) {
+        return nativeCancellationResult()
+      } catch {
+        return .failed(mapCaptureError(error))
+      }
+    }
+    return nativeCancellationResult()
+  }
+
+  public func cancelNativeRegion(requestID: String) async {
+    if nativeRegionReservedID == requestID {
+      nativeRegionPreCancelledID = requestID
+      return
+    }
+    guard nativeRegionRequestID == requestID else { return }
+    nativeRegionCancelled = true
+    if let overlay = nativeOverlay { await overlay.dismiss() }
+    finishNativeSelection(.cancelled)
+  }
+
+  private func expireNativeRegion(requestID: String) async {
+    guard nativeRegionRequestID == requestID else { return }
+    nativeRegionExpired = true
+    await cancelNativeRegion(requestID: requestID)
+  }
+
+  private func nativeCancellationResult() -> CaptureResult {
+    nativeRegionExpired
+      ? .failed(HostFailure(
+        code: .captureUnavailable,
+        message: "The Region selection timed out. Start a new capture.",
+        retryable: true
+      ))
+      : .cancelled()
+  }
+
+  private func finishNativeSelection(_ outcome: NativeSelectionOutcome) {
+    let continuation = nativeSelection
+    nativeSelection = nil
+    continuation?.resume(returning: outcome)
+  }
+
+  private func reportNativeWindowOrdered(requestID: String, startedAt: ContinuousClock.Instant) {
+    guard nativeRegionRequestID == requestID else { return }
+    reportTiming(requestID: requestID, stage: "native-window-ordered", startedAt: startedAt)
+  }
+
+  private func reportNativeInteractive(requestID: String, startedAt: ContinuousClock.Instant) {
+    guard nativeRegionRequestID == requestID else { return }
+    reportTiming(requestID: requestID, stage: "native-window-interactive", startedAt: startedAt)
+  }
+
+  private func capabilities(version: Int = platformContractVersion) async -> PlatformCapabilities {
     guard let target = await ActiveDisplayTargetResolver.resolve() else {
       issuedRegionTargets.removeAll()
       issuedRegionTargetOrder.removeAll()
       return PlatformCapabilities(
-        contractVersion: platformContractVersion,
+        contractVersion: version,
         platform: "macos",
         hostStatus: "available",
         captureModes: [],
@@ -118,23 +378,30 @@ public actor MacCaptureService {
     }
     await warmScreenCaptureKitIfAuthorized()
     let issued = IssuedRegionTarget(id: UUID().uuidString, target: target)
-    issueRegionTarget(issued)
+    if version == platformContractVersion { issueRegionTarget(issued) }
     return PlatformCapabilities(
-      contractVersion: platformContractVersion,
+      contractVersion: version,
       platform: "macos",
       hostStatus: "available",
       captureModes: [.region, .display],
       deliveryTargets: [.clipboard, .folder],
       hdrCapture: target.supportsHDR ? "supported" : "unavailable",
       outputProfiles: ["srgb-visual-match"],
-      activeTarget: CaptureTarget(
-        id: issued.id,
-        logicalSize: LogicalSize(width: target.logicalWidth, height: target.logicalHeight)
-      )
+      activeTarget: version == platformContractVersion
+        ? CaptureTarget(
+            id: issued.id,
+            logicalSize: LogicalSize(width: target.logicalWidth, height: target.logicalHeight)
+          ) : nil
     )
   }
 
   private func captureDisplay(parameters: DisplayCaptureParameters) async -> CaptureResult {
+    guard nativeRegionRequestID == nil, nativeRegionReservedID == nil else {
+      return .failed(
+        HostFailure(code: .captureUnavailable, message: "A Region capture is in progress.",
+                    retryable: true)
+      )
+    }
     guard let target = await ActiveDisplayTargetResolver.resolve() else {
       return .failed(
         HostFailure(
@@ -164,6 +431,12 @@ public actor MacCaptureService {
   }
 
   private func prepareRegion(requestID: String, targetId: String) async -> PrepareOutcome {
+    guard nativeRegionRequestID == nil, nativeRegionReservedID == nil else {
+      return .failure(
+        HostFailure(code: .captureUnavailable, message: "A Region capture is in progress.",
+                    retryable: true)
+      )
+    }
     let startedAt = ContinuousClock.now
     releaseFrozenRegion()
     guard let issuedTarget = issuedRegionTargets.removeValue(forKey: targetId) else {
@@ -480,10 +753,13 @@ public actor MacCaptureService {
     return fileURL
   }
 
-  private func invalidRequest(id: String, message: String) -> PlatformResponse {
+  private func invalidRequest(
+    id: String, message: String, version: Int = platformContractVersion
+  ) -> PlatformResponse {
     .failure(
       id: id,
-      error: HostFailure(code: .invalidRequest, message: message, retryable: false)
+      error: HostFailure(code: .invalidRequest, message: message, retryable: false),
+      version: version
     )
   }
 
@@ -649,6 +925,14 @@ enum RegionPreviewGeometry {
     }
     return PixelSize(width: Int(width), height: Int(height))
   }
+}
+
+private enum NativeSelectionOutcome {
+  case cancelled
+  case topologyChanged
+  case activationFailed(String)
+  case switchDisplay(CGDirectDisplayID)
+  case selected(CaptureGeometry)
 }
 
 private enum MacCaptureSessionError: Error {

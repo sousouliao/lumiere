@@ -105,6 +105,48 @@ func decodesCancelRegionRequest() throws {
 }
 
 @Test
+func decodesNativeRegionCaptureAndCancellationRequests() throws {
+  let capture = try PlatformRequestDecoder.decode(
+    line: #"{"version":6,"id":"capture-region-1","method":"captureRegion","params":{"delivery":"both","saveDirectory":"/tmp/lumiere"}}"#
+  )
+  #expect(capture.method == .captureRegion)
+  #expect(capture.displayCapture == DisplayCaptureParameters(
+    delivery: .both, saveDirectory: "/tmp/lumiere"
+  ))
+
+  let cancellation = try PlatformRequestDecoder.decode(
+    line: #"{"version":6,"id":"cancel-1","method":"cancelRegion","params":{"requestId":"capture-region-1"}}"#
+  )
+  #expect(cancellation.requestId == "capture-region-1")
+  #expect(cancellation.sessionId == nil)
+}
+
+@Test(arguments: [
+  #"{"version":6,"id":"old-prepare","method":"prepareRegion","params":{"targetId":"target"}}"#,
+  #"{"version":6,"id":"old-commit","method":"commitRegion","params":{"sessionId":"session","delivery":"clipboard","geometry":{"coordinateSpace":"target-logical","x":0,"y":0,"width":32,"height":24}}}"#,
+  #"{"version":6,"id":"old-cancel","method":"cancelRegion","params":{"sessionId":"session"}}"#,
+  #"{"version":5,"id":"new-capture","method":"captureRegion","params":{"delivery":"clipboard"}}"#,
+])
+func rejectsRegionMethodsForTheWrongProtocolVersion(line: String) {
+  #expect(throws: PlatformProtocolError.self) {
+    try PlatformRequestDecoder.decode(line: line)
+  }
+}
+
+@Test
+func cancellationOfReservedRegionPreventsFrameAcquisition() async {
+  let service = MacCaptureService()
+  #expect(await service.reserveNativeRegion(requestID: "queued-region"))
+  await service.cancelNativeRegion(requestID: "queued-region")
+  let result = await service.captureRegionNatively(
+    requestID: "queued-region",
+    parameters: DisplayCaptureParameters(delivery: .clipboard)
+  )
+  #expect(result.status == "cancelled")
+  await service.shutdown()
+}
+
+@Test
 func rejectsUnknownFields() {
   #expect(throws: PlatformProtocolError.self) {
     try PlatformRequestDecoder.decode(

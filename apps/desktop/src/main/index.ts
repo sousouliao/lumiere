@@ -303,22 +303,23 @@ function registerIpc(): void {
     platformHost,
     settingsStore,
   ))
-  regionOverlayController ??= new RegionOverlayController({
-    preloadPath: join(__dirname, '../preload/index.js'),
-    rendererDirectory: join(__dirname, '../renderer'),
-    ...(!app.isPackaged && process.env.ELECTRON_RENDERER_URL
-      ? { rendererUrl: process.env.ELECTRON_RENDERER_URL }
-      : {}),
-    onSessionFailure: (generation) => {
-      if (regionOverlaySession?.generation === generation) {
-        void failRegionOverlay(router, captureFailedResult())
-      }
-    },
-    onTiming: (stage) => {
-      const session = regionOverlaySession
-      if (session) reportSessionTiming(session, stage)
-    },
-  })
+  if (process.platform === 'win32')
+    regionOverlayController ??= new RegionOverlayController({
+      preloadPath: join(__dirname, '../preload/index.js'),
+      rendererDirectory: join(__dirname, '../renderer'),
+      ...(!app.isPackaged && process.env.ELECTRON_RENDERER_URL
+        ? { rendererUrl: process.env.ELECTRON_RENDERER_URL }
+        : {}),
+      onSessionFailure: (generation) => {
+        if (regionOverlaySession?.generation === generation) {
+          void failRegionOverlay(router, captureFailedResult())
+        }
+      },
+      onTiming: (stage) => {
+        const session = regionOverlaySession
+        if (session) reportSessionTiming(session, stage)
+      },
+    })
   captureSurfaceMonitor ??= new CaptureSurfaceMonitor({
     readTargetId: () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id,
     readSnapshot: () => router.getSurfaceSnapshot(),
@@ -793,6 +794,20 @@ async function captureRegion(router: CaptureCommandRouter): Promise<CaptureComma
   return result
 }
 
+async function captureNativeMacRegion(router: CaptureCommandRouter): Promise<CaptureCommandResult> {
+  const timingStartedAt = performance.now()
+  reportRegionCaptureTiming('command-received', timingStartedAt)
+  const restoreMainWindow = mainWindow?.isVisible() === true && !mainWindow.isMinimized()
+  mainWindow?.hide()
+  reportRegionCaptureTiming('main-window-hidden', timingStartedAt)
+  try {
+    return await router.captureRegionNatively()
+  } finally {
+    if (restoreMainWindow && !quitting) showMainWindow()
+    reportRegionCaptureTiming('native-region-completed', timingStartedAt)
+  }
+}
+
 function queueRegionDisplaySwitch(
   router: CaptureCommandRouter,
   session: RegionOverlaySession,
@@ -1096,7 +1111,11 @@ async function runCapture(mode: 'region' | 'display'): Promise<CaptureCommandRes
     mode,
     async () => {
       return completeCapture(
-        mode === 'region' ? await captureRegion(router) : await router.captureDisplay(),
+        mode === 'region'
+          ? await (process.platform === 'darwin'
+              ? captureNativeMacRegion(router)
+              : captureRegion(router))
+          : await router.captureDisplay(),
       )
     },
     (completion) => {
@@ -1292,7 +1311,7 @@ function createPlatformHost(): PlatformHost {
 }
 
 void app.whenReady().then(async () => {
-  registerRegionPreviewProtocol()
+  if (process.platform === 'win32') registerRegionPreviewProtocol()
   platformHost = createPlatformHost()
   const userDataPath = app.getPath('userData')
   settingsStore = new SettingsStore(join(userDataPath, 'settings.json'))
@@ -1328,6 +1347,14 @@ void app.whenReady().then(async () => {
     display: () => runExternalCapture('display'),
   })
   shortcutService.initialize()
+  process.stderr.write(
+    `${JSON.stringify({
+      level: 'info',
+      event: 'shortcut-registration',
+      region: shortcutService.getSnapshot().region.status,
+      display: shortcutService.getSnapshot().display.status,
+    })}\n`,
+  )
   lastTrayState = await getApplicationTrayState()
   applicationTray = createApplicationTray(lastTrayState, {
     captureRegion: () => {
@@ -1362,6 +1389,7 @@ app.on('before-quit', () => {
   captureSurfaceMonitor?.dispose()
   if (captureRouter) {
     disposeRegionOverlay(captureRouter)
+    void captureRouter.cancelNativeRegionCapture()
   }
   regionOverlayController?.dispose()
   if (platformHost instanceof NativeProcessPlatformHost) {

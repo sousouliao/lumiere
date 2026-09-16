@@ -10,6 +10,41 @@ afterEach(() => {
 })
 
 describe('macOS platform host process transport', () => {
+  it('keeps a v6 Region request pending while cancellation receives its own response', async () => {
+    const process = new FakeNativeProcess()
+    const requests: Record<string, unknown>[] = []
+    process.stdin.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString('utf8').trim().split('\n')) {
+        requests.push(JSON.parse(line) as Record<string, unknown>)
+      }
+      if (requests.length !== 2) return
+      const [capture, cancellation] = requests
+      expect(capture).toMatchObject({
+        version: 6,
+        method: 'captureRegion',
+        params: { delivery: 'folder', saveDirectory: '/tmp/lumiere' },
+      })
+      expect(cancellation).toMatchObject({
+        version: 6,
+        method: 'cancelRegion',
+        params: { requestId: capture.id },
+      })
+      process.respond({ version: 6, id: cancellation.id, result: { status: 'released' } })
+      process.respond({ version: 6, id: capture.id, result: { status: 'cancelled' } })
+    })
+    const host = new MacOSPlatformHost([execPath], () => process.asChildProcess())
+    const capture = host.captureRegionNative({
+      delivery: 'folder',
+      saveDirectory: '/tmp/lumiere',
+    })
+    const cancellation = host.cancelActiveNativeRegion()
+
+    await expect(cancellation).resolves.toEqual({ status: 'released' })
+    await expect(capture).resolves.toEqual({ status: 'cancelled' })
+    expect(process.killed).toBe(false)
+    host.dispose()
+  })
+
   it('requests Screen Capture permission through the macOS host', async () => {
     const process = new FakeNativeProcess()
     process.stdin.once('data', (chunk: Buffer) => {

@@ -19,11 +19,14 @@ import { deliveryTargetsFor, PLATFORM_CONTRACT_VERSION } from '../shared/platfor
 
 const requestTimeoutMilliseconds = 15_000
 const prepareRegionTimeoutMilliseconds = 30_000
+const nativeRegionTimeoutMilliseconds = 75_000
+const nativeRegionContractVersion = 6
 
 export type SpawnHost = (executablePath: string) => ChildProcessWithoutNullStreams
 
 interface PendingRequest {
   method: HostMethod
+  version: number
   resolve(value: unknown): void
   reject(error: Error): void
   timeout: NodeJS.Timeout
@@ -34,6 +37,7 @@ export class NativeProcessPlatformHost implements PlatformHost {
   private processStart: Promise<ChildProcessWithoutNullStreams> | null = null
   private stdoutBuffer = ''
   private readonly pending = new Map<string, PendingRequest>()
+  private activeNativeRegionRequestId: string | null = null
   private disposed = false
 
   public constructor(
@@ -95,6 +99,49 @@ export class NativeProcessPlatformHost implements PlatformHost {
     }
   }
 
+  public async captureRegionNative(request: DisplayCaptureRequest): Promise<CaptureResult> {
+    if (this.platform !== 'macos') {
+      throw new Error('Native Region capture is not yet connected on Windows.')
+    }
+    if (this.activeNativeRegionRequestId) {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'capture-unavailable',
+          message: 'A Region capture is already in progress.',
+          retryable: true,
+        },
+      }
+    }
+    const id = randomUUID()
+    this.activeNativeRegionRequestId = id
+    try {
+      const result = parseCaptureResult(
+        await this.request('captureRegion', request, nativeRegionContractVersion, id),
+        this.platform,
+      )
+      validateCaptureDeliveries(request, result)
+      return result
+    } catch (error) {
+      return { status: 'failed', failure: failureFromError(error, this.platform) }
+    } finally {
+      if (this.activeNativeRegionRequestId === id) this.activeNativeRegionRequestId = null
+    }
+  }
+
+  public async cancelActiveNativeRegion(): Promise<ReleasedRegionCapture> {
+    const requestId = this.activeNativeRegionRequestId
+    if (!requestId || this.platform !== 'macos') return { status: 'released' }
+    try {
+      return parseReleasedRegion(
+        await this.request('cancelRegion', { requestId }, nativeRegionContractVersion),
+        this.platform,
+      )
+    } catch {
+      return { status: 'released' }
+    }
+  }
+
   public async requestScreenCapturePermission(): Promise<ScreenCapturePermissionRequestResult> {
     if (this.platform !== 'macos') {
       throw new Error('Screen Capture permission requests are macOS-only.')
@@ -114,11 +161,15 @@ export class NativeProcessPlatformHost implements PlatformHost {
     this.rejectPending(new Error(`The ${this.platform} native capture host was disposed.`))
   }
 
-  private async request(method: HostMethod, params: object): Promise<unknown> {
+  private async request(
+    method: HostMethod,
+    params: object,
+    version: number = PLATFORM_CONTRACT_VERSION,
+    id: string = randomUUID(),
+  ): Promise<unknown> {
     const child = await this.ensureProcess()
-    const id = randomUUID()
     const line = JSON.stringify({
-      version: PLATFORM_CONTRACT_VERSION,
+      version,
       id,
       method,
       params,
@@ -132,9 +183,13 @@ export class NativeProcessPlatformHost implements PlatformHost {
             new Error(`The ${this.platform} host timed out while handling ${method}.`),
           )
         },
-        method === 'prepareRegion' ? prepareRegionTimeoutMilliseconds : requestTimeoutMilliseconds,
+        method === 'captureRegion'
+          ? nativeRegionTimeoutMilliseconds
+          : method === 'prepareRegion'
+            ? prepareRegionTimeoutMilliseconds
+            : requestTimeoutMilliseconds,
       )
-      this.pending.set(id, { method, resolve, reject, timeout })
+      this.pending.set(id, { method, version, resolve, reject, timeout })
 
       child.stdin.write(`${line}\n`, (error) => {
         if (!error) {
@@ -233,7 +288,8 @@ export class NativeProcessPlatformHost implements PlatformHost {
 
     if (
       !isRecord(envelope) ||
-      envelope.version !== PLATFORM_CONTRACT_VERSION ||
+      (envelope.version !== PLATFORM_CONTRACT_VERSION &&
+        envelope.version !== nativeRegionContractVersion) ||
       typeof envelope.id !== 'string' ||
       envelope.id.length === 0 ||
       (!hasExactKeys(envelope, ['version', 'id', 'result']) &&
@@ -248,6 +304,13 @@ export class NativeProcessPlatformHost implements PlatformHost {
 
     const pending = this.pending.get(envelope.id)
     if (!pending) {
+      return
+    }
+    if (pending.version !== envelope.version) {
+      this.handleTermination(
+        child,
+        new Error(`The ${this.platform} host returned the wrong protocol version.`),
+      )
       return
     }
 
@@ -414,6 +477,7 @@ function parseHostResult(
     case 'getCapabilities':
       return parseCapabilities(value, platform)
     case 'captureDisplay':
+    case 'captureRegion':
     case 'commitRegion':
       return parseCaptureResult(value, platform)
     case 'prepareRegion':

@@ -1,6 +1,6 @@
 # Current Project State
 
-- Updated: 2026-09-11
+- Updated: 2026-09-15
 - Milestone: 1 — Cross-platform HDR-aware MVP with sRGB Visual Match
 - Posture: native capture and shared product surface complete; macOS and Windows stable distribution is published, with Windows explicitly unsigned.
 - Issues #12, #15, and #16 were resolved on Windows on 2026-09-11; ADR 0018 makes signing independent of stable release status.
@@ -84,8 +84,20 @@ running history here.
 
 ## Execution Frontiers
 
-No GitHub implementation Issue is currently open. ADR 0018 permits unsigned Windows stable
-distribution while keeping signing, sparse identity, borderless consent, and automatic updates
-deferred. Remaining broad fidelity, multi-display Windows observation, fresh-machine `v0.5.0`
-installation, and HDR-preserved export are not implied by the closed slices and should receive
-new owning Issues when selected.
+[Issue #19](https://github.com/sousouliao/lumiere/issues/19) owns the full-resolution
+native Region overlay, with [#20](https://github.com/sousouliao/lumiere/issues/20)
+for the shared v6 seam, [#21](https://github.com/sousouliao/lumiere/issues/21) for
+macOS, and [#22](https://github.com/sousouliao/lumiere/issues/22) for Windows. The
+v6 schema and macOS Region request are in the working tree. The macOS Shell sends
+`captureRegion` to its prewarmed AppKit Host and no longer creates the Electron Region
+Overlay; capabilities, Display capture, and Windows remain on v5 pending the Windows
+native slice. Both macOS application architectures package with the matching Host. The
+arm64 build has Screen Recording access and its packaged native overlay was observed with
+the frozen full-screen image, dimming, crosshair, hint, and input focus. A subsequent
+automated drag was sent through another application's automation target, so it is not
+valid delivery evidence and was not repeated. Shortcut-to-visible timing and packaged
+selection delivery remain open runtime checks. Next: implement and verify Windows on its
+own machine, then finish the two targeted macOS runtime checks before removing the staged
+v5 Region path.
+ADR 0018 continues to permit unsigned Windows stable distribution; broad fidelity,
+fresh-machine installation, and HDR-preserved export remain separate work.

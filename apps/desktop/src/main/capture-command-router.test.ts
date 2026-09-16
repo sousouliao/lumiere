@@ -89,6 +89,31 @@ describe('CaptureCommandRouter', () => {
     expect(host.requests).toEqual([{ operation: 'display', delivery: 'both' }])
   })
 
+  it('routes native Region delivery without resolving a preview target', async () => {
+    const host = new StubHost(availableCapabilities(), {
+      status: 'completed',
+      sourceDynamicRange: 'sdr',
+      outputProfile: 'srgb-visual-match',
+      deliveries: [{ target: 'folder', status: 'success', filePath: '/tmp/native/region.png' }],
+    })
+    const router = new CaptureCommandRouter('macos', host, {
+      getCapturePreferences: () => ({
+        delivery: 'folder',
+        saveDirectory: '/tmp/native',
+        hdrStatusReminders: true,
+      }),
+    })
+
+    await expect(router.captureRegionNatively()).resolves.toMatchObject({
+      status: 'success',
+      filePath: '/tmp/native/region.png',
+    })
+    expect(host.capabilitiesRequests).toBe(0)
+    expect(host.requests).toEqual([
+      { operation: 'native-region', delivery: 'folder', saveDirectory: '/tmp/native' },
+    ])
+  })
+
   it('routes a custom save directory only to file-capable capture requests', async () => {
     const host = new StubHost(availableCapabilities(), {
       status: 'completed',
@@ -349,6 +374,7 @@ class StubHost implements PlatformHost {
     | { operation: 'prepare-region'; targetId: string }
     | ({ operation: 'commit-region' } & CommitRegionRequest)
     | { operation: 'cancel-region'; sessionId: string }
+    | ({ operation: 'native-region' } & DisplayCaptureRequest)
   )[] = []
 
   public constructor(
@@ -376,6 +402,11 @@ class StubHost implements PlatformHost {
 
   public captureDisplay(request: DisplayCaptureRequest): Promise<CaptureResult> {
     this.requests.push({ operation: 'display', ...request })
+    return Promise.resolve(this.result)
+  }
+
+  public captureRegionNative(request: DisplayCaptureRequest): Promise<CaptureResult> {
+    this.requests.push({ operation: 'native-region', ...request })
     return Promise.resolve(this.result)
   }
 

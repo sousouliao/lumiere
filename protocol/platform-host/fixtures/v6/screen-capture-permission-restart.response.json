@@ -1,0 +1,7 @@
+{
+  "version": 6,
+  "id": "permission-1",
+  "result": {
+    "status": "restart-required"
+  }
+}

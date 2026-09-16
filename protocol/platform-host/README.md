@@ -17,8 +17,29 @@ Every response echoes `version` and `id`, and contains exactly one of `result` o
 
 Unknown versions, methods, fields, or enum values are protocol errors. Additive
 changes require a new schema version when an older host cannot safely reject or ignore
-them. Versions 1–4 are frozen in their matching schemas. Version 5 is the current
-shared contract in [`v5.schema.json`](v5.schema.json).
+them. Versions 1–4 are frozen in their matching schemas. Version 5 remains the published
+contract in [`v5.schema.json`](v5.schema.json). The current working-tree macOS Region
+path sends Version 6 `captureRegion` and `cancelRegion` requests; its capabilities,
+Display capture, and permission requests still use Version 5. Windows still uses
+Version 5. This staged seam must be removed when the Windows native overlay and shared
+Version 6 migration are verified.
+
+## Version 6 (native Region migration)
+
+`captureRegion` accepts the same delivery and optional save-directory parameters as
+`captureDisplay`. The Host resolves the pointer target when this request arrives,
+captures one on-demand frozen frame, displays a full-pixel native overlay, handles the
+logical selection, and returns the existing completed/cancelled/failed capture result.
+It never returns a preview path or native image handle. `cancelRegion` accepts the
+pending `captureRegion` request's `requestId` and returns `released`, including when
+that request has already ended. The capture response remains correlated with its
+original id. Hosts must register a capture request before dispatching its async work,
+so an immediately following cancellation cannot overtake it. They dispatch work
+concurrently and serialize response writes so cancellation can be processed while
+selection is pending. At most one capture is active, and the selection lease is 60
+seconds. Display capture, capabilities, delivery results, and macOS permission request
+semantics remain unchanged. `activeTarget` is removed because native Region resolves
+its own target at request time.
 
 ## Version 5
 
@@ -111,7 +132,7 @@ are retained in v3. Region timing is superseded by
 ## Fixtures
 
 [`fixtures/v1`](fixtures/v1), [`fixtures/v2`](fixtures/v2),
-[`fixtures/v3`](fixtures/v3), [`fixtures/v4`](fixtures/v4), and
-[`fixtures/v5`](fixtures/v5) are executable examples. The desktop protocol tests
+[`fixtures/v3`](fixtures/v3), [`fixtures/v4`](fixtures/v4),
+[`fixtures/v5`](fixtures/v5), and [`fixtures/v6`](fixtures/v6) are executable examples. The desktop protocol tests
 validate every fixture against its owning schema. Fixtures illustrate wire shape; they
 do not replace the cross-field checks described above.

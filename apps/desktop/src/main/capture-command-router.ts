@@ -114,6 +114,33 @@ export class CaptureCommandRouter {
     }
   }
 
+  public async captureRegionNatively(): Promise<CaptureCommandResult> {
+    if (this.captureInFlight) return captureAlreadyInProgress()
+    if (!this.host.captureRegionNative) return captureFailed()
+
+    this.captureInFlight = true
+    try {
+      const { delivery, saveDirectory } = this.preferences.getCapturePreferences()
+      const result = await this.host.captureRegionNative({
+        delivery,
+        ...(delivery !== 'clipboard' && saveDirectory ? { saveDirectory } : {}),
+      })
+      return projectCaptureResult(result)
+    } catch {
+      return captureFailed()
+    } finally {
+      this.captureInFlight = false
+    }
+  }
+
+  public async cancelNativeRegionCapture(): Promise<void> {
+    try {
+      await this.host.cancelActiveNativeRegion?.()
+    } catch {
+      // Native Host disposal also releases the overlay during application shutdown.
+    }
+  }
+
   public async beginRegionCapture(
     targetId: string,
     reportTiming?: RegionCaptureTimingReporter,

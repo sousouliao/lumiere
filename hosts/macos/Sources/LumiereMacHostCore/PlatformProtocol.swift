@@ -1,6 +1,7 @@
 import Foundation
 
 public let platformContractVersion = 5
+public let nativeRegionContractVersion = 6
 
 public enum HostFailureCode: String, Codable, Sendable {
   case hostUnavailable = "host-unavailable"
@@ -108,6 +109,7 @@ public enum PlatformMethod: String, Codable, Sendable {
   case getCapabilities
   case requestScreenCapturePermission
   case captureDisplay
+  case captureRegion
   case prepareRegion
   case commitRegion
   case cancelRegion
@@ -120,6 +122,7 @@ public struct PlatformRequest: Equatable, Sendable {
   public let displayCapture: DisplayCaptureParameters?
   public let commitRegion: CommitRegionParameters?
   public let sessionId: String?
+  public let requestId: String?
   public let targetId: String?
 }
 
@@ -253,12 +256,16 @@ public struct PlatformResponse: Encodable, Sendable {
   public let result: PlatformResult?
   public let error: HostFailure?
 
-  public static func success(id: String, result: PlatformResult) -> PlatformResponse {
-    PlatformResponse(version: platformContractVersion, id: id, result: result, error: nil)
+  public static func success(
+    id: String, result: PlatformResult, version: Int = platformContractVersion
+  ) -> PlatformResponse {
+    PlatformResponse(version: version, id: id, result: result, error: nil)
   }
 
-  public static func failure(id: String, error: HostFailure) -> PlatformResponse {
-    PlatformResponse(version: platformContractVersion, id: id, result: nil, error: error)
+  public static func failure(
+    id: String, error: HostFailure, version: Int = platformContractVersion
+  ) -> PlatformResponse {
+    PlatformResponse(version: version, id: id, result: nil, error: error)
   }
 
   private enum CodingKeys: String, CodingKey { case version, id, result, error }
@@ -309,8 +316,10 @@ public enum PlatformRequestDecoder {
     else { throw PlatformProtocolError.invalidJSON }
 
     try requireExactKeys(envelope, expected: ["version", "id", "method", "params"])
-    guard let version = envelope["version"] as? Int, version == platformContractVersion else {
-      throw PlatformProtocolError.invalidEnvelope("Protocol version must be 5.")
+    guard let version = envelope["version"] as? Int,
+      version == platformContractVersion || version == nativeRegionContractVersion
+    else {
+      throw PlatformProtocolError.invalidEnvelope("Protocol version must be 5 or 6.")
     }
     guard let id = envelope["id"] as? String, !id.isEmpty else {
       throw PlatformProtocolError.invalidEnvelope("Request id must be a non-empty string.")
@@ -319,6 +328,14 @@ public enum PlatformRequestDecoder {
       let method = PlatformMethod(rawValue: methodValue),
       let parameters = envelope["params"] as? [String: Any]
     else { throw PlatformProtocolError.invalidEnvelope("Unknown platform-host method.") }
+
+    if version == nativeRegionContractVersion {
+      guard ![PlatformMethod.prepareRegion, .commitRegion].contains(method) else {
+        throw PlatformProtocolError.invalidEnvelope("The v6 Region method is captureRegion.")
+      }
+    } else if method == .captureRegion {
+      throw PlatformProtocolError.invalidEnvelope("captureRegion requires protocol v6.")
+    }
 
     switch method {
     case .getCapabilities, .requestScreenCapturePermission:
@@ -329,7 +346,7 @@ public enum PlatformRequestDecoder {
         method: method,
         displayCapture: nil,
         commitRegion: nil,
-        sessionId: nil,
+        sessionId: nil, requestId: nil,
         targetId: nil
       )
     case .prepareRegion:
@@ -339,7 +356,7 @@ public enum PlatformRequestDecoder {
       }
       return PlatformRequest(
         version: version, id: id, method: method, displayCapture: nil, commitRegion: nil,
-        sessionId: nil, targetId: targetId
+        sessionId: nil, requestId: nil, targetId: targetId
       )
     case .captureDisplay:
       return PlatformRequest(
@@ -348,8 +365,14 @@ public enum PlatformRequestDecoder {
         method: method,
         displayCapture: try decodeDisplayCapture(parameters),
         commitRegion: nil,
-        sessionId: nil,
+        sessionId: nil, requestId: nil,
         targetId: nil
+      )
+    case .captureRegion:
+      return PlatformRequest(
+        version: version, id: id, method: method,
+        displayCapture: try decodeDisplayCapture(parameters), commitRegion: nil,
+        sessionId: nil, requestId: nil, targetId: nil
       )
     case .commitRegion:
       return PlatformRequest(
@@ -358,15 +381,14 @@ public enum PlatformRequestDecoder {
         method: method,
         displayCapture: nil,
         commitRegion: try decodeCommitRegion(parameters),
-        sessionId: nil,
+        sessionId: nil, requestId: nil,
         targetId: nil
       )
     case .cancelRegion:
-      try requireExactKeys(parameters, expected: ["sessionId"])
-      guard let sessionId = parameters["sessionId"] as? String, !sessionId.isEmpty else {
-        throw PlatformProtocolError.invalidEnvelope(
-          "Region session id must be a non-empty string."
-        )
+      let key = version == nativeRegionContractVersion ? "requestId" : "sessionId"
+      try requireExactKeys(parameters, expected: [key])
+      guard let regionID = parameters[key] as? String, !regionID.isEmpty else {
+        throw PlatformProtocolError.invalidEnvelope("Region \(key) must be a non-empty string.")
       }
       return PlatformRequest(
         version: version,
@@ -374,7 +396,8 @@ public enum PlatformRequestDecoder {
         method: method,
         displayCapture: nil,
         commitRegion: nil,
-        sessionId: sessionId,
+        sessionId: version == platformContractVersion ? regionID : nil,
+        requestId: version == nativeRegionContractVersion ? regionID : nil,
         targetId: nil
       )
     }
