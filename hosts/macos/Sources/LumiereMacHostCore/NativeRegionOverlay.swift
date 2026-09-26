@@ -9,6 +9,7 @@ public final class NativeRegionOverlay {
   private var pointerTimer: Timer?
   private var activationTimer: Timer?
   private var screenChangeObserver: NSObjectProtocol?
+  private var occlusionObserver: NSObjectProtocol?
   private var activeDisplayID: CGDirectDisplayID?
   private var activeDisplayFrame: NSRect?
   private var onDisplayChange: ((CGDirectDisplayID) -> Void)?
@@ -48,8 +49,9 @@ public final class NativeRegionOverlay {
     onDisplayChange: @escaping (CGDirectDisplayID) -> Void,
     onTopologyChange: @escaping () -> Void,
     onSelection: @escaping (CaptureGeometry?) -> Void,
-    onOrdered: @escaping () -> Void,
-    onInteractive: @escaping () -> Void,
+    onOrdered: @escaping (ContinuousClock.Instant) -> Void,
+    onVisible: @escaping (ContinuousClock.Instant) -> Void,
+    onInteractive: @escaping (ContinuousClock.Instant) -> Void,
     onActivationFailure: @escaping (String) -> Void
   ) -> Bool {
     dismiss()
@@ -80,13 +82,25 @@ public final class NativeRegionOverlay {
     activeDisplayFrame = screen.frame
     self.onDisplayChange = onDisplayChange
     self.onTopologyChange = onTopologyChange
+    occlusionObserver = NotificationCenter.default.addObserver(
+      forName: NSWindow.didChangeOcclusionStateNotification,
+      object: panel,
+      queue: .main
+    ) { [weak self, weak panel] _ in
+      let observedAt = ContinuousClock.now
+      MainActor.assumeIsolated {
+        guard let self, let panel, panel.occlusionState.contains(.visible) else { return }
+        self.removeOcclusionObserver()
+        onVisible(observedAt)
+      }
+    }
     panel.orderFrontRegardless()
     panel.makeKey()
     guard panel.makeFirstResponder(selection) else {
       dismiss()
       return false
     }
-    onOrdered()
+    onOrdered(ContinuousClock.now)
     var activationAttempts = 0
     activationTimer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) {
       [weak self, weak panel, weak selection] _ in
@@ -95,7 +109,7 @@ public final class NativeRegionOverlay {
         if panel.isKeyWindow && panel.firstResponder === selection {
           self.activationTimer?.invalidate()
           self.activationTimer = nil
-          onInteractive()
+          onInteractive(ContinuousClock.now)
         } else {
           activationAttempts += 1
           if activationAttempts >= 50 {
@@ -127,6 +141,7 @@ public final class NativeRegionOverlay {
     activationTimer = nil
     if let screenChangeObserver { NotificationCenter.default.removeObserver(screenChangeObserver) }
     screenChangeObserver = nil
+    removeOcclusionObserver()
     activeDisplayID = nil
     activeDisplayFrame = nil
     onDisplayChange = nil
@@ -141,6 +156,11 @@ public final class NativeRegionOverlay {
     window?.close()
     window = nil
     background = nil
+  }
+
+  private func removeOcclusionObserver() {
+    if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
+    occlusionObserver = nil
   }
 
   private func checkPointerDisplay() {

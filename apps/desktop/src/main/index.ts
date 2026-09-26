@@ -137,6 +137,7 @@ function reportRegionCaptureTiming(
       event: 'region-capture-timing',
       stage,
       elapsedMilliseconds: Math.round(performance.now() - startedAt),
+      epochMilliseconds: Date.now(),
       ...details,
     })}\n`,
   )
@@ -1343,7 +1344,10 @@ void app.whenReady().then(async () => {
     throw new Error('Capture commands are not ready.')
   }
   shortcutService = new ShortcutService(settingsStore, globalShortcut, {
-    region: () => runExternalCapture('region'),
+    region: () => {
+      reportRegionCaptureTiming('shortcut-callback', performance.now())
+      return runExternalCapture('region')
+    },
     display: () => runExternalCapture('display'),
   })
   shortcutService.initialize()

@@ -14,6 +14,8 @@ public struct CaptureTiming: Sendable {
   public let width: Int?
   public let height: Int?
   public let bytes: Int?
+  /// Wall-clock time, so Host stages can be aligned with Shell stages from another process.
+  public let epochMilliseconds: Int
 
   public init(
     requestID: String,
@@ -22,7 +24,8 @@ public struct CaptureTiming: Sendable {
     stageMilliseconds: Int,
     width: Int? = nil,
     height: Int? = nil,
-    bytes: Int? = nil
+    bytes: Int? = nil,
+    epochMilliseconds: Int = Int((Date().timeIntervalSince1970 * 1_000).rounded())
   ) {
     self.requestID = requestID
     self.stage = stage
@@ -31,6 +34,7 @@ public struct CaptureTiming: Sendable {
     self.width = width
     self.height = height
     self.bytes = bytes
+    self.epochMilliseconds = epochMilliseconds
   }
 }
 
@@ -239,14 +243,25 @@ public actor MacCaptureService {
                   )
                 }
               },
-              onOrdered: {
+              onOrdered: { observedAt in
                 Task {
-                  await self.reportNativeWindowOrdered(requestID: requestID, startedAt: startedAt)
+                  await self.reportNativeStage(
+                    "native-window-ordered", requestID: requestID, startedAt: startedAt, at: observedAt
+                  )
                 }
               },
-              onInteractive: {
+              onVisible: { observedAt in
                 Task {
-                  await self.reportNativeInteractive(requestID: requestID, startedAt: startedAt)
+                  await self.reportNativeStage(
+                    "native-window-visible", requestID: requestID, startedAt: startedAt, at: observedAt
+                  )
+                }
+              },
+              onInteractive: { observedAt in
+                Task {
+                  await self.reportNativeStage(
+                    "native-window-interactive", requestID: requestID, startedAt: startedAt, at: observedAt
+                  )
                 }
               },
               onActivationFailure: { detail in
@@ -352,14 +367,14 @@ public actor MacCaptureService {
     continuation?.resume(returning: outcome)
   }
 
-  private func reportNativeWindowOrdered(requestID: String, startedAt: ContinuousClock.Instant) {
+  private func reportNativeStage(
+    _ stage: String,
+    requestID: String,
+    startedAt: ContinuousClock.Instant,
+    at observedAt: ContinuousClock.Instant
+  ) {
     guard nativeRegionRequestID == requestID else { return }
-    reportTiming(requestID: requestID, stage: "native-window-ordered", startedAt: startedAt)
-  }
-
-  private func reportNativeInteractive(requestID: String, startedAt: ContinuousClock.Instant) {
-    guard nativeRegionRequestID == requestID else { return }
-    reportTiming(requestID: requestID, stage: "native-window-interactive", startedAt: startedAt)
+    reportTiming(requestID: requestID, stage: stage, startedAt: startedAt, at: observedAt)
   }
 
   private func capabilities(version: Int = platformContractVersion) async -> PlatformCapabilities {
@@ -550,11 +565,15 @@ public actor MacCaptureService {
     startedAt: ContinuousClock.Instant,
     width: Int? = nil,
     height: Int? = nil,
-    bytes: Int? = nil
+    bytes: Int? = nil,
+    at observedAt: ContinuousClock.Instant? = nil
   ) {
-    let now = ContinuousClock.now
+    let reportedAt = ContinuousClock.now
+    let now = observedAt ?? reportedAt
     let previous = timingLastInstant[requestID] ?? startedAt
     timingLastInstant[requestID] = stage == "preview-written" ? nil : now
+    let epochMilliseconds = Int((Date().timeIntervalSince1970 * 1_000).rounded())
+      - milliseconds(now.duration(to: reportedAt))
     timingReporter?(
       CaptureTiming(
         requestID: requestID,
@@ -563,7 +582,8 @@ public actor MacCaptureService {
         stageMilliseconds: milliseconds(previous.duration(to: now)),
         width: width,
         height: height,
-        bytes: bytes
+        bytes: bytes,
+        epochMilliseconds: epochMilliseconds
       )
     )
   }

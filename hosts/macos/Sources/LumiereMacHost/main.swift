@@ -59,6 +59,12 @@ enum LumiereMacHostMain {
             await writer.write(invalidRequestResponse(line: line, error: error))
             continue
           }
+          if request.method == .captureRegion {
+            writeTimingDiagnostic(CaptureTiming(
+              requestID: request.id, stage: "request-received",
+              elapsedMilliseconds: 0, stageMilliseconds: 0
+            ))
+          }
           if request.method == .captureRegion,
             !(await service.reserveNativeRegion(requestID: request.id))
           {
@@ -190,6 +196,7 @@ enum LumiereMacHostMain {
       "stage": timing.stage,
       "elapsedMilliseconds": timing.elapsedMilliseconds,
       "stageMilliseconds": timing.stageMilliseconds,
+      "epochMilliseconds": timing.epochMilliseconds,
     ]
     if let width = timing.width {
       diagnostic["width"] = width
