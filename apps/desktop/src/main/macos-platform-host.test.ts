@@ -45,6 +45,27 @@ describe('macOS platform host process transport', () => {
     host.dispose()
   })
 
+  it('writes a Region request to a running host before yielding to the microtask queue', async () => {
+    const process = new FakeNativeProcess()
+    process.stdin.on('data', (chunk: Buffer) => {
+      const request = JSON.parse(chunk.toString('utf8')) as Record<string, unknown>
+      process.respond(
+        request.method === 'captureRegion'
+          ? { version: 6, id: request.id, result: { status: 'cancelled' } }
+          : { version: 5, id: request.id, result: { status: 'restart-required' } },
+      )
+    })
+    const host = new MacOSPlatformHost([execPath], () => process.asChildProcess())
+    await host.requestScreenCapturePermission()
+    const write = vi.spyOn(process.stdin, 'write')
+
+    const capture = host.captureRegionNative({ delivery: 'clipboard' })
+
+    expect(write).toHaveBeenCalledTimes(1)
+    await expect(capture).resolves.toEqual({ status: 'cancelled' })
+    host.dispose()
+  })
+
   it('requests Screen Capture permission through the macOS host', async () => {
     const process = new FakeNativeProcess()
     process.stdin.once('data', (chunk: Buffer) => {

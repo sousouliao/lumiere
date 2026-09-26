@@ -167,7 +167,9 @@ export class NativeProcessPlatformHost implements PlatformHost {
     version: number = PLATFORM_CONTRACT_VERSION,
     id: string = randomUUID(),
   ): Promise<unknown> {
-    const child = await this.ensureProcess()
+    // Electron runs no microtask checkpoint after native callbacks such as global shortcuts;
+    // awaiting an already running Host would stall this write until an unrelated event.
+    const child = this.process ?? (await this.ensureProcess())
     const line = JSON.stringify({
       version,
       id,
