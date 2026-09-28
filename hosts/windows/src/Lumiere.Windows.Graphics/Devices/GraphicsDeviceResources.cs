@@ -29,6 +29,10 @@ internal sealed class GraphicsDeviceResources : IDisposable
 
     public ID3D11DeviceContext ImmediateContext { get; }
 
+    // WGC callbacks and the overlay UI use different threads. All immediate-context
+    // calls, including a Map/Unmap pair, must be serialized through this gate.
+    public object ImmediateContextSync { get; } = new();
+
     public IDXGIDevice DxgiDevice { get; }
 
     public string? AdapterName { get; }

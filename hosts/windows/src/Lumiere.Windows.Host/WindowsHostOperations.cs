@@ -35,6 +35,8 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
     private readonly Func<string> outputDirectory;
     private readonly Action<string> createDirectory;
     private readonly ILogger logger;
+    private readonly NativeRegionRequestCoordinator nativeRegionRequests = new();
+    private readonly Func<string, HostCaptureRequest, CancellationToken, Task<HostCaptureResult>> nativeRegionCapture;
     private readonly SemaphoreSlim engineCreationGate = new(1, 1);
     private IWindowsCaptureEngine? engine;
     private readonly List<IssuedTarget> issuedTargets = [];
@@ -46,7 +48,8 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
         Func<string> outputDirectory,
         Action<string> createDirectory,
         ILogger? logger = null,
-        Func<string>? targetTokenFactory = null)
+        Func<string>? targetTokenFactory = null,
+        Func<string, HostCaptureRequest, CancellationToken, Task<HostCaptureResult>>? nativeRegionCapture = null)
     {
         ArgumentNullException.ThrowIfNull(engineFactory);
         this.engineFactory = _ => Task.FromResult(engineFactory());
@@ -56,6 +59,7 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
         this.outputDirectory = outputDirectory ?? throw new ArgumentNullException(nameof(outputDirectory));
         this.createDirectory = createDirectory ?? throw new ArgumentNullException(nameof(createDirectory));
         this.logger = logger ?? NullLogger.Instance;
+        this.nativeRegionCapture = nativeRegionCapture ?? NativeRegionUnavailableAsync;
     }
 
     public static WindowsHostOperations CreateDefault(ILogger? logger = null)
@@ -86,6 +90,7 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
         this.outputDirectory = outputDirectory ?? throw new ArgumentNullException(nameof(outputDirectory));
         this.createDirectory = createDirectory ?? throw new ArgumentNullException(nameof(createDirectory));
         this.logger = logger ?? NullLogger.Instance;
+        nativeRegionCapture = NativeRegionUnavailableAsync;
     }
 
     public HostCapabilities GetCapabilities()
@@ -142,6 +147,58 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
             (engine, captureRequest, token) => engine.CaptureDisplayAsync(captureRequest, token),
             cancellationToken);
     }
+
+    public Task<HostCaptureResult> CaptureNativeRegionAsync(
+        string requestId,
+        HostCaptureRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return nativeRegionRequests.CaptureAsync(
+            requestId,
+            token => CaptureNativeRegionSafelyAsync(requestId, request, token),
+            cancellationToken);
+    }
+
+    public Task<HostReleasedRegion> CancelNativeRegionAsync(string requestId) =>
+        nativeRegionRequests.CancelAsync(requestId);
+
+    private async Task<HostCaptureResult> CaptureNativeRegionSafelyAsync(
+        string requestId,
+        HostCaptureRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await nativeRegionCapture(requestId, request, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "operation=CaptureNativeRegion, stage=Failed, correlation={CorrelationId}",
+                requestId);
+            return Failed(
+                "unexpected-failure",
+                "Windows capture failed. Try again.",
+                retryable: true);
+        }
+    }
+
+    private static Task<HostCaptureResult> NativeRegionUnavailableAsync(
+        string requestId,
+        HostCaptureRequest request,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(new HostCaptureResult(
+            "failed",
+            Failure: new PlatformFailure(
+                "capture-unavailable",
+                "Native Region capture is not yet available on Windows.",
+                Retryable: false)));
 
     public async Task<HostPrepareRegionResult> PrepareRegionAsync(
         string requestId,
@@ -534,6 +591,7 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
             return;
         }
 
+        await nativeRegionRequests.DisposeAsync();
         IWindowsCaptureEngine? ownedEngine;
         lock (sync)
         {

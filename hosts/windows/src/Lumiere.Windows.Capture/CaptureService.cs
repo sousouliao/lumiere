@@ -210,15 +210,18 @@ internal sealed class CaptureService
 
         var owned = deviceResources.Device.CreateTexture2D(description);
         var sourceBox = new Box(0, 0, 0, source.Width, source.Height, 1);
-        deviceResources.ImmediateContext.CopySubresourceRegion(
-            owned,
-            0,
-            0,
-            0,
-            0,
-            source.Texture,
-            0,
-            sourceBox);
+        lock (deviceResources.ImmediateContextSync)
+        {
+            deviceResources.ImmediateContext.CopySubresourceRegion(
+                owned,
+                0,
+                0,
+                0,
+                0,
+                source.Texture,
+                0,
+                sourceBox);
+        }
         return new CapturedFrameTexture(owned, source.Width, source.Height, "Owned frozen frame");
     }
 

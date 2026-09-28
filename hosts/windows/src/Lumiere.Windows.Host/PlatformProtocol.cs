@@ -85,17 +85,46 @@ public interface IWindowsHostOperations : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     Task<HostReleasedRegion> CancelRegionAsync(string sessionId);
+
+    Task<HostCaptureResult> CaptureNativeRegionAsync(
+        string requestId,
+        HostCaptureRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<HostReleasedRegion> CancelNativeRegionAsync(string requestId);
 }
 
 public static class PlatformProtocol
 {
     public const int ContractVersion = 5;
+    public const int NativeRegionContractVersion = 6;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
+
+    public static bool IsPendingNativeRegionRequest(string line)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(line);
+            var envelope = document.RootElement;
+            return envelope.ValueKind == JsonValueKind.Object
+                && envelope.TryGetProperty("version", out var version)
+                && version.ValueKind == JsonValueKind.Number
+                && version.TryGetInt32(out var value)
+                && value == NativeRegionContractVersion
+                && envelope.TryGetProperty("method", out var method)
+                && method.ValueKind == JsonValueKind.String
+                && method.GetString() == "captureRegion";
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     public static async Task<ProtocolLineResult> ProcessLineAsync(
         string line,
@@ -106,6 +135,7 @@ public static class PlatformProtocol
         ArgumentNullException.ThrowIfNull(operations);
 
         var requestId = "invalid-request";
+        var responseVersion = ContractVersion;
         try
         {
             using var document = JsonDocument.Parse(line);
@@ -117,38 +147,57 @@ public static class PlatformProtocol
             {
                 requestId = candidateId.GetString()!;
             }
+            if (envelope.ValueKind == JsonValueKind.Object
+                && envelope.TryGetProperty("version", out var candidateVersion)
+                && candidateVersion.ValueKind == JsonValueKind.Number
+                && candidateVersion.TryGetInt32(out var requestedVersion)
+                && requestedVersion == NativeRegionContractVersion)
+            {
+                responseVersion = NativeRegionContractVersion;
+            }
 
             RequireExactProperties(envelope, "version", "id", "method", "params");
-            RequireVersion(envelope);
+            var version = RequireVersion(envelope);
             requestId = RequireNonEmptyString(envelope, "id", "Request id");
             var method = RequireNonEmptyString(envelope, "method", "Request method");
             var parameters = RequireObject(envelope, "params", "Request params");
 
-            return method switch
+            return (version, method) switch
             {
-                "getCapabilities" => ProcessGetCapabilities(requestId, parameters, operations),
-                "captureDisplay" => await ProcessCaptureDisplayAsync(
+                (_, "getCapabilities") => ProcessGetCapabilities(version, requestId, parameters, operations),
+                (_, "captureDisplay") => await ProcessCaptureDisplayAsync(
+                    version,
                     requestId,
                     parameters,
                     operations,
                     cancellationToken),
-                "prepareRegion" => await ProcessPrepareRegionAsync(
+                (ContractVersion, "prepareRegion") => await ProcessPrepareRegionAsync(
                     requestId,
                     parameters,
                     operations,
                     cancellationToken),
-                "commitRegion" => await ProcessCommitRegionAsync(
+                (ContractVersion, "commitRegion") => await ProcessCommitRegionAsync(
                     requestId,
                     parameters,
                     operations,
                     cancellationToken),
-                "cancelRegion" => await ProcessCancelRegionAsync(requestId, parameters, operations),
+                (ContractVersion, "cancelRegion") => await ProcessCancelRegionAsync(requestId, parameters, operations),
+                (NativeRegionContractVersion, "captureRegion") => await ProcessCaptureNativeRegionAsync(
+                    requestId,
+                    parameters,
+                    operations,
+                    cancellationToken),
+                (NativeRegionContractVersion, "cancelRegion") => await ProcessCancelNativeRegionAsync(
+                    requestId,
+                    parameters,
+                    operations),
                 _ => throw new PlatformProtocolException("Unknown platform-host method."),
             };
         }
         catch (JsonException)
         {
             return Failure(
+                responseVersion,
                 requestId,
                 "invalid-request",
                 "Request must be one complete JSON object.",
@@ -157,6 +206,7 @@ public static class PlatformProtocol
         catch (PlatformProtocolException exception)
         {
             return Failure(
+                responseVersion,
                 requestId,
                 "invalid-request",
                 exception.Message,
@@ -165,15 +215,28 @@ public static class PlatformProtocol
     }
 
     private static ProtocolLineResult ProcessGetCapabilities(
+        int version,
         string requestId,
         JsonElement parameters,
         IWindowsHostOperations operations)
     {
         RequireExactProperties(parameters);
-        return Success(requestId, operations.GetCapabilities());
+        var capabilities = operations.GetCapabilities();
+        return Success(
+            version,
+            requestId,
+            version == NativeRegionContractVersion
+                ? capabilities with
+                {
+                    ContractVersion = version,
+                    CaptureModes = ["display"],
+                    ActiveTarget = null,
+                }
+                : capabilities);
     }
 
     private static async Task<ProtocolLineResult> ProcessCaptureDisplayAsync(
+        int version,
         string requestId,
         JsonElement parameters,
         IWindowsHostOperations operations,
@@ -181,7 +244,7 @@ public static class PlatformProtocol
     {
         var request = ValidateDisplayParameters(parameters);
         var result = await operations.CaptureDisplayAsync(requestId, request, cancellationToken);
-        return CaptureResult(requestId, result);
+        return CaptureResult(version, requestId, result);
     }
 
     private static async Task<ProtocolLineResult> ProcessPrepareRegionAsync(
@@ -207,7 +270,7 @@ public static class PlatformProtocol
     {
         var request = ValidateCommitRegionParameters(parameters);
         var result = await operations.CommitRegionAsync(requestId, request, cancellationToken);
-        return CaptureResult(requestId, result);
+        return CaptureResult(ContractVersion, requestId, result);
     }
 
     private static async Task<ProtocolLineResult> ProcessCancelRegionAsync(
@@ -218,15 +281,42 @@ public static class PlatformProtocol
         RequireExactProperties(parameters, "sessionId");
         var sessionId = RequireNonEmptyString(parameters, "sessionId", "Region session id");
         var result = await operations.CancelRegionAsync(sessionId);
-        return Success(requestId, result);
+        return Success(ContractVersion, requestId, result);
     }
 
-    private static ProtocolLineResult CaptureResult(string requestId, HostCaptureResult result)
+    private static async Task<ProtocolLineResult> ProcessCaptureNativeRegionAsync(
+        string requestId,
+        JsonElement parameters,
+        IWindowsHostOperations operations,
+        CancellationToken cancellationToken)
+    {
+        var request = ValidateDisplayParameters(parameters);
+        var result = await operations.CaptureNativeRegionAsync(requestId, request, cancellationToken);
+        return CaptureResult(NativeRegionContractVersion, requestId, result);
+    }
+
+    private static async Task<ProtocolLineResult> ProcessCancelNativeRegionAsync(
+        string requestId,
+        JsonElement parameters,
+        IWindowsHostOperations operations)
+    {
+        RequireExactProperties(parameters, "requestId");
+        var captureRequestId = RequireNonEmptyString(parameters, "requestId", "Region request id");
+        return Success(
+            NativeRegionContractVersion,
+            requestId,
+            await operations.CancelNativeRegionAsync(captureRequestId));
+    }
+
+    private static ProtocolLineResult CaptureResult(
+        int version,
+        string requestId,
+        HostCaptureResult result)
     {
         var failure = result.Failure
             ?? result.Deliveries?.FirstOrDefault(delivery => delivery.Failure is not null)?.Failure;
         return new ProtocolLineResult(
-            Serialize(new { version = ContractVersion, id = requestId, result }),
+            Serialize(new { version, id = requestId, result }),
             failure is null
                 ? null
                 : new HostDiagnostic(failure.Code, requestId, failure));
@@ -309,10 +399,11 @@ public static class PlatformProtocol
         return property.GetString();
     }
 
-    private static ProtocolLineResult Success(string requestId, object result) =>
-        new(Serialize(new { version = ContractVersion, id = requestId, result }));
+    private static ProtocolLineResult Success(int version, string requestId, object result) =>
+        new(Serialize(new { version, id = requestId, result }));
 
     private static ProtocolLineResult Failure(
+        int version,
         string requestId,
         string code,
         string message,
@@ -320,22 +411,24 @@ public static class PlatformProtocol
     {
         var failure = new PlatformFailure(code, message, retryable);
         return new ProtocolLineResult(
-            Serialize(new { version = ContractVersion, id = requestId, error = failure }),
+            Serialize(new { version, id = requestId, error = failure }),
             new HostDiagnostic("request-failed", requestId, failure));
     }
 
     private static string Serialize(object value) =>
         JsonSerializer.Serialize(value, SerializerOptions);
 
-    private static void RequireVersion(JsonElement envelope)
+    private static int RequireVersion(JsonElement envelope)
     {
         if (!envelope.TryGetProperty("version", out var version)
             || version.ValueKind != JsonValueKind.Number
             || !version.TryGetInt32(out var value)
-            || value != ContractVersion)
+            || value is not (ContractVersion or NativeRegionContractVersion))
         {
-            throw new PlatformProtocolException("Protocol version must be 5.");
+            throw new PlatformProtocolException("Protocol version must be 5 or 6.");
         }
+
+        return value;
     }
 
     private static JsonElement RequireObject(

@@ -15,22 +15,14 @@ internal static class Program
         ILogger logger = loggerFactory.CreateLogger("Lumiere.Windows.Host.Protocol");
         await using var operations = WindowsHostOperations.CreateDefault(
             loggerFactory.CreateLogger("Lumiere.Windows.Host.Operations"));
-
-        while (await Console.In.ReadLineAsync() is { } line)
+        await PlatformHostRequestLoop.RunAsync(Console.In, Console.Out, operations, diagnostic =>
         {
-            var result = await PlatformProtocol.ProcessLineAsync(line, operations);
-            await Console.Out.WriteLineAsync(result.ResponseLine);
-            await Console.Out.FlushAsync();
-
-            if (result.Diagnostic is { } diagnostic)
-            {
-                logger.Log(
-                    LogLevel.Warning,
-                    new EventId(0, diagnostic.Event),
-                    diagnostic,
-                    exception: null,
-                    static (state, _) => state.Failure.Message);
-            }
-        }
+            logger.Log(
+                LogLevel.Warning,
+                new EventId(0, diagnostic.Event),
+                diagnostic,
+                exception: null,
+                static (state, _) => state.Failure.Message);
+        });
     }
 }

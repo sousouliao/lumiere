@@ -87,44 +87,47 @@ internal sealed class CapturedFrameTextureReadback : ICapturedFrameTextureReadba
 
         using var stagingTexture = CreateStagingTexture(pixelWidth, pixelHeight);
         var sourceBox = new Box(pixelX, pixelY, 0, pixelX + pixelWidth, pixelY + pixelHeight, 1);
-        deviceResources.ImmediateContext.CopySubresourceRegion(
-            stagingTexture,
-            0,
-            0,
-            0,
-            0,
-            texture.Texture,
-            0,
-            sourceBox);
-
-        var map = deviceResources.ImmediateContext.Map(
-            stagingTexture,
-            0,
-            MapMode.Read,
-            Vortice.Direct3D11.MapFlags.None);
-        try
+        lock (deviceResources.ImmediateContextSync)
         {
-            var pixelData = new byte[checked(pixelWidth * pixelHeight * CapturedFrameReadback.BytesPerPixel)];
-            var rowBytes = checked(pixelWidth * CapturedFrameReadback.BytesPerPixel);
-            var stride = checked((int)map.RowPitch);
+            deviceResources.ImmediateContext.CopySubresourceRegion(
+                stagingTexture,
+                0,
+                0,
+                0,
+                0,
+                texture.Texture,
+                0,
+                sourceBox);
 
-            for (int y = 0; y < pixelHeight; y++)
+            var map = deviceResources.ImmediateContext.Map(
+                stagingTexture,
+                0,
+                MapMode.Read,
+                Vortice.Direct3D11.MapFlags.None);
+            try
             {
-                Marshal.Copy(
-                    IntPtr.Add(map.DataPointer, y * stride),
-                    pixelData,
-                    y * rowBytes,
-                    rowBytes);
-            }
+                var pixelData = new byte[checked(pixelWidth * pixelHeight * CapturedFrameReadback.BytesPerPixel)];
+                var rowBytes = checked(pixelWidth * CapturedFrameReadback.BytesPerPixel);
+                var stride = checked((int)map.RowPitch);
 
-            return new CapturedFrameReadback(
-                pixelWidth,
-                pixelHeight,
-                pixelData);
-        }
-        finally
-        {
-            deviceResources.ImmediateContext.Unmap(stagingTexture, 0);
+                for (int y = 0; y < pixelHeight; y++)
+                {
+                    Marshal.Copy(
+                        IntPtr.Add(map.DataPointer, y * stride),
+                        pixelData,
+                        y * rowBytes,
+                        rowBytes);
+                }
+
+                return new CapturedFrameReadback(
+                    pixelWidth,
+                    pixelHeight,
+                    pixelData);
+            }
+            finally
+            {
+                deviceResources.ImmediateContext.Unmap(stagingTexture, 0);
+            }
         }
     }
 
