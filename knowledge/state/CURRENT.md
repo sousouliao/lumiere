@@ -1,6 +1,6 @@
 # Current Project State
 
-- Updated: 2026-09-27
+- Updated: 2026-09-30
 - Milestone: 1 — Cross-platform HDR-aware MVP with sRGB Visual Match
 - Posture: native capture and shared product surface complete; macOS and Windows stable distribution is published, with Windows explicitly unsigned.
 - Issues #12, #15, and #16 were resolved on Windows on 2026-09-11; ADR 0018 makes signing independent of stable release status.
@@ -90,15 +90,26 @@ for the shared v6 seam, [#21](https://github.com/sousouliao/lumiere/issues/21) f
 macOS, and [#22](https://github.com/sousouliao/lumiere/issues/22) for Windows. The
 v6 schema and macOS Region request are committed. The macOS Shell sends `captureRegion`
 to its prewarmed AppKit Host and no longer creates the Electron Region Overlay;
-capabilities, Display capture, and Windows remain on v5 pending the Windows native slice.
+capabilities and Display capture remain on v5. The Windows Host now accepts v6 native
+Region capture and request-ID cancellation: an owned STA window presents the frozen
+full-resolution GPU Visual Match surface and returns geometry for same-frame delivery.
+The Windows Shell still uses the v5 Electron overlay while native behavior is verified.
+On the named 3840×2160 SDR target at 150% scaling, one direct Host EXE smoke produced a
+225×150 sRGB PNG from a 150×100 logical selection; this used synthetic window messages
+and does not certify interactive input or presentation. `pwsh ./hosts/windows/scripts/verify.ps1`
+passes (Host 41, Capture 93, Graphics 50, Interop 35 tests); `pnpm check`,
+`pnpm test:shared` (31 files, 187 tests), and `pnpm build` pass on Windows. Native
+HDR and multi-display runtime behavior, packaged Shell routing, and recorded hot
+shortcut-to-visible latency remain to verify before the Windows cutover.
 Both macOS application architectures package with the matching Host. The packaged arm64
 native overlay was observed with the frozen full-screen image, dimming, crosshair, hint,
 and input focus. A background-shortcut stall (Host stdin write deferred behind a microtask
 after the native shortcut callback) is fixed; with the main window closed, 23 packaged
 arm64 presses reached AppKit-visible at software-endpoint p90 151 ms, without physical-key
 or recorded corroboration. Packaged selection delivery and recorded ≥30-sample
-shortcut-to-visible timing remain open. Next: implement and verify Windows on its own
-machine, then finish the two targeted macOS runtime checks before removing the staged v5
-Region path.
+shortcut-to-visible timing remain open. Next: verify Windows native presentation and
+selection with physical input on named SDR/HDR and multi-display targets, record the
+packaged hot latency series, then switch the Windows Shell and retire its v5 overlay.
+Finish the two targeted macOS runtime checks before removing the staged v5 Region path.
 ADR 0018 continues to permit unsigned Windows stable distribution; broad fidelity,
 fresh-machine installation, and HDR-preserved export remain separate work.

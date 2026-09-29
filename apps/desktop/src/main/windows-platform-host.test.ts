@@ -6,6 +6,40 @@ import { describe, expect, it } from 'vitest'
 import { WindowsPlatformHost } from './windows-platform-host'
 
 describe('Windows platform host process transport', () => {
+  it('cancels a pending native Region capture with its v6 request id', async () => {
+    const process = new FakeNativeProcess()
+    const requests: Record<string, unknown>[] = []
+    process.stdin.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString('utf8').trim().split('\n')) {
+        requests.push(JSON.parse(line) as Record<string, unknown>)
+      }
+      if (requests.length !== 2) return
+      const [capture, cancellation] = requests
+      expect(capture).toMatchObject({
+        version: 6,
+        method: 'captureRegion',
+        params: { delivery: 'folder', saveDirectory: 'C:\\Pictures\\Lumiere' },
+      })
+      expect(cancellation).toMatchObject({
+        version: 6,
+        method: 'cancelRegion',
+        params: { requestId: capture.id },
+      })
+      process.respond({ version: 6, id: cancellation.id, result: { status: 'released' } })
+      process.respond({ version: 6, id: capture.id, result: { status: 'cancelled' } })
+    })
+    const host = new WindowsPlatformHost([execPath], () => process.asChildProcess())
+    const capture = host.captureRegionNative({
+      delivery: 'folder',
+      saveDirectory: 'C:\\Pictures\\Lumiere',
+    })
+    const cancellation = host.cancelActiveNativeRegion()
+
+    await expect(cancellation).resolves.toEqual({ status: 'released' })
+    await expect(capture).resolves.toEqual({ status: 'cancelled' })
+    host.dispose()
+  })
+
   it('projects the current target and reuses one process for repeated folder capture', async () => {
     const process = new FakeNativeProcess()
     let spawnCount = 0

@@ -69,6 +69,8 @@ public interface IWindowsHostOperations : IAsyncDisposable
 {
     HostCapabilities GetCapabilities();
 
+    HostCapabilities GetNativeRegionCapabilities();
+
     Task<HostCaptureResult> CaptureDisplayAsync(
         string requestId,
         HostCaptureRequest request,
@@ -221,18 +223,10 @@ public static class PlatformProtocol
         IWindowsHostOperations operations)
     {
         RequireExactProperties(parameters);
-        var capabilities = operations.GetCapabilities();
-        return Success(
-            version,
-            requestId,
-            version == NativeRegionContractVersion
-                ? capabilities with
-                {
-                    ContractVersion = version,
-                    CaptureModes = ["display"],
-                    ActiveTarget = null,
-                }
-                : capabilities);
+        var capabilities = version == NativeRegionContractVersion
+            ? operations.GetNativeRegionCapabilities()
+            : operations.GetCapabilities();
+        return Success(version, requestId, capabilities);
     }
 
     private static async Task<ProtocolLineResult> ProcessCaptureDisplayAsync(

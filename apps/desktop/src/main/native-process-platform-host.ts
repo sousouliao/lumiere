@@ -100,9 +100,6 @@ export class NativeProcessPlatformHost implements PlatformHost {
   }
 
   public async captureRegionNative(request: DisplayCaptureRequest): Promise<CaptureResult> {
-    if (this.platform !== 'macos') {
-      throw new Error('Native Region capture is not yet connected on Windows.')
-    }
     if (this.activeNativeRegionRequestId) {
       return {
         status: 'failed',
@@ -131,7 +128,7 @@ export class NativeProcessPlatformHost implements PlatformHost {
 
   public async cancelActiveNativeRegion(): Promise<ReleasedRegionCapture> {
     const requestId = this.activeNativeRegionRequestId
-    if (!requestId || this.platform !== 'macos') return { status: 'released' }
+    if (!requestId) return { status: 'released' }
     try {
       return parseReleasedRegion(
         await this.request('cancelRegion', { requestId }, nativeRegionContractVersion),

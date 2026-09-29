@@ -8,11 +8,32 @@ namespace Lumiere.Windows.Host.Tests;
 public sealed class NativeRegionProtocolTests
 {
     [Fact]
-    public async Task V6CapabilityDoesNotAdvertiseUnconnectedNativeRegion()
+    public async Task V6CapabilityAdvertisesNativeRegionForSupportedTarget()
     {
         await using var operations = new WindowsHostOperations(
             () => new StubCaptureEngine(),
-            WindowsHostOperationsTests.CreateRegionCapability,
+            CreateNativeRegionCapability,
+            () => "C:\\Pictures\\Lumiere",
+            _ => { },
+            nativeRegionCapture: (_, _, _) => Task.FromResult(new HostCaptureResult("cancelled")));
+        var response = await PlatformProtocol.ProcessLineAsync(
+            """{"version":6,"id":"capabilities","method":"getCapabilities","params":{}}""",
+            operations);
+        using var document = JsonDocument.Parse(response.ResponseLine);
+        var result = document.RootElement.GetProperty("result");
+        Assert.Equal(6, result.GetProperty("contractVersion").GetInt32());
+        Assert.Equal("region", result.GetProperty("captureModes")[0].GetString());
+        Assert.Equal("display", result.GetProperty("captureModes")[1].GetString());
+        Assert.Equal(2, result.GetProperty("captureModes").GetArrayLength());
+        Assert.True(result.TryGetProperty("activeTarget", out _));
+    }
+
+    [Fact]
+    public async Task V6CapabilityOmitsRegionWithoutNativeCapture()
+    {
+        await using var operations = new WindowsHostOperations(
+            () => new StubCaptureEngine(),
+            CreateNativeRegionCapability,
             () => "C:\\Pictures\\Lumiere",
             _ => { });
         var response = await PlatformProtocol.ProcessLineAsync(
@@ -20,7 +41,6 @@ public sealed class NativeRegionProtocolTests
             operations);
         using var document = JsonDocument.Parse(response.ResponseLine);
         var result = document.RootElement.GetProperty("result");
-        Assert.Equal(6, result.GetProperty("contractVersion").GetInt32());
         Assert.Equal("display", result.GetProperty("captureModes")[0].GetString());
         Assert.Equal(1, result.GetProperty("captureModes").GetArrayLength());
         Assert.False(result.TryGetProperty("activeTarget", out _));
@@ -127,4 +147,17 @@ public sealed class NativeRegionProtocolTests
             () => "C:\\Pictures\\Lumiere",
             _ => { },
             nativeRegionCapture: capture);
+
+    private static WindowsTargetCapability CreateNativeRegionCapability()
+    {
+        var target = WindowsHostOperationsTests.CreateRegionCapability();
+        return new WindowsTargetCapability(
+            target.HdrState,
+            target.LogicalSize,
+            pixelLeft: 0,
+            pixelTop: 0,
+            pixelWidth: 3840,
+            pixelHeight: 2160,
+            captureTargetFactory: target.CreateCaptureTarget);
+    }
 }

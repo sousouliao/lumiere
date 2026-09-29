@@ -1,5 +1,6 @@
 **/artifacts/
 **/.build/
+**/.dotnet/
 **/bin/
 **/node_modules/
 **/obj/

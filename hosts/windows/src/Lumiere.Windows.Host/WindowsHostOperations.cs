@@ -45,6 +45,7 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
     private readonly ILogger logger;
     private readonly NativeRegionRequestCoordinator nativeRegionRequests = new();
     private readonly Func<string, HostCaptureRequest, CancellationToken, Task<HostCaptureResult>> nativeRegionCapture;
+    private readonly bool nativeRegionAvailable;
     private readonly SemaphoreSlim engineCreationGate = new(1, 1);
     private IWindowsCaptureEngine? engine;
     private readonly List<IssuedTarget> issuedTargets = [];
@@ -68,6 +69,7 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
         this.createDirectory = createDirectory ?? throw new ArgumentNullException(nameof(createDirectory));
         this.logger = logger ?? NullLogger.Instance;
         this.nativeRegionCapture = nativeRegionCapture ?? NativeRegionUnavailableAsync;
+        nativeRegionAvailable = nativeRegionCapture is not null;
     }
 
     public static WindowsHostOperations CreateDefault(ILogger? logger = null)
@@ -99,14 +101,23 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
         this.createDirectory = createDirectory ?? throw new ArgumentNullException(nameof(createDirectory));
         this.logger = logger ?? NullLogger.Instance;
         nativeRegionCapture = CaptureNativeRegionDefaultAsync;
+        nativeRegionAvailable = true;
     }
 
-    public HostCapabilities GetCapabilities()
+    public HostCapabilities GetCapabilities() => CreateCapabilities(nativeRegion: false);
+
+    public HostCapabilities GetNativeRegionCapabilities() => CreateCapabilities(nativeRegion: true);
+
+    private HostCapabilities CreateCapabilities(bool nativeRegion)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
         var target = getTargetCapability();
         HostCaptureTarget? activeTarget = null;
-        if (target?.SupportsRegionCapture == true && target.LogicalSize is { } logicalSize)
+        if (target is not null
+            && (nativeRegion
+                ? nativeRegionAvailable && target.SupportsNativeRegionCapture
+                : target.SupportsRegionCapture)
+            && target.LogicalSize is { } logicalSize)
         {
             var token = targetTokenFactory();
             if (!string.IsNullOrWhiteSpace(token))
@@ -129,7 +140,7 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
         }
         var supportsRegion = activeTarget is not null;
         return new HostCapabilities(
-            PlatformProtocol.ContractVersion,
+            nativeRegion ? PlatformProtocol.NativeRegionContractVersion : PlatformProtocol.ContractVersion,
             "windows",
             "available",
             supportsRegion ? ["region", "display"] : ["display"],
