@@ -104,15 +104,19 @@ shortcut-to-visible latency remain to verify before accepting the Windows cutove
 Three direct Host EXE timing probes on this SDR target measured 566 ms cold and 58/56 ms
 hot from JSONL write to visible HWND (10 ms polling); they do not include Electron,
 physical shortcut input, or a packaged build.
+After restarting `pnpm dev` from the main checkout, the maintainer observed near-immediate
+native overlay presentation and normal pointer interaction. Physical right-click cancelled
+selection; a physical drag selected a Region and the Debug Host completed Clipboard and
+Folder delivery of the same 1166×1533 sRGB Visual Match artifact. This confirms the
+development app on the named SDR display, not HDR or packaged latency.
 Both macOS application architectures package with the matching Host. The packaged arm64
 native overlay was observed with the frozen full-screen image, dimming, crosshair, hint,
 and input focus. A background-shortcut stall (Host stdin write deferred behind a microtask
 after the native shortcut callback) is fixed; with the main window closed, 23 packaged
 arm64 presses reached AppKit-visible at software-endpoint p90 151 ms, without physical-key
 or recorded corroboration. Packaged selection delivery and recorded ≥30-sample
-shortcut-to-visible timing remain open. Next: restart the Windows development app on
-this checkout and verify native presentation and selection with physical input on named
-SDR/HDR and multi-display targets, then record the packaged hot latency series and
+shortcut-to-visible timing remain open. Next: verify native presentation and selection
+on named HDR and multi-display targets, then record the packaged hot latency series and
 retire the v5 Electron fallback.
 Finish the two targeted macOS runtime checks before removing the staged v5 Region path.
 ADR 0018 continues to permit unsigned Windows stable distribution; broad fidelity,
