@@ -31,12 +31,16 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
     private readonly IOutputService output;
     private readonly IRegionPreviewEncoder regionPreviewEncoder;
     private readonly Func<CapturedFrameTexture, CapturedFrameTexture> copyOwnedFrame;
+    private readonly Func<CapturedFrameTexture, SrgbVisualMatchConversionContext, CapturedFrameTexture>? renderNativeRegion;
+    private readonly IDisposable? nativeRegionRenderer;
     private readonly IDisposable? ownedResources;
     private readonly TimeSpan frameTimeout;
     private readonly SemaphoreSlim operationGate = new(1, 1);
+    private readonly SemaphoreSlim nativeRegionGate = new(1, 1);
     private readonly CancellationTokenSource lifetimeCancellation = new();
     private readonly object frozenLock = new();
     private FrozenRegionSession? frozenRegion;
+    private int nativeRegionActive;
     private int disposed;
 
     internal WindowsDisplayCaptureEngine(
@@ -49,7 +53,9 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
         IRegionPreviewEncoder regionPreviewEncoder,
         IDisposable? ownedResources = null,
         TimeSpan? frameTimeout = null,
-        Func<CapturedFrameTexture, CapturedFrameTexture>? copyOwnedFrame = null)
+        Func<CapturedFrameTexture, CapturedFrameTexture>? copyOwnedFrame = null,
+        Func<CapturedFrameTexture, SrgbVisualMatchConversionContext, CapturedFrameTexture>? renderNativeRegion = null,
+        IDisposable? nativeRegionRenderer = null)
     {
         this.reserveCommand = reserveCommand ?? throw new ArgumentNullException(nameof(reserveCommand));
         this.updateSessionState = updateSessionState ?? throw new ArgumentNullException(nameof(updateSessionState));
@@ -59,6 +65,8 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
         this.output = output ?? throw new ArgumentNullException(nameof(output));
         this.regionPreviewEncoder = regionPreviewEncoder ?? throw new ArgumentNullException(nameof(regionPreviewEncoder));
         this.copyOwnedFrame = copyOwnedFrame ?? (frame => frame);
+        this.renderNativeRegion = renderNativeRegion;
+        this.nativeRegionRenderer = nativeRegionRenderer;
         this.ownedResources = ownedResources;
         this.frameTimeout = frameTimeout ?? DefaultFrameTimeout;
         if (this.frameTimeout <= TimeSpan.Zero)
@@ -113,7 +121,7 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
         WindowsCaptureRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (HasFrozenRegion())
+        if (HasFrozenRegion() || Volatile.Read(ref nativeRegionActive) != 0)
         {
             return new WindowsCaptureResult(
                 WindowsCaptureOutcome.Unavailable,
@@ -132,6 +140,14 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
         ArgumentNullException.ThrowIfNull(target);
+        if (Volatile.Read(ref nativeRegionActive) != 0)
+        {
+            return new WindowsPrepareRegionResult(
+                false,
+                WindowsCaptureOutcome.Unavailable,
+                "Region capture is already in progress",
+                "A native Region capture is still active.");
+        }
         var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
         var lastAt = startedAt;
         await ReleaseFrozenRegionAsync();
@@ -281,6 +297,13 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(geometry);
+        if (Volatile.Read(ref nativeRegionActive) != 0)
+        {
+            return new WindowsCaptureResult(
+                WindowsCaptureOutcome.Unavailable,
+                "Region capture is already in progress",
+                "A native Region capture is still active.");
+        }
 
         FrozenRegionSession? session;
         lock (frozenLock)
@@ -334,10 +357,111 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
     public Task ReleaseRegionAsync(string sessionId) =>
         ReleaseFrozenRegionAsync(sessionId);
 
+    internal async Task<WindowsCaptureResult> CaptureNativeRegionAsync(
+        WindowsCaptureRequest request,
+        WindowsTargetCapability target,
+        INativeRegionOverlay overlay,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(overlay);
+        ThrowIfDisposed();
+        if (renderNativeRegion is null)
+        {
+            throw new InvalidOperationException("The native Region renderer is unavailable.");
+        }
+
+        if (!await nativeRegionGate.WaitAsync(0, cancellationToken))
+        {
+            return new WindowsCaptureResult(
+                WindowsCaptureOutcome.Unavailable,
+                "Region capture is already in progress",
+                "A native Region capture is still active.");
+        }
+
+        Volatile.Write(ref nativeRegionActive, 1);
+        try
+        {
+            ThrowIfDisposed();
+            using var sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                lifetimeCancellation.Token);
+            var sessionToken = sessionCancellation.Token;
+            if (HasFrozenRegion() || !target.SupportsRegionCapture)
+            {
+                return new WindowsCaptureResult(
+                    WindowsCaptureOutcome.Unavailable,
+                    "Region capture is unavailable",
+                    "The target cannot start a native Region capture.");
+            }
+
+            var acquired = await CaptureAsync(request, target, sessionToken, isNativeRegion: true);
+            if (acquired.HeldFrame is not { } held)
+            {
+                return acquired.Result;
+            }
+
+            // Acquisition has its own timeout. The selection lease starts with the frozen frame.
+            using (held)
+            {
+                WindowsRegionGeometry? geometry;
+                using (var lease = CancellationTokenSource.CreateLinkedTokenSource(sessionToken))
+                {
+                    lease.CancelAfter(RegionLeaseMilliseconds);
+                    using var surface = renderNativeRegion(
+                        held.Texture,
+                        ResolveVisualMatchContext(held.HdrCapability));
+                    geometry = await overlay.SelectAsync(surface, target, lease.Token);
+                    if (geometry is null || lease.IsCancellationRequested)
+                    {
+                        return Cancelled("Region selection was cancelled or expired.");
+                    }
+                }
+
+                CropPixelRect crop;
+                try
+                {
+                    crop = RegionCropResolver.Resolve(geometry, held.Target, held.CaptureTarget);
+                }
+                catch (ArgumentException exception)
+                {
+                    return new WindowsCaptureResult(
+                        WindowsCaptureOutcome.Unavailable,
+                        "Region capture is unavailable",
+                        exception.Message);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    return new WindowsCaptureResult(
+                        WindowsCaptureOutcome.Unavailable,
+                        "Region capture is unavailable",
+                        exception.Message);
+                }
+                return await DeliverHeldFrameAsync(
+                    request,
+                    held.Texture,
+                    held.HdrCapability,
+                    crop,
+                    sessionToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return Cancelled("Region selection was cancelled or expired.");
+        }
+        finally
+        {
+            Volatile.Write(ref nativeRegionActive, 0);
+            nativeRegionGate.Release();
+        }
+    }
+
     private async Task<CaptureAcquireResult> CaptureAsync(
         WindowsCaptureRequest request,
         WindowsTargetCapability? freezeTarget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool isNativeRegion = false)
     {
         ArgumentNullException.ThrowIfNull(request);
         ThrowIfDisposed();
@@ -359,6 +483,15 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
         try
         {
             ThrowIfDisposed();
+            if (!isNativeRegion && Volatile.Read(ref nativeRegionActive) != 0)
+            {
+                return new CaptureAcquireResult(
+                    new WindowsCaptureResult(
+                        WindowsCaptureOutcome.Unavailable,
+                        "Region capture is already in progress",
+                        "A native Region capture is still active."),
+                    null);
+            }
             using var diagnosticScope = SessionDiagnosticScope.Begin(
                 LoggerHolder.Value,
                 correlationId: request.CorrelationId);
@@ -741,16 +874,20 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
         }
 
         await lifetimeCancellation.CancelAsync();
+        await nativeRegionGate.WaitAsync();
         await operationGate.WaitAsync();
         try
         {
             await ReleaseFrozenRegionAsync();
+            nativeRegionRenderer?.Dispose();
             ownedResources?.Dispose();
         }
         finally
         {
             operationGate.Release();
             operationGate.Dispose();
+            nativeRegionGate.Release();
+            nativeRegionGate.Dispose();
             lifetimeCancellation.Dispose();
         }
     }

@@ -112,6 +112,133 @@ public sealed class WindowsDisplayCaptureEngineTests
     }
 
     [Fact]
+    public async Task NativeRegion_UsesOneFrozenFrameForPresentationAndDelivery()
+    {
+        var target = CreateTarget();
+        var output = new RecordingOutput();
+        var captures = 0;
+        var rendered = 0;
+        await using var engine = CreateEngine(
+            target,
+            (onFrame, _) =>
+            {
+                captures++;
+                onFrame(new CapturedFrameTexture(null, 2, 2, "frozen"));
+                return CaptureStartResult.StartSucceeded(
+                    new CaptureSessionResources(() => { }),
+                    EngineReadinessStatus.Initializing("Capture started"));
+            },
+            output,
+            renderNativeRegion: (source, _) =>
+            {
+                Assert.Equal("frozen", source.SourceDescription);
+                rendered++;
+                return new CapturedFrameTexture(null, 2, 2, "visual match");
+            });
+        var overlay = new FakeNativeOverlay((surface, _, _) =>
+        {
+            Assert.Equal("visual match", surface.SourceDescription);
+            return Task.FromResult<WindowsRegionGeometry?>(
+                new WindowsRegionGeometry(16, 12, 32, 24));
+        });
+
+        var result = await engine.CaptureNativeRegionAsync(
+            new WindowsCaptureRequest("native-region", OutputTarget.Folder, "C:\\captures"),
+            RegionTarget(target),
+            overlay);
+
+        Assert.Equal(WindowsCaptureOutcome.Delivered, result.Outcome);
+        Assert.Equal(new CropPixelRect(0, 0, 2, 2), output.Request?.CropRegion);
+        Assert.Equal("frozen", output.Request?.Texture.SourceDescription);
+        Assert.Equal(1, captures);
+        Assert.Equal(1, rendered);
+    }
+
+    [Fact]
+    public async Task NativeRegion_CancellationReleasesSelectionAndRejectsConcurrentCapture()
+    {
+        var target = CreateTarget();
+        var selecting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var overlay = new FakeNativeOverlay(async (_, _, token) =>
+        {
+            selecting.SetResult();
+            await Task.Delay(Timeout.Infinite, token);
+            return null;
+        });
+        await using var engine = CreateEngine(
+            target,
+            (onFrame, _) =>
+            {
+                onFrame(new CapturedFrameTexture(null, 2, 2, "frozen"));
+                return CaptureStartResult.StartSucceeded(
+                    new CaptureSessionResources(() => { }),
+                    EngineReadinessStatus.Initializing("Capture started"));
+            },
+            renderNativeRegion: (_, _) => new CapturedFrameTexture(null, 2, 2, "visual match"));
+        using var cancellation = new CancellationTokenSource();
+        var capture = engine.CaptureNativeRegionAsync(
+            new WindowsCaptureRequest("native-cancel", OutputTarget.Folder, "C:\\captures"),
+            RegionTarget(target),
+            overlay,
+            cancellation.Token);
+        await selecting.Task;
+
+        var competing = await engine.CaptureDisplayAsync(
+            new WindowsCaptureRequest("competing", OutputTarget.Folder, "C:\\captures"));
+        Assert.Equal(WindowsCaptureOutcome.Unavailable, competing.Outcome);
+
+        await cancellation.CancelAsync();
+        Assert.Equal(WindowsCaptureOutcome.Cancelled, (await capture).Outcome);
+        Assert.Equal(WindowsCaptureOutcome.Delivered,
+            (await engine.CaptureDisplayAsync(
+                new WindowsCaptureRequest("after-cancel", OutputTarget.Folder, "C:\\captures"))).Outcome);
+    }
+
+    [Fact]
+    public async Task NativeRegion_EngineExitCancelsSelectionBeforeDisposingResources()
+    {
+        var target = CreateTarget();
+        var selecting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var selectionEnded = false;
+        var rendererDisposedAfterSelection = false;
+        var overlay = new FakeNativeOverlay(async (_, _, token) =>
+        {
+            selecting.SetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            finally
+            {
+                selectionEnded = true;
+            }
+            return null;
+        });
+        var engine = CreateEngine(
+            target,
+            (onFrame, _) =>
+            {
+                onFrame(new CapturedFrameTexture(null, 2, 2, "frozen"));
+                return CaptureStartResult.StartSucceeded(
+                    new CaptureSessionResources(() => { }),
+                    EngineReadinessStatus.Initializing("Capture started"));
+            },
+            renderNativeRegion: (_, _) => new CapturedFrameTexture(null, 2, 2, "visual match"),
+            nativeRegionRenderer: new ActionDisposable(
+                () => rendererDisposedAfterSelection = selectionEnded));
+
+        var capture = engine.CaptureNativeRegionAsync(
+            new WindowsCaptureRequest("native-exit", OutputTarget.Folder, "C:\\captures"),
+            RegionTarget(target),
+            overlay);
+        await selecting.Task;
+        await engine.DisposeAsync();
+
+        Assert.Equal(WindowsCaptureOutcome.Cancelled, (await capture).Outcome);
+        Assert.True(rendererDisposedAfterSelection);
+    }
+
+    [Fact]
     public async Task CaptureDisplayAsync_MapsTargetResolutionFailureToUnavailable()
     {
         await using var engine = new WindowsDisplayCaptureEngine(
@@ -218,7 +345,9 @@ public sealed class WindowsDisplayCaptureEngineTests
         Func<Action<CapturedFrameTexture>, Action<EngineReadinessStatus>, CaptureStartResult> startCapture,
         IOutputService? output = null,
         HdrDisplayCapability? hdrCapability = null,
-        IRegionPreviewEncoder? previewEncoder = null) =>
+        IRegionPreviewEncoder? previewEncoder = null,
+        Func<CapturedFrameTexture, SrgbVisualMatchConversionContext, CapturedFrameTexture>? renderNativeRegion = null,
+        IDisposable? nativeRegionRenderer = null) =>
         new(
             command => CaptureCommandResult.Accepted(command),
             _ => { },
@@ -231,7 +360,15 @@ public sealed class WindowsDisplayCaptureEngineTests
                 "test display"),
             (_, onFrame, onFailure) => startCapture(onFrame, onFailure),
             output ?? new SuccessfulOutput(),
-            previewEncoder ?? new SuccessfulPreviewEncoder());
+            previewEncoder ?? new SuccessfulPreviewEncoder(),
+            renderNativeRegion: renderNativeRegion,
+            nativeRegionRenderer: nativeRegionRenderer);
+
+    private static WindowsTargetCapability RegionTarget(CaptureTarget target) =>
+        WindowsTargetCapability.CreateForTest(
+            WindowsTargetHdrState.Inactive,
+            new WindowsTargetLogicalSize(64, 48),
+            target);
 
     private static CaptureTarget CreateTarget() =>
         CaptureTarget.CreateForTest(
@@ -294,6 +431,22 @@ public sealed class WindowsDisplayCaptureEngineTests
             RequestedSize = (outputWidth, outputHeight);
             return Task.FromResult(new RegionPreviewArtifact(PreviewPng, outputWidth, outputHeight));
         }
+    }
+
+    private sealed class FakeNativeOverlay(
+        Func<CapturedFrameTexture, WindowsTargetCapability, CancellationToken,
+            Task<WindowsRegionGeometry?>> select) : INativeRegionOverlay
+    {
+        public Task<WindowsRegionGeometry?> SelectAsync(
+            CapturedFrameTexture visualMatchSurface,
+            WindowsTargetCapability target,
+            CancellationToken cancellationToken) =>
+            select(visualMatchSurface, target, cancellationToken);
+    }
+
+    private sealed class ActionDisposable(Action action) : IDisposable
+    {
+        public void Dispose() => action();
     }
 
     private static readonly byte[] PreviewPng = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
