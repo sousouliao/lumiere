@@ -72,6 +72,8 @@ const latestReleasePageUrl = 'https://github.com/Mournerliao/lumiere/releases/la
 const macOSBundleIdentifier = 'io.github.sousouliao.lumiere'
 const macOSPermissionResetCommand = `/usr/bin/tccutil reset ScreenCapture ${macOSBundleIdentifier}`
 const processStartedAt = Date.now() - process.uptime() * 1_000
+const useElectronRegionOverlay =
+  process.platform === 'win32' && process.env.LUMIERE_WINDOWS_REGION_OVERLAY === 'electron'
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('io.github.sousouliao.lumiere')
@@ -304,7 +306,7 @@ function registerIpc(): void {
     platformHost,
     settingsStore,
   ))
-  if (process.platform === 'win32')
+  if (useElectronRegionOverlay)
     regionOverlayController ??= new RegionOverlayController({
       preloadPath: join(__dirname, '../preload/index.js'),
       rendererDirectory: join(__dirname, '../renderer'),
@@ -795,7 +797,7 @@ async function captureRegion(router: CaptureCommandRouter): Promise<CaptureComma
   return result
 }
 
-async function captureNativeMacRegion(router: CaptureCommandRouter): Promise<CaptureCommandResult> {
+async function captureNativeRegion(router: CaptureCommandRouter): Promise<CaptureCommandResult> {
   const timingStartedAt = performance.now()
   reportRegionCaptureTiming('command-received', timingStartedAt)
   const restoreMainWindow = mainWindow?.isVisible() === true && !mainWindow.isMinimized()
@@ -1113,9 +1115,7 @@ async function runCapture(mode: 'region' | 'display'): Promise<CaptureCommandRes
     async () => {
       return completeCapture(
         mode === 'region'
-          ? await (process.platform === 'darwin'
-              ? captureNativeMacRegion(router)
-              : captureRegion(router))
+          ? await (useElectronRegionOverlay ? captureRegion(router) : captureNativeRegion(router))
           : await router.captureDisplay(),
       )
     },
@@ -1312,7 +1312,7 @@ function createPlatformHost(): PlatformHost {
 }
 
 void app.whenReady().then(async () => {
-  if (process.platform === 'win32') registerRegionPreviewProtocol()
+  if (useElectronRegionOverlay) registerRegionPreviewProtocol()
   platformHost = createPlatformHost()
   const userDataPath = app.getPath('userData')
   settingsStore = new SettingsStore(join(userDataPath, 'settings.json'))

@@ -7,13 +7,13 @@
 
 ## Current Position
 
-Electron/React drives Swift and .NET Hosts through platform-host v5 JSON Lines.
-Display and frozen-frame Region capture support Clipboard, Folder, and Both delivery.
+Electron/React drives Swift and .NET Hosts through platform-host JSON Lines. Display
+capture and capability polling use v5; native Region requests use v6 on both platforms.
+Display and Region capture support Clipboard, Folder, and Both delivery.
 Main owns persisted output, save-directory, shortcut, after-capture, and HDR-reminder
-settings. Region uses a logical-resolution preview and crops the retained backing frame;
-the reusable Overlay and native preparation run in parallel. During Region selection,
-pointer display changes serially replace the native frozen session, preview, and Overlay
-bounds through Host-issued opaque target tokens.
+settings. Native Region presents the retained full-resolution Visual Match frame and
+crops that same backing frame after selection. Windows retains its v5 Electron preview
+path only as an explicit diagnostic fallback (`LUMIERE_WINDOWS_REGION_OVERLAY=electron`).
 The desktop shell starts resident without showing its main window: macOS runs as a
 menu-bar-only accessory app, while Windows retains the corresponding tray behavior in
 source pending current runtime verification. Explicit open/settings actions reveal the
@@ -93,23 +93,27 @@ to its prewarmed AppKit Host and no longer creates the Electron Region Overlay;
 capabilities and Display capture remain on v5. The Windows Host now accepts v6 native
 Region capture and request-ID cancellation: an owned STA window presents the frozen
 full-resolution GPU Visual Match surface and returns geometry for same-frame delivery.
-The Windows Shell still uses the v5 Electron overlay while native behavior is verified.
+The Windows Shell now routes Region to v6 by default while native behavior is verified.
 On the named 3840×2160 SDR target at 150% scaling, one direct Host EXE smoke produced a
 225×150 sRGB PNG from a 150×100 logical selection; this used synthetic window messages
 and does not certify interactive input or presentation. `pwsh ./hosts/windows/scripts/verify.ps1`
 passes (Host 41, Capture 93, Graphics 50, Interop 35 tests); `pnpm check`,
 `pnpm test:shared` (31 files, 187 tests), and `pnpm build` pass on Windows. Native
 HDR and multi-display runtime behavior, packaged Shell routing, and recorded hot
-shortcut-to-visible latency remain to verify before the Windows cutover.
+shortcut-to-visible latency remain to verify before accepting the Windows cutover.
+Three direct Host EXE timing probes on this SDR target measured 566 ms cold and 58/56 ms
+hot from JSONL write to visible HWND (10 ms polling); they do not include Electron,
+physical shortcut input, or a packaged build.
 Both macOS application architectures package with the matching Host. The packaged arm64
 native overlay was observed with the frozen full-screen image, dimming, crosshair, hint,
 and input focus. A background-shortcut stall (Host stdin write deferred behind a microtask
 after the native shortcut callback) is fixed; with the main window closed, 23 packaged
 arm64 presses reached AppKit-visible at software-endpoint p90 151 ms, without physical-key
 or recorded corroboration. Packaged selection delivery and recorded ≥30-sample
-shortcut-to-visible timing remain open. Next: verify Windows native presentation and
-selection with physical input on named SDR/HDR and multi-display targets, record the
-packaged hot latency series, then switch the Windows Shell and retire its v5 overlay.
+shortcut-to-visible timing remain open. Next: restart the Windows development app on
+this checkout and verify native presentation and selection with physical input on named
+SDR/HDR and multi-display targets, then record the packaged hot latency series and
+retire the v5 Electron fallback.
 Finish the two targeted macOS runtime checks before removing the staged v5 Region path.
 ADR 0018 continues to permit unsigned Windows stable distribution; broad fidelity,
 fresh-machine installation, and HDR-preserved export remain separate work.

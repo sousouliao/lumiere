@@ -40,6 +40,11 @@ native target snapshot. `prepareRegion` copies the first complete WGC frame into
 application-owned texture; `commitRegion` crops that frozen frame to an outward-aligned
 pixel rectangle inside the native boundary.
 
+The Windows Shell sends Region through the v6 native Host path by default. For targeted
+comparison with the previous Electron preview overlay, set
+`LUMIERE_WINDOWS_REGION_OVERLAY=electron` before starting the desktop app. This is a
+diagnostic fallback, not the native runtime verification path.
+
 ## Truth Boundary
 
 A passing Host handshake does not prove native capture, HDR Visual Match, or hardware
