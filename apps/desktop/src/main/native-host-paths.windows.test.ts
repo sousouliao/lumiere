@@ -22,8 +22,8 @@ describe('Windows native host paths', () => {
         resourcesPath: String.raw`D:\unused`,
       }),
     ).toEqual([
-      String.raw`D:\workspace\lumiere\hosts\windows\src\Lumiere.Windows.Host\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\Lumiere.Windows.Host.exe`,
-      String.raw`D:\workspace\lumiere\hosts\windows\src\Lumiere.Windows.Host\bin\x64\Release\net10.0-windows10.0.19041.0\win-x64\Lumiere.Windows.Host.exe`,
+      String.raw`D:\workspace\lumiere\hosts\windows\src\Lumiere.Windows.Host\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\Lumiere.Windows.Host.exe`,
+      String.raw`D:\workspace\lumiere\hosts\windows\src\Lumiere.Windows.Host\bin\x64\Release\net10.0-windows10.0.26100.0\win-x64\Lumiere.Windows.Host.exe`,
     ])
   })
 

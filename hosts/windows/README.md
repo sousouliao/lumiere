@@ -31,7 +31,7 @@ process needs a structured stderr logger.
 
 The executable conforms to `../../protocol/platform-host/v2.schema.json`. A Debug build
 lives at
-`src/Lumiere.Windows.Host/bin/x64/Debug/net10.0-windows10.0.19041.0/win-x64/Lumiere.Windows.Host.exe`;
+`src/Lumiere.Windows.Host/bin/x64/Debug/net10.0-windows10.0.26100.0/win-x64/Lumiere.Windows.Host.exe`;
 the Electron development launcher builds and selects that artifact before a Release
 fallback. `LUMIERE_WINDOWS_HOST_PATH` remains the authoritative development override.
 

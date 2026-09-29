@@ -36,6 +36,6 @@ export function windowsHostCandidates(options: NativeHostPathOptions): readonly 
     options.appPath,
     '../../hosts/windows/src/Lumiere.Windows.Host/bin/x64',
   )
-  const target = 'net10.0-windows10.0.19041.0/win-x64/Lumiere.Windows.Host.exe'
+  const target = 'net10.0-windows10.0.26100.0/win-x64/Lumiere.Windows.Host.exe'
   return [path.win32.join(hostRoot, 'Debug', target), path.win32.join(hostRoot, 'Release', target)]
 }
