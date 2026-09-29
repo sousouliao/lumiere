@@ -21,19 +21,24 @@ public sealed class WindowsTargetCapability
     public WindowsTargetCapability(
         WindowsTargetHdrState hdrState,
         WindowsTargetLogicalSize? logicalSize)
-        : this(hdrState, logicalSize, pixelWidth: null, pixelHeight: null, captureTargetFactory: null)
+        : this(hdrState, logicalSize, pixelLeft: null, pixelTop: null,
+            pixelWidth: null, pixelHeight: null, captureTargetFactory: null)
     {
     }
 
     internal WindowsTargetCapability(
         WindowsTargetHdrState hdrState,
         WindowsTargetLogicalSize? logicalSize,
+        int? pixelLeft,
+        int? pixelTop,
         int? pixelWidth,
         int? pixelHeight,
         Func<CaptureTarget>? captureTargetFactory)
     {
         HdrState = hdrState;
         LogicalSize = logicalSize;
+        PixelLeft = pixelLeft;
+        PixelTop = pixelTop;
         PixelWidth = pixelWidth;
         PixelHeight = pixelHeight;
         this.captureTargetFactory = captureTargetFactory;
@@ -48,6 +53,13 @@ public sealed class WindowsTargetCapability
         && PixelWidth is > 0
         && PixelHeight is > 0
         && captureTargetFactory is not null;
+
+    internal bool SupportsNativeRegionCapture =>
+        SupportsRegionCapture && PixelLeft is not null && PixelTop is not null;
+
+    internal int? PixelLeft { get; }
+
+    internal int? PixelTop { get; }
 
     internal int? PixelWidth { get; }
 
@@ -64,6 +76,8 @@ public sealed class WindowsTargetCapability
         new(
             hdrState,
             logicalSize,
+            target.DisplayIdentity?.Left,
+            target.DisplayIdentity?.Top,
             target.Size.Width,
             target.Size.Height,
             () => target);
@@ -107,6 +121,8 @@ public sealed class WindowsTargetCapabilityProvider
                 logicalSize is { } size
                     ? new WindowsTargetLogicalSize(size.Width, size.Height)
                     : null,
+                monitor.Left,
+                monitor.Top,
                 monitor.Width,
                 monitor.Height,
                 () => WindowsDisplayTargetFactory.Create(monitor));

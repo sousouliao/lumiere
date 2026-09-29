@@ -138,13 +138,13 @@ public sealed class WindowsDisplayCaptureEngineTests
         var overlay = new FakeNativeOverlay((surface, _, _) =>
         {
             Assert.Equal("visual match", surface.SourceDescription);
-            return Task.FromResult<WindowsRegionGeometry?>(
-                new WindowsRegionGeometry(16, 12, 32, 24));
+            return Task.FromResult(NativeRegionOverlayResult.Selected(
+                new WindowsRegionGeometry(16, 12, 32, 24)));
         });
 
         var result = await engine.CaptureNativeRegionAsync(
             new WindowsCaptureRequest("native-region", OutputTarget.Folder, "C:\\captures"),
-            RegionTarget(target),
+            () => RegionTarget(target),
             overlay);
 
         Assert.Equal(WindowsCaptureOutcome.Delivered, result.Outcome);
@@ -152,6 +152,52 @@ public sealed class WindowsDisplayCaptureEngineTests
         Assert.Equal("frozen", output.Request?.Texture.SourceDescription);
         Assert.Equal(1, captures);
         Assert.Equal(1, rendered);
+    }
+
+    [Fact]
+    public async Task NativeRegion_SwitchReleasesOldFrameAndCapturesLatestTarget()
+    {
+        var target = CreateTarget();
+        var output = new RecordingOutput();
+        var captures = 0;
+        var targetResolutions = 0;
+        var presentations = 0;
+        await using var engine = CreateEngine(
+            target,
+            (onFrame, _) =>
+            {
+                captures++;
+                onFrame(new CapturedFrameTexture(null, 2, 2, $"frame-{captures}"));
+                return CaptureStartResult.StartSucceeded(
+                    new CaptureSessionResources(() => { }),
+                    EngineReadinessStatus.Initializing("Capture started"));
+            },
+            output,
+            renderNativeRegion: (source, _) =>
+                new CapturedFrameTexture(null, 2, 2, source.SourceDescription));
+        var overlay = new FakeNativeOverlay((surface, _, _) =>
+        {
+            presentations++;
+            Assert.Equal($"frame-{presentations}", surface.SourceDescription);
+            return Task.FromResult(presentations == 1
+                ? NativeRegionOverlayResult.SwitchTarget
+                : NativeRegionOverlayResult.Selected(new WindowsRegionGeometry(16, 12, 32, 24)));
+        });
+
+        var result = await engine.CaptureNativeRegionAsync(
+            new WindowsCaptureRequest("native-switch", OutputTarget.Folder, "C:\\captures"),
+            () =>
+            {
+                targetResolutions++;
+                return RegionTarget(target);
+            },
+            overlay);
+
+        Assert.Equal(WindowsCaptureOutcome.Delivered, result.Outcome);
+        Assert.Equal("frame-2", output.Request?.Texture.SourceDescription);
+        Assert.Equal(2, captures);
+        Assert.Equal(2, presentations);
+        Assert.Equal(2, targetResolutions);
     }
 
     [Fact]
@@ -163,7 +209,7 @@ public sealed class WindowsDisplayCaptureEngineTests
         {
             selecting.SetResult();
             await Task.Delay(Timeout.Infinite, token);
-            return null;
+            return NativeRegionOverlayResult.Cancelled;
         });
         await using var engine = CreateEngine(
             target,
@@ -178,7 +224,7 @@ public sealed class WindowsDisplayCaptureEngineTests
         using var cancellation = new CancellationTokenSource();
         var capture = engine.CaptureNativeRegionAsync(
             new WindowsCaptureRequest("native-cancel", OutputTarget.Folder, "C:\\captures"),
-            RegionTarget(target),
+            () => RegionTarget(target),
             overlay,
             cancellation.Token);
         await selecting.Task;
@@ -212,7 +258,7 @@ public sealed class WindowsDisplayCaptureEngineTests
             {
                 selectionEnded = true;
             }
-            return null;
+            return NativeRegionOverlayResult.Cancelled;
         });
         var engine = CreateEngine(
             target,
@@ -229,7 +275,7 @@ public sealed class WindowsDisplayCaptureEngineTests
 
         var capture = engine.CaptureNativeRegionAsync(
             new WindowsCaptureRequest("native-exit", OutputTarget.Folder, "C:\\captures"),
-            RegionTarget(target),
+            () => RegionTarget(target),
             overlay);
         await selecting.Task;
         await engine.DisposeAsync();
@@ -435,9 +481,9 @@ public sealed class WindowsDisplayCaptureEngineTests
 
     private sealed class FakeNativeOverlay(
         Func<CapturedFrameTexture, WindowsTargetCapability, CancellationToken,
-            Task<WindowsRegionGeometry?>> select) : INativeRegionOverlay
+            Task<NativeRegionOverlayResult>> select) : INativeRegionOverlay
     {
-        public Task<WindowsRegionGeometry?> SelectAsync(
+        public Task<NativeRegionOverlayResult> SelectAsync(
             CapturedFrameTexture visualMatchSurface,
             WindowsTargetCapability target,
             CancellationToken cancellationToken) =>

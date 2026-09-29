@@ -359,12 +359,12 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
 
     internal async Task<WindowsCaptureResult> CaptureNativeRegionAsync(
         WindowsCaptureRequest request,
-        WindowsTargetCapability target,
+        Func<WindowsTargetCapability?> getCurrentTarget,
         INativeRegionOverlay overlay,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(getCurrentTarget);
         ArgumentNullException.ThrowIfNull(overlay);
         ThrowIfDisposed();
         if (renderNativeRegion is null)
@@ -388,62 +388,84 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
                 cancellationToken,
                 lifetimeCancellation.Token);
             var sessionToken = sessionCancellation.Token;
-            if (HasFrozenRegion() || !target.SupportsRegionCapture)
+            if (HasFrozenRegion())
             {
                 return new WindowsCaptureResult(
                     WindowsCaptureOutcome.Unavailable,
                     "Region capture is unavailable",
-                    "The target cannot start a native Region capture.");
+                    "A frozen Region capture is still active.");
             }
 
-            var acquired = await CaptureAsync(request, target, sessionToken, isNativeRegion: true);
-            if (acquired.HeldFrame is not { } held)
+            while (true)
             {
-                return acquired.Result;
-            }
-
-            // Acquisition has its own timeout. The selection lease starts with the frozen frame.
-            using (held)
-            {
-                WindowsRegionGeometry? geometry;
-                using (var lease = CancellationTokenSource.CreateLinkedTokenSource(sessionToken))
+                sessionToken.ThrowIfCancellationRequested();
+                var target = getCurrentTarget();
+                if (target?.SupportsNativeRegionCapture != true)
                 {
-                    lease.CancelAfter(RegionLeaseMilliseconds);
-                    using var surface = renderNativeRegion(
-                        held.Texture,
-                        ResolveVisualMatchContext(held.HdrCapability));
-                    geometry = await overlay.SelectAsync(surface, target, lease.Token);
-                    if (geometry is null || lease.IsCancellationRequested)
+                    return new WindowsCaptureResult(
+                        WindowsCaptureOutcome.Unavailable,
+                        "Region capture is unavailable",
+                        "The current target cannot start a native Region capture.");
+                }
+
+                var acquired = await CaptureAsync(request, target, sessionToken, isNativeRegion: true);
+                if (acquired.HeldFrame is not { } held)
+                {
+                    return acquired.Result;
+                }
+
+                // Each frozen frame gets its own selection lease after acquisition.
+                using (held)
+                {
+                    NativeRegionOverlayResult selection;
+                    using (var lease = CancellationTokenSource.CreateLinkedTokenSource(sessionToken))
                     {
-                        return Cancelled("Region selection was cancelled or expired.");
+                        lease.CancelAfter(RegionLeaseMilliseconds);
+                        using var surface = renderNativeRegion(
+                            held.Texture,
+                            ResolveVisualMatchContext(held.HdrCapability));
+                        selection = await overlay.SelectAsync(surface, target, lease.Token);
+                        if (lease.IsCancellationRequested)
+                        {
+                            return Cancelled("Region selection was cancelled or expired.");
+                        }
                     }
-                }
 
-                CropPixelRect crop;
-                try
-                {
-                    crop = RegionCropResolver.Resolve(geometry, held.Target, held.CaptureTarget);
+                    if (selection.Action == NativeRegionOverlayAction.SwitchTarget)
+                    {
+                        continue;
+                    }
+                    if (selection is not { Action: NativeRegionOverlayAction.Selected, Geometry: { } geometry })
+                    {
+                        return Cancelled("Region selection was cancelled.");
+                    }
+
+                    CropPixelRect crop;
+                    try
+                    {
+                        crop = RegionCropResolver.Resolve(geometry, held.Target, held.CaptureTarget);
+                    }
+                    catch (ArgumentException exception)
+                    {
+                        return new WindowsCaptureResult(
+                            WindowsCaptureOutcome.Unavailable,
+                            "Region capture is unavailable",
+                            exception.Message);
+                    }
+                    catch (InvalidOperationException exception)
+                    {
+                        return new WindowsCaptureResult(
+                            WindowsCaptureOutcome.Unavailable,
+                            "Region capture is unavailable",
+                            exception.Message);
+                    }
+                    return await DeliverHeldFrameAsync(
+                        request,
+                        held.Texture,
+                        held.HdrCapability,
+                        crop,
+                        sessionToken);
                 }
-                catch (ArgumentException exception)
-                {
-                    return new WindowsCaptureResult(
-                        WindowsCaptureOutcome.Unavailable,
-                        "Region capture is unavailable",
-                        exception.Message);
-                }
-                catch (InvalidOperationException exception)
-                {
-                    return new WindowsCaptureResult(
-                        WindowsCaptureOutcome.Unavailable,
-                        "Region capture is unavailable",
-                        exception.Message);
-                }
-                return await DeliverHeldFrameAsync(
-                    request,
-                    held.Texture,
-                    held.HdrCapability,
-                    crop,
-                    sessionToken);
             }
         }
         catch (OperationCanceledException)

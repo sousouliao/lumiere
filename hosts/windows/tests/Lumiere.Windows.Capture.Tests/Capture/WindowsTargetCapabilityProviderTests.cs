@@ -46,6 +46,32 @@ public sealed class WindowsTargetCapabilityProviderTests
     }
 
     [Fact]
+    public void NativeRegionPreservesNegativePhysicalMonitorOrigin()
+    {
+        var monitor = new MonitorHandle(
+            (nint)42,
+            @"\\.\DISPLAY2",
+            Left: -3840,
+            Top: -240,
+            Width: 3840,
+            Height: 2160,
+            EffectiveDpiX: 144,
+            EffectiveDpiY: 144);
+        var provider = new WindowsTargetCapabilityProvider(
+            () => monitor,
+            _ => new HdrDisplayCapability(HdrDisplayState.Active, null, @"\\.\DISPLAY2"));
+
+        var capability = provider.GetCurrent();
+
+        Assert.NotNull(capability);
+        Assert.True(capability.SupportsNativeRegionCapture);
+        Assert.Equal(-3840, capability.PixelLeft);
+        Assert.Equal(-240, capability.PixelTop);
+        Assert.Equal(3840, capability.PixelWidth);
+        Assert.Equal(2160, capability.PixelHeight);
+    }
+
+    [Fact]
     public void CalculatesTargetLocalLogicalSizeFromEffectiveDpi()
     {
         var monitor = new MonitorHandle(
