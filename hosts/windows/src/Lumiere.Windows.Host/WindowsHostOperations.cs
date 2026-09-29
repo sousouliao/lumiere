@@ -25,6 +25,14 @@ public interface IWindowsCaptureEngine : IAsyncDisposable
     Task ReleaseRegionAsync(string sessionId);
 }
 
+internal interface IWindowsNativeRegionCaptureEngine
+{
+    Task<WindowsCaptureResult> CaptureNativeRegionAsync(
+        WindowsCaptureRequest request,
+        Func<WindowsTargetCapability?> getCurrentTarget,
+        CancellationToken cancellationToken);
+}
+
 public sealed class WindowsHostOperations : IWindowsHostOperations
 {
     private const int IssuedTargetLimit = 8;
@@ -90,7 +98,7 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
         this.outputDirectory = outputDirectory ?? throw new ArgumentNullException(nameof(outputDirectory));
         this.createDirectory = createDirectory ?? throw new ArgumentNullException(nameof(createDirectory));
         this.logger = logger ?? NullLogger.Instance;
-        nativeRegionCapture = NativeRegionUnavailableAsync;
+        nativeRegionCapture = CaptureNativeRegionDefaultAsync;
     }
 
     public HostCapabilities GetCapabilities()
@@ -199,6 +207,24 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
                 "capture-unavailable",
                 "Native Region capture is not yet available on Windows.",
                 Retryable: false)));
+
+    private Task<HostCaptureResult> CaptureNativeRegionDefaultAsync(
+        string requestId,
+        HostCaptureRequest request,
+        CancellationToken cancellationToken) =>
+        ExecuteCaptureAsync(
+            requestId,
+            request.Delivery,
+            request.SaveDirectory,
+            captureMode: "region",
+            (engine, captureRequest, token) =>
+                engine is IWindowsNativeRegionCaptureEngine native
+                    ? native.CaptureNativeRegionAsync(captureRequest, getTargetCapability, token)
+                    : Task.FromResult(new WindowsCaptureResult(
+                        WindowsCaptureOutcome.Unavailable,
+                        "Native Region capture is unavailable",
+                        "The capture engine does not support a native Region overlay.")),
+            cancellationToken);
 
     public async Task<HostPrepareRegionResult> PrepareRegionAsync(
         string requestId,
@@ -606,7 +632,7 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
     }
 
     private sealed class WindowsDisplayCaptureEngineAdapter(WindowsDisplayCaptureEngine inner)
-        : IWindowsCaptureEngine
+        : IWindowsCaptureEngine, IWindowsNativeRegionCaptureEngine
     {
         public Task<WindowsCaptureResult> CaptureDisplayAsync(
             WindowsCaptureRequest request,
@@ -628,6 +654,12 @@ public sealed class WindowsHostOperations : IWindowsHostOperations
 
         public Task ReleaseRegionAsync(string sessionId) =>
             inner.ReleaseRegionAsync(sessionId);
+
+        public Task<WindowsCaptureResult> CaptureNativeRegionAsync(
+            WindowsCaptureRequest request,
+            Func<WindowsTargetCapability?> getCurrentTarget,
+            CancellationToken cancellationToken) =>
+            inner.CaptureNativeRegionAsync(request, getCurrentTarget, cancellationToken);
 
         public ValueTask DisposeAsync() => inner.DisposeAsync();
     }

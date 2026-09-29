@@ -33,6 +33,7 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
     private readonly Func<CapturedFrameTexture, CapturedFrameTexture> copyOwnedFrame;
     private readonly Func<CapturedFrameTexture, SrgbVisualMatchConversionContext, CapturedFrameTexture>? renderNativeRegion;
     private readonly IDisposable? nativeRegionRenderer;
+    private readonly INativeRegionOverlay? nativeRegionOverlay;
     private readonly IDisposable? ownedResources;
     private readonly TimeSpan frameTimeout;
     private readonly SemaphoreSlim operationGate = new(1, 1);
@@ -55,7 +56,8 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
         TimeSpan? frameTimeout = null,
         Func<CapturedFrameTexture, CapturedFrameTexture>? copyOwnedFrame = null,
         Func<CapturedFrameTexture, SrgbVisualMatchConversionContext, CapturedFrameTexture>? renderNativeRegion = null,
-        IDisposable? nativeRegionRenderer = null)
+        IDisposable? nativeRegionRenderer = null,
+        INativeRegionOverlay? nativeRegionOverlay = null)
     {
         this.reserveCommand = reserveCommand ?? throw new ArgumentNullException(nameof(reserveCommand));
         this.updateSessionState = updateSessionState ?? throw new ArgumentNullException(nameof(updateSessionState));
@@ -67,6 +69,7 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
         this.copyOwnedFrame = copyOwnedFrame ?? (frame => frame);
         this.renderNativeRegion = renderNativeRegion;
         this.nativeRegionRenderer = nativeRegionRenderer;
+        this.nativeRegionOverlay = nativeRegionOverlay;
         this.ownedResources = ownedResources;
         this.frameTimeout = frameTimeout ?? DefaultFrameTimeout;
         if (this.frameTimeout <= TimeSpan.Zero)
@@ -86,6 +89,8 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(borderOptions);
         var deviceResources = new GraphicsDeviceProvider().CreateDevice();
+        GpuVisualMatchSurface? nativeRenderer = null;
+        NativeRegionOverlayWindow? nativeOverlay = null;
         try
         {
             var captureService = new CaptureService(deviceResources, borderOptions);
@@ -95,6 +100,8 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
             var output = ConfiguredOutputService.CreateDefault(deviceResources);
             var regionPreviewEncoder = new SrgbRegionPreviewEncoder(
                 new CapturedFrameTextureReadback(deviceResources));
+            nativeRenderer = new GpuVisualMatchSurface(deviceResources);
+            nativeOverlay = new NativeRegionOverlayWindow(deviceResources);
 
             return new WindowsDisplayCaptureEngine(
                 captureService.TryReserveCommand,
@@ -105,10 +112,15 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
                 output,
                 regionPreviewEncoder,
                 deviceResources,
-                copyOwnedFrame: captureService.CopyToOwnedTexture);
+                copyOwnedFrame: captureService.CopyToOwnedTexture,
+                renderNativeRegion: nativeRenderer.Render,
+                nativeRegionRenderer: nativeRenderer,
+                nativeRegionOverlay: nativeOverlay);
         }
         catch
         {
+            nativeOverlay?.Dispose();
+            nativeRenderer?.Dispose();
             deviceResources.Dispose();
             throw;
         }
@@ -407,6 +419,15 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
                         "Region capture is unavailable",
                         "The current target cannot start a native Region capture.");
                 }
+                LoggerHolder.Value.LogInformation(
+                    "operation=NativeRegionTarget, correlation={CorrelationId}, logicalWidth={LogicalWidth}, logicalHeight={LogicalHeight}, pixelWidth={PixelWidth}, pixelHeight={PixelHeight}, left={Left}, top={Top}",
+                    request.CorrelationId,
+                    target.LogicalSize!.Width,
+                    target.LogicalSize.Height,
+                    target.PixelWidth,
+                    target.PixelHeight,
+                    target.PixelLeft,
+                    target.PixelTop);
 
                 var acquired = await CaptureAsync(request, target, sessionToken, isNativeRegion: true);
                 if (acquired.HeldFrame is not { } held)
@@ -459,6 +480,17 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
                             "Region capture is unavailable",
                             exception.Message);
                     }
+                    LoggerHolder.Value.LogInformation(
+                        "operation=NativeRegionCrop, correlation={CorrelationId}, logicalX={X}, logicalY={Y}, logicalWidth={Width}, logicalHeight={Height}, pixelLeft={PixelLeft}, pixelTop={PixelTop}, pixelWidth={PixelWidth}, pixelHeight={PixelHeight}",
+                        request.CorrelationId,
+                        geometry.X,
+                        geometry.Y,
+                        geometry.Width,
+                        geometry.Height,
+                        crop.X,
+                        crop.Y,
+                        crop.Width,
+                        crop.Height);
                     return await DeliverHeldFrameAsync(
                         request,
                         held.Texture,
@@ -478,6 +510,16 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
             nativeRegionGate.Release();
         }
     }
+
+    internal Task<WindowsCaptureResult> CaptureNativeRegionAsync(
+        WindowsCaptureRequest request,
+        Func<WindowsTargetCapability?> getCurrentTarget,
+        CancellationToken cancellationToken = default) =>
+        CaptureNativeRegionAsync(
+            request,
+            getCurrentTarget,
+            nativeRegionOverlay ?? throw new InvalidOperationException("Native Region overlay is unavailable."),
+            cancellationToken);
 
     private async Task<CaptureAcquireResult> CaptureAsync(
         WindowsCaptureRequest request,
@@ -901,6 +943,7 @@ public sealed class WindowsDisplayCaptureEngine : IAsyncDisposable
         try
         {
             await ReleaseFrozenRegionAsync();
+            (nativeRegionOverlay as IDisposable)?.Dispose();
             nativeRegionRenderer?.Dispose();
             ownedResources?.Dispose();
         }
