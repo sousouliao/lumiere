@@ -1,6 +1,7 @@
 # Windows Engine Development Runbook
 
-Windows host adaptation is active. The repository contains a platform-host v5 executable
+Windows host adaptation is active. The repository contains a platform-host executable
+using v5 for capabilities/Display and v6 for native Region and request-id cancellation,
 with a capability handshake plus the three retained native libraries. Windows is required
 for .NET restore, Release build, tests, formatting, WGC/D3D11/DXGI runtime behavior,
 clipboard behavior, and HDR hardware checks.
@@ -34,11 +35,12 @@ alias and does not execute macOS tests.
 The repository-root `pnpm dev` command builds the current Windows Debug Host unless
 `LUMIERE_WINDOWS_HOST_PATH` is set, then Electron selects that artifact ahead of a Release
 fallback. The current Host executes Display capture with Clipboard, Folder, or Both
-delivery from the same encoded sRGB Visual Match artifact. Region is advertised when
-the target under the pointer has effective-DPI logical geometry and a reconstructable
-native target snapshot. `prepareRegion` copies the first complete WGC frame into an
-application-owned texture; `commitRegion` crops that frozen frame to an outward-aligned
-pixel rectangle inside the native boundary.
+delivery from the same encoded sRGB Visual Match artifact. Native Region uses one v6
+`captureRegion` request: the first WGC frame is retained, converted and presented at
+full resolution by the native overlay, then cropped/delivered from that same frame.
+Cancellation identifies the pending request. Effective-DPI logical selection maps to
+outward-aligned backing pixels. The explicit Electron diagnostic override retains
+`prepareRegion`/`commitRegion`; it is not the default product path.
 
 The Windows Shell sends Region through the v6 native Host path by default. For targeted
 comparison with the previous Electron preview overlay, set
@@ -65,7 +67,7 @@ The Windows distribution lane advances in this order:
 3. Publish the assisted unsigned NSIS installer in stable or prerelease GitHub Releases.
    The release page must document functionality, installation, uninstall, checksum
    verification, and expected unknown-publisher or SmartScreen warnings.
-4. Do not configure production Publisher, sparse identity, or updater metadata without a
+4. Do not configure production Publisher or sparse identity without a
    later decision. A future signed lane must open a new ADR and Issue and repeat its
    signing, identity, update, checksum, provenance, and clean-machine verification.
 
@@ -78,12 +80,29 @@ Build the unsigned Windows installer from the repository root:
 pnpm package:windows
 ```
 
-This produces `artifacts/windows/build/Lumiere-Setup-<version>-x64.exe`. Unsigned installers
-deliberately omit the production sparse identity and updater configuration, so WGC keeps
-the system capture border and automatic updates remain disabled.
+This produces `artifacts/windows/build/Lumiere-Setup-<version>-x64.exe` and matching
+`latest.yml`. Unsigned installers omit production sparse identity, so WGC keeps its
+system capture border. ADR 0020 enables explicit in-app updates independently of signing.
+Packaged app-update.yml points at the official repository; SHA-512 is checked on download.
+Publisher signature verification is explicitly disabled for unsigned installers.
 
 The active release workflow always uses this unsigned path for Windows, adds the installer
-to the unified checksum manifest, and does not generate `latest.yml`. Dormant SignPath,
-sparse-identity, and updater code remains unavailable to the workflow. Do not reconnect it
+to the unified checksum manifest, and uploads matching `latest.yml`. Dormant SignPath and
+sparse-identity code remain unavailable to the workflow. Do not reconnect them
 or add signing variables or secrets until a future ADR and Issue establish a provider and
 verification plan.
+
+## In-app update verification
+
+Check after 30 seconds and every six hours without opening a window or downloading.
+Use System settings to download, observe progress and restart to update. Ordinary quit
+must not install; capture in progress disables restart. The Host must exit before NSIS
+starts with `/S` and `--force-run`. Development builds do not update themselves.
+
+Test two installed local versions using a test-only app-update.yml pointing at a loopback
+HTTP fixture; do not ship that fixture or enable an environment override in production.
+Observe a silent upgrade, actual new-version launch and settings retention. A wrong hash
+must reject installation; an unavailable server must allow retry. Record source commit,
+artifact hashes, commands, OS/GPU/display, install directory and observed OS prompts.
+Restore the user's backed-up settings and installation after testing. Public-source
+observation is a separate publication gate. Local uninstall/reinstall is not a clean-machine test.

@@ -44,6 +44,20 @@ ManifestDPIAware true
     DetailPrint "Windows identity registration failed; Lumiere will retain the system capture border."
   ${EndIf}
   identity_done:
+  ; The per-user updater already runs with the user's unelevated token. Launch
+  ; directly rather than relying on Explorer's asynchronous Shell automation.
+  ${If} ${isUpdated}
+  ${AndIf} ${Silent}
+  ${AndIf} ${isForceRun}
+  ${AndIf} $installMode == "CurrentUser"
+  ${AndIfNot} ${UAC_IsAdmin}
+    ClearErrors
+    Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --updated'
+    ${IfNot} ${Errors}
+      SetErrorLevel 0
+      Quit
+    ${EndIf}
+  ${EndIf}
 !macroend
 
 !macro customUnInstall

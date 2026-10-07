@@ -55,8 +55,8 @@ On Windows, `predev` incrementally builds the current .NET Debug Host unless
 an existing Release build. The current Host supports Clipboard, Folder, and Both delivery,
 always advertises Display, and advertises Region when the pointer target has a
 reconstructable native snapshot with effective-DPI logical geometry. Region capture
-prepares a frozen native frame, then commits a target-local crop of that same frame
-inside the Windows Host.
+presents a full-resolution frozen native frame and selects/crops that same frame through
+one v6 request inside the Windows Host. The v5 Electron route is a diagnostic fallback.
 
 ## Renderer Components
 

@@ -121,7 +121,7 @@ describe('SettingsView', () => {
     expect(markup).toContain('aria-live="polite"')
   })
 
-  it('shows the real version without update actions on Windows', () => {
+  it('shows the real version without update actions when Windows updates are disabled', () => {
     const markup = renderSystemSettings('windows', {
       status: 'idle',
       currentVersion: '0.2.0',
@@ -130,6 +130,28 @@ describe('SettingsView', () => {
     expect(markup).toContain('settings-row-value--muted">0.2.0')
     expect(markup).not.toContain('Check for updates')
   })
+
+  it.each([
+    [{ status: 'available', availableVersion: '0.6.1' }, 'Download update'],
+    [{ status: 'downloading', availableVersion: '0.6.1', percent: 42 }, 'Downloading 42%'],
+    [{ status: 'ready', availableVersion: '0.6.1' }, 'Restart to update'],
+    [
+      { status: 'failed', retry: 'download', message: 'Couldn’t download the update. Try again.' },
+      'Try again',
+    ],
+  ] as const)(
+    'shows the Windows %s update action in the existing version row',
+    (windowsUpdate, text) => {
+      const markup = renderSystemSettings('windows', {
+        status: 'idle',
+        currentVersion: '0.6.0',
+        windowsUpdate,
+      })
+      expect(markup).toContain(text)
+      expect(markup).toContain('aria-live="polite"')
+      expect(markup).not.toContain('View update')
+    },
+  )
 
   it.each([
     [{ status: 'idle', currentVersion: '0.2.0' }, '0.2.0', 'Check for updates'],

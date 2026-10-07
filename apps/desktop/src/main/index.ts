@@ -46,6 +46,7 @@ import {
 } from '../shared/settings-command'
 import { parseShortcutUpdate } from '../shared/shortcut-command'
 import { configureWindowsUpdates } from './windows-updater'
+import type { WindowsUpdateService } from './windows-update-service'
 import { checkLatestRelease } from './manual-update-check'
 import { updateCommandChannels } from '../shared/update-command'
 import { macOSPermissionRecoveryCommandChannels } from '../shared/macos-permission-recovery-command'
@@ -95,6 +96,7 @@ let regionOverlaySession: RegionOverlaySession | null = null
 let regionOverlayController: RegionOverlayController | null = null
 let nextRegionOverlayGeneration = 0
 let quitting = false
+let windowsUpdates: WindowsUpdateService | null = null
 let lastTrayState: ApplicationTrayState | null = null
 const captureSession = new CaptureSession((activity) => {
   if (quitting) return
@@ -557,13 +559,20 @@ function registerIpc(): void {
   ipcMain.handle(updateCommandChannels.getSnapshot, (event, ...args) => {
     assertTrustedWindow(event, mainWindow)
     assertNoArguments(args)
-    return { currentVersion: app.getVersion() }
+    return windowsUpdates?.getSnapshot() ?? { currentVersion: app.getVersion() }
   })
 
   ipcMain.handle(updateCommandChannels.check, async (event, ...args) => {
     assertTrustedWindow(event, mainWindow)
     assertNoArguments(args)
-    if (process.platform !== 'darwin') throw new Error('Manual update checks are macOS-only.')
+    if (process.platform === 'win32') {
+      await windowsUpdates?.check()
+      return {
+        status: 'idle' as const,
+        ...windowsUpdates?.getSnapshot(),
+        currentVersion: app.getVersion(),
+      }
+    }
     return checkLatestRelease(
       app.getVersion(),
       () =>
@@ -591,6 +600,19 @@ function registerIpc(): void {
     if (process.platform !== 'darwin') throw new Error('Manual updates are macOS-only.')
     await shell.openExternal(latestReleasePageUrl)
   })
+
+  for (const [channel, action] of [
+    [updateCommandChannels.download, () => windowsUpdates?.download()],
+    [updateCommandChannels.install, () => windowsUpdates?.install()],
+  ] as const) {
+    ipcMain.handle(channel, async (event, ...args) => {
+      assertTrustedWindow(event, mainWindow)
+      assertNoArguments(args)
+      if (!windowsUpdates) throw new Error('Windows updates are unavailable.')
+      await action()
+      return windowsUpdates.getSnapshot()
+    })
+  }
 
   ipcMain.handle(macOSPermissionRecoveryCommandChannels.getSnapshot, (event, ...args) => {
     assertTrustedWindow(event, mainWindow)
@@ -1109,7 +1131,7 @@ function broadcastSettingsChanged(snapshot: SettingsSnapshot): void {
 
 async function runCapture(mode: 'region' | 'display'): Promise<CaptureCommandResult> {
   const router = captureRouter
-  if (!router || quitting) return captureFailedResult()
+  if (!router || quitting || windowsUpdates?.isInstalling()) return captureFailedResult()
   return captureSession.run(
     mode,
     async () => {
@@ -1373,7 +1395,20 @@ void app.whenReady().then(async () => {
       app.quit()
     },
   })
-  void configureWindowsUpdates()
+  windowsUpdates = await configureWindowsUpdates(
+    (snapshot) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(updateCommandChannels.changed, snapshot)
+      }
+    },
+    () => captureSession.getSnapshot().activeMode !== null,
+    async () => {
+      if (platformHost instanceof NativeProcessPlatformHost) await platformHost.stopForUpdate()
+    },
+    () => {
+      if (platformHost instanceof NativeProcessPlatformHost) platformHost.resumeAfterUpdateFailure()
+    },
+  )
   if (macOSPermissionRecovery?.getSnapshot().phase !== 'inactive') showCaptureWindow()
 })
 
@@ -1383,6 +1418,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   quitting = true
+  windowsUpdates?.dispose()
   captureFailureNotifier.clear()
   applicationTray?.destroy()
   applicationTray = null

@@ -5,6 +5,22 @@ import { describe, expect, it } from 'vitest'
 const desktopRoot = process.cwd()
 
 describe('Windows packaging policy', () => {
+  it('enables unsigned NSIS updates from the actual public repository without sparse identity', async () => {
+    const config = JSON.parse(
+      await readFile(resolve(desktopRoot, 'electron-builder.windows.json'), 'utf8'),
+    ) as {
+      publish: unknown
+      win: { verifyUpdateCodeSignature: unknown }
+      nsis: { perMachine: unknown }
+      extraResources: unknown
+    }
+    expect(config.publish).toEqual([
+      { provider: 'github', owner: 'sousouliao', repo: 'lumiere', releaseType: 'release' },
+    ])
+    expect(config.win.verifyUpdateCodeSignature).toBe(false)
+    expect(config.nsis.perMachine).toBe(false)
+    expect(JSON.stringify(config.extraResources)).not.toContain('windows-identity')
+  })
   it('keeps the installer sharp and makes drive-root destinations explicit', async () => {
     const builderConfig = JSON.parse(
       await readFile(resolve(desktopRoot, 'electron-builder.windows.json'), 'utf8'),

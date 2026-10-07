@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/motion/select'
 import { Switch } from '@/components/motion/switch'
-import type { UpdateCheckResult } from '../../shared/update-command'
+import type { UpdateCheckResult, WindowsUpdateState } from '../../shared/update-command'
 
 const outputDeliveryLabels: Record<OutputDelivery, string> = {
   clipboard: 'Clipboard',
@@ -41,11 +41,12 @@ const afterCaptureBehaviorLabels: Record<AfterCaptureBehavior, string> = {
 }
 
 export type SettingsSection = 'output' | 'capture' | 'system'
-export type UpdateViewState =
+export type UpdateViewState = (
   | { status: 'loading' }
   | { status: 'idle'; currentVersion: string }
   | { status: 'checking'; currentVersion: string }
   | UpdateCheckResult
+) & { windowsUpdate?: WindowsUpdateState }
 
 interface SettingsViewProps {
   initialSection?: SettingsSection
@@ -65,6 +66,9 @@ interface SettingsViewProps {
   onShortcutRecordingChange: (recording: boolean) => Promise<void>
   onCheckForUpdates: () => void
   onOpenLatestRelease: () => void
+  onDownloadUpdate?: () => void
+  onInstallUpdate?: () => void
+  captureBusy?: boolean
 }
 
 export function SettingsView({
@@ -85,6 +89,9 @@ export function SettingsView({
   onShortcutRecordingChange,
   onCheckForUpdates,
   onOpenLatestRelease,
+  onDownloadUpdate,
+  onInstallUpdate,
+  captureBusy = false,
 }: SettingsViewProps): React.JSX.Element {
   const [section, setSection] = useState<SettingsSection>(initialSection)
   const available = snapshot?.availableOutputDeliveries ?? []
@@ -196,6 +203,9 @@ export function SettingsView({
             updateState={updateState}
             onCheckForUpdates={onCheckForUpdates}
             onOpenLatestRelease={onOpenLatestRelease}
+            onDownloadUpdate={onDownloadUpdate}
+            onInstallUpdate={onInstallUpdate}
+            captureBusy={captureBusy}
           />
         ) : null}
         {error ? (
@@ -494,12 +504,18 @@ function SystemSettings({
   updateState,
   onCheckForUpdates,
   onOpenLatestRelease,
+  onDownloadUpdate,
+  onInstallUpdate,
+  captureBusy,
 }: {
   snapshot: CaptureSurfaceSnapshot | null
   platform: LumierePlatform
   updateState: UpdateViewState
   onCheckForUpdates: () => void
   onOpenLatestRelease: () => void
+  onDownloadUpdate?: () => void
+  onInstallUpdate?: () => void
+  captureBusy: boolean
 }): React.JSX.Element {
   const hostAvailable = snapshot?.hostAvailable === true
   const displayAvailable = snapshot?.captureModes.includes('display') === true
@@ -562,6 +578,15 @@ function SystemSettings({
             {updateState.status === 'checking' ? 'Checking…' : updateAction}
           </Button>
         </div>
+      ) : updateState.windowsUpdate && updateState.windowsUpdate.status !== 'disabled' ? (
+        <WindowsUpdateRow
+          currentVersion={currentVersion}
+          state={updateState.windowsUpdate}
+          captureBusy={captureBusy}
+          onCheck={onCheckForUpdates}
+          onDownload={onDownloadUpdate}
+          onInstall={onInstallUpdate}
+        />
       ) : (
         <SettingsRow label="Version" value={currentVersion} />
       )}
@@ -569,6 +594,91 @@ function SystemSettings({
         Native HDR-aware capture. Everyday output is sRGB Visual Match. Copied and saved mean
         delivered, not certified.
       </p>
+    </div>
+  )
+}
+
+function WindowsUpdateRow({
+  currentVersion,
+  state,
+  captureBusy,
+  onCheck,
+  onDownload,
+  onInstall,
+}: {
+  currentVersion: string
+  state: WindowsUpdateState
+  captureBusy: boolean
+  onCheck: () => void
+  onDownload?: () => void
+  onInstall?: () => void
+}): React.JSX.Element {
+  let hint = currentVersion
+  let label = 'Check for updates'
+  let action = onCheck
+  let disabled = false
+  switch (state.status) {
+    case 'checking':
+      hint += ' · Checking…'
+      label = 'Checking…'
+      disabled = true
+      break
+    case 'up-to-date':
+      hint += ' · Up to date'
+      label = 'Check again'
+      break
+    case 'available':
+      hint += ` · ${state.availableVersion} available`
+      label = 'Download update'
+      action = onDownload ?? onCheck
+      break
+    case 'downloading':
+      hint += ` · Downloading ${String(Math.floor(state.percent))}%`
+      label = 'Downloading…'
+      disabled = true
+      break
+    case 'ready':
+      hint += captureBusy ? ' · Finish capture to restart' : ` · ${state.availableVersion} ready`
+      label = 'Restart to update'
+      action = onInstall ?? onCheck
+      disabled = captureBusy
+      break
+    case 'installing':
+      hint += ' · Restarting…'
+      label = 'Restarting…'
+      disabled = true
+      break
+    case 'failed':
+      hint += ` · ${state.message}`
+      label = 'Try again'
+      action =
+        state.retry === 'download'
+          ? (onDownload ?? onCheck)
+          : state.retry === 'install'
+            ? (onInstall ?? onCheck)
+            : onCheck
+      disabled = state.retry === 'install' && captureBusy
+      break
+  }
+  return (
+    <div className="settings-row">
+      <span className="settings-row-copy">
+        <span className="settings-row-label">Version</span>
+        <span className="settings-row-hint" aria-live="polite">
+          {hint}
+        </span>
+      </span>
+      <Button
+        variant={state.status === 'available' || state.status === 'ready' ? 'primary' : 'ghost'}
+        size="sm"
+        hoverScale={1}
+        pressScale={0.98}
+        className="settings-inline-action update-check-button"
+        disabled={disabled}
+        onClick={action}
+      >
+        {label}
+      </Button>
     </div>
   )
 }

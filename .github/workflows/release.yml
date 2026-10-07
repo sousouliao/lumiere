@@ -162,7 +162,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: release-windows
-          path: artifacts/windows/build/Lumiere-Setup-*-x64.exe
+          path: |
+            artifacts/windows/build/Lumiere-Setup-*-x64.exe
+            artifacts/windows/build/latest.yml
           if-no-files-found: error
 
   publish:

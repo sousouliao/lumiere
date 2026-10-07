@@ -4,6 +4,29 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.6.0`
+
+Release platforms: Windows
+
+### Added
+
+- Check for Windows updates in the app, download on request with progress, then restart into the new version without an installer wizard.
+
+### Changed
+
+- Select Windows Regions over a full-resolution native frozen-frame overlay instead of an encoded Electron preview.
+
+### Fixed
+
+- Sharpen the Windows installer and place drive-root installations in a Lumiere subdirectory.
+- Remove rounded corners from the screenshot selection window.
+
+### Known limitations
+
+- The Windows installer and updates remain unsigned; Windows may display warnings or block execution. The system capture border remains.
+- Existing v0.5.0 installations require one manual upgrade before in-app updates are available.
+- Windows multi-display, non-development-machine and recorded native Region latency acceptance remain open; this candidate is not yet ready for publication.
+
 ## [0.5.0] - 2026-09-11
 
 Release platforms: macOS, Windows

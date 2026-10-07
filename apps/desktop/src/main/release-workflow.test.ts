@@ -42,10 +42,10 @@ describe('unified release workflow', () => {
     )
 
     expect(workflow).toContain('run: pnpm package:windows')
-    expect(workflow).toContain('path: artifacts/windows/build/Lumiere-Setup-*-x64.exe')
+    expect(workflow).toContain('artifacts/windows/build/Lumiere-Setup-*-x64.exe')
     expect(workflow).not.toContain('signpath/github-action-submit-signing-request')
     expect(workflow).not.toContain('pnpm release:windows:finalize')
-    expect(workflow).not.toContain('latest.yml')
+    expect(workflow).toContain('artifacts/windows/build/latest.yml')
     expect(workflow).not.toContain('SIGNPATH_')
   })
 

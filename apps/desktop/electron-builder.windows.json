@@ -3,6 +3,9 @@
   "productName": "Lumiere",
   "asar": true,
   "npmRebuild": false,
+  "publish": [
+    { "provider": "github", "owner": "sousouliao", "repo": "lumiere", "releaseType": "release" }
+  ],
   "directories": {
     "output": "../../artifacts/windows/build"
   },
@@ -22,6 +25,7 @@
     }
   ],
   "win": {
+    "verifyUpdateCodeSignature": false,
     "target": [
       {
         "target": "nsis",

@@ -39,6 +39,7 @@ export class NativeProcessPlatformHost implements PlatformHost {
   private readonly pending = new Map<string, PendingRequest>()
   private activeNativeRegionRequestId: string | null = null
   private disposed = false
+  private suspendedForUpdate = false
 
   public constructor(
     private readonly platform: LumierePlatform,
@@ -158,12 +159,39 @@ export class NativeProcessPlatformHost implements PlatformHost {
     this.rejectPending(new Error(`The ${this.platform} native capture host was disposed.`))
   }
 
+  /** Release executable/DLL handles before an installer replaces the bundled Host. */
+  public async stopForUpdate(): Promise<void> {
+    this.suspendedForUpdate = true
+    const child = this.process ?? (await this.processStart)
+    if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        child.removeListener('exit', exited)
+        this.suspendedForUpdate = false
+        reject(new Error('The native capture host did not exit before the update.'))
+      }, 5_000)
+      const exited = (): void => {
+        clearTimeout(timer)
+        resolve()
+      }
+      child.once('exit', exited)
+      this.rejectPending(new Error('The native capture host stopped for an update.'))
+      if (!child.killed) child.kill()
+    })
+  }
+
+  public resumeAfterUpdateFailure(): void {
+    this.suspendedForUpdate = false
+  }
+
   private async request(
     method: HostMethod,
     params: object,
     version: number = PLATFORM_CONTRACT_VERSION,
     id: string = randomUUID(),
   ): Promise<unknown> {
+    if (this.suspendedForUpdate)
+      throw new Error('The native capture host is stopped for an update.')
     // Electron runs no microtask checkpoint after native callbacks such as global shortcuts;
     // awaiting an already running Host would stall this write until an unrelated event.
     const child = this.process ?? (await this.ensureProcess())

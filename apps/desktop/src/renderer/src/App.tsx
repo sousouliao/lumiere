@@ -420,6 +420,7 @@ function SettingsWindow({
   const [savingShortcut, setSavingShortcut] = useState<CaptureMode | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [updateState, setUpdateState] = useState<UpdateViewState>({ status: 'loading' })
+  const [captureBusy, setCaptureBusy] = useState(false)
 
   useEffect(() => {
     let isCurrent = true
@@ -456,10 +457,38 @@ function SettingsWindow({
       .catch(() => {
         // Keep the update control disabled when local version metadata is unavailable.
       })
+    const stopUpdates = window.lumierePlatform.onUpdateChanged((nextSnapshot) => {
+      if (isCurrent) setUpdateState({ status: 'idle', ...nextSnapshot })
+    })
+    const stopCapture = window.lumierePlatform.onCaptureActivityChanged((activity) => {
+      if (isCurrent) setCaptureBusy(activity.activeMode !== null)
+    })
+    void window.lumierePlatform
+      .getCaptureActivity()
+      .then((activity) => {
+        if (isCurrent) setCaptureBusy(activity.activeMode !== null)
+      })
+      .catch(() => {
+        if (isCurrent) setCaptureBusy(true)
+      })
     return () => {
+      stopUpdates()
+      stopCapture()
       isCurrent = false
     }
   }, [])
+
+  const performWindowsUpdate = async (action: 'download' | 'install'): Promise<void> => {
+    try {
+      const next =
+        action === 'download'
+          ? await window.lumierePlatform.downloadUpdate()
+          : await window.lumierePlatform.installUpdate()
+      setUpdateState({ status: 'idle', ...next })
+    } catch {
+      setError('The update could not be completed. Try again.')
+    }
+  }
 
   const checkForUpdates = async (): Promise<void> => {
     if (updateState.status === 'loading') return
@@ -568,6 +597,9 @@ function SettingsWindow({
         return window.lumierePlatform.setShortcutRecording(recording)
       }}
       onCheckForUpdates={() => void checkForUpdates()}
+      onDownloadUpdate={() => void performWindowsUpdate('download')}
+      onInstallUpdate={() => void performWindowsUpdate('install')}
+      captureBusy={captureBusy}
       onOpenLatestRelease={() => void openLatestRelease()}
     />
   )

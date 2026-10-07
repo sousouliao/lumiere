@@ -2,10 +2,35 @@ import { EventEmitter } from 'node:events'
 import { execPath } from 'node:process'
 import { PassThrough } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { WindowsPlatformHost } from './windows-platform-host'
 
 describe('Windows platform host process transport', () => {
+  it('waits for actual Host exit and prevents polling from reopening it before install', async () => {
+    const process = new FakeNativeProcess()
+    const spawn = vi.fn(() => {
+      return process.asChildProcess()
+    })
+    const host = new WindowsPlatformHost([execPath], spawn)
+    const capture = host.captureRegionNative({ delivery: 'clipboard' })
+    await vi.waitFor(() => {
+      expect(spawn).toHaveBeenCalledOnce()
+    })
+    let stopped = false
+    const stopping = host.stopForUpdate().then(() => {
+      stopped = true
+    })
+    await Promise.resolve()
+    expect(process.killed).toBe(true)
+    expect(stopped).toBe(false)
+    await host.getCapabilities()
+    expect(spawn).toHaveBeenCalledOnce()
+    process.emit('exit', 0, null)
+    await stopping
+    await expect(capture).resolves.toMatchObject({ status: 'failed' })
+    expect(stopped).toBe(true)
+    host.dispose()
+  })
   it('cancels a pending native Region capture with its v6 request id', async () => {
     const process = new FakeNativeProcess()
     const requests: Record<string, unknown>[] = []
@@ -125,10 +150,13 @@ describe('Windows platform host process transport', () => {
 })
 
 class FakeNativeProcess extends EventEmitter {
+  public readonly pid = 1234
   public readonly stdin = new PassThrough()
   public readonly stdout = new PassThrough()
   public readonly stderr = new PassThrough()
   public killed = false
+  public exitCode: number | null = null
+  public signalCode: NodeJS.Signals | null = null
 
   public respond(envelope: unknown): void {
     this.stdout.write(`${JSON.stringify(envelope)}\n`)

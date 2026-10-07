@@ -46,8 +46,11 @@ Windows may show a SmartScreen or unknown-publisher warning because the installe
 only when the digest matches `SHA256SUMS` from the official release. The assisted installer runs
 per user, allows a custom destination, and can create desktop and Start menu shortcuts. Uninstall
 Lumiere through Windows Settings or its Start menu shortcut. Windows releases intentionally exclude
-the production borderless-capture identity and automatic updates, so Windows Graphics Capture keeps
-its system capture border.
+the production borderless-capture identity, so Windows Graphics Capture keeps its system capture border.
+The v0.6.0 candidate checks for updates periodically; download and silent restart installation are
+explicit actions in System settings. Ordinary quit does not install. Existing v0.5.0 users need
+one manual upgrade to obtain this capability. Until v0.6.0 is published, public v0.5.0 stays manual.
+Unsigned updates can still be blocked by Windows application-control policies.
 
 ## Install on macOS
 

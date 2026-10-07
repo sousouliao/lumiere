@@ -12,7 +12,6 @@ const stagingRoot = join(repositoryRoot, 'artifacts', 'windows', 'staging')
 const hostStaging = join(stagingRoot, 'windows-host')
 const identityStaging = join(stagingRoot, 'windows-identity')
 const identitySource = join(stagingRoot, 'windows-identity-source')
-const releaseMarker = join(stagingRoot, 'windows-release.json')
 const generatedBuilderConfig = join(stagingRoot, 'electron-builder.generated.json')
 const packageName = 'io.github.sousouliao.lumiere'
 const applicationId = 'LumiereHost'
@@ -85,7 +84,6 @@ async function prepare(desktopPackage, release) {
       createSparseManifest(desktopPackage.version, publisher),
       'utf8',
     )
-    await writeFile(releaseMarker, `${JSON.stringify({ channel: 'stable' }, null, 2)}\n`, 'utf8')
     const makeAppx = await findWindowsSdkTool('makeappx.exe')
     await run(makeAppx, [
       'pack',
@@ -110,19 +108,10 @@ async function buildInstaller(baseConfig, version, release) {
   config.electronDist = electronDist
   if (release) {
     await access(join(identityStaging, 'Lumiere.Identity.msix'))
-    await access(releaseMarker)
-    config.extraResources.push(
-      { from: '../../artifacts/windows/staging/windows-identity', to: 'windows-identity' },
-      { from: '../../artifacts/windows/staging/windows-release.json', to: 'windows-release.json' },
-    )
-    config.publish = [
-      {
-        provider: 'github',
-        owner: 'Mournerliao',
-        repo: 'lumiere',
-        releaseType: 'release',
-      },
-    ]
+    config.extraResources.push({
+      from: '../../artifacts/windows/staging/windows-identity',
+      to: 'windows-identity',
+    })
   }
   await writeFile(generatedBuilderConfig, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
   await run(
@@ -137,6 +126,8 @@ async function buildInstaller(baseConfig, version, release) {
       '--x64',
       '--config',
       generatedBuilderConfig,
+      '--publish',
+      'never',
     ],
     { cwd: repositoryRoot },
   )

@@ -114,6 +114,18 @@ const platformApi: LumiereRendererApi = {
   getUpdateSnapshot: () => ipcRenderer.invoke(updateCommandChannels.getSnapshot),
   checkForUpdates: () => ipcRenderer.invoke(updateCommandChannels.check),
   openLatestRelease: () => ipcRenderer.invoke(updateCommandChannels.openLatestRelease),
+  downloadUpdate: () => ipcRenderer.invoke(updateCommandChannels.download),
+  installUpdate: () => ipcRenderer.invoke(updateCommandChannels.install),
+  onUpdateChanged: (listener) => {
+    const handle = (
+      _event: Electron.IpcRendererEvent,
+      snapshot: Parameters<typeof listener>[0],
+    ): void => {
+      listener(snapshot)
+    }
+    ipcRenderer.on(updateCommandChannels.changed, handle)
+    return () => ipcRenderer.removeListener(updateCommandChannels.changed, handle)
+  },
   getMacOSPermissionRecoverySnapshot: () =>
     ipcRenderer.invoke(macOSPermissionRecoveryCommandChannels.getSnapshot),
   onMacOSPermissionRecoveryChanged: (listener) => {

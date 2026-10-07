@@ -55,8 +55,10 @@ onto the other.
 Stable and prerelease status describe product maturity and are independent of platform
 code-signing status. Windows releases may use the unsigned NSIS distribution selected by
 ADR 0018 when no signing provider is configured. Such releases must publish a checksum and
-disclose the unknown-publisher warning, retained WGC system capture border, and absence of
-automatic updates. They must not claim publisher identity, sparse identity, or borderless
+disclose the unknown-publisher warning, retained WGC system capture border, and potential
+application-control restrictions. ADR 0020 permits explicit in-app download and silent restart
+updates independently of signing, using matching installer/latest.yml and file hashes.
+They must not claim publisher identity, sparse identity, or borderless
 capture consent.
 
 ## Changelog
@@ -84,5 +86,5 @@ to `main`.
 
 The workflow may publish only after every selected platform artifact succeeds. The public
 release must contain release notes derived from the matching changelog entry, the selected
-installers, Windows updater metadata only when an active signed route requires it, and one
+installers, matching Windows updater metadata when Windows is selected, and one
 checksum manifest covering all installer or disk-image bytes.
