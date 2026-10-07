@@ -3,7 +3,7 @@
 - Updated: 2026-10-08
 - Milestone: 1 — Cross-platform HDR-aware MVP with sRGB Visual Match
 - Public distribution: `v0.5.0`, including unsigned Windows x64 NSIS; not replaced or republished.
-- Windows candidate: `0.6.0`, update implementation at `88e1d60`; not ready for public finalization while applicable native/hardware gates remain open.
+- Windows candidate: `0.6.0`, update implementation at `88e1d60`; the maintainer explicitly accepted the remaining Windows hardware/environment gates for this release only on 2026-10-08. Publication is in progress; owning Issues stay open.
 
 ## Current Position
 

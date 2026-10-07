@@ -26,7 +26,8 @@ Release platforms: Windows
 
 - The Windows installer and updates remain unsigned; Windows may display warnings or block execution. The system capture border remains.
 - Existing v0.5.0 installations require one manual upgrade before in-app updates are available.
-- Windows multi-display, non-development-machine and recorded native Region latency acceptance remain open; this candidate is not yet ready for publication.
+- Native Region has been tested on a single 4K HDR display at 150% scaling; broader display configurations and installation on a clean Windows machine remain unverified.
+- Recorded Region latency covers a software visibility/focus endpoint, not the full display-presentation latency.
 
 ## [0.5.0] - 2026-09-11
 
