@@ -14,6 +14,11 @@ Display use v5; native Region uses v6 and request-ID cancellation. Native select
 crops the retained full-resolution frame. Explicit Windows updates follow ADR 0020.
 No Rust or Tauri runtime cutover is claimed yet.
 
+P1 adds the pinned Rust workspace, typed Windows v5/v6 contract and independent
+JSONL Host. It reserves captures before dispatch, processes controls concurrently,
+and waits for native release on cancellation, lease expiry, EOF and broken output.
+The Rust engine honestly reports unavailable until P2 ports capture.
+
 The accepted target removes Electron, .NET and all macOS-specific implementation
 from the final product. It keeps an independent Rust capture library, thin native
 Host and language-neutral protocol. The native shell/Host stay resident; the WebView
@@ -45,6 +50,12 @@ the new installer must independently verify both generations of upgrades.
 
 ## Next action
 
-Land the baseline/ADR/inventory slice, then implement P1's Rust workspace, strictly
-typed Windows protocol, cancellable request loop and transport tests. Keep the old
-application only as a migration reference until replacement verification passes.
+P1 verification: `cargo test --workspace` (4 protocol + 5 transport tests),
+`cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`,
+`cargo build -p lumiere-windows-host` and `node scripts/verify-rust-protocol.mjs`
+(5 real-child responses against existing schemas) pass. Script ESLint/Prettier pass.
+[#27](https://github.com/sousouliao/lumiere/issues/27) owns this slice.
+
+Implement P2 WGC/D3D11 Display capture and equivalent conversion/PNG/clipboard/file
+delivery. Keep the old application as a migration reference until replacement
+verification passes; P3 owns native Region and P4 owns shell cutover.

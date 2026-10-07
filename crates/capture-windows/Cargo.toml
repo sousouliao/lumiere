@@ -1,0 +1,13 @@
+[package]
+name = "lumiere-capture-windows"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+lumiere-capture-contract.workspace = true
+
+[lints]
+workspace = true
+

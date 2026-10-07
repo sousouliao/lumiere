@@ -9,3 +9,5 @@
 .github/ISSUE_TEMPLATE/
 knowledge/
 pnpm-lock.yaml
+/target/
+Cargo.lock
