@@ -2,8 +2,8 @@
 
 - Updated: 2026-10-08
 - Milestone: 1 — Cross-platform HDR-aware MVP with sRGB Visual Match
-- Public distribution: `v0.5.0`, including unsigned Windows x64 NSIS; not replaced or republished.
-- Windows candidate: `0.6.0`, update implementation at `88e1d60`; the maintainer explicitly accepted the remaining Windows hardware/environment gates for this release only on 2026-10-08. Publication is in progress; owning Issues stay open.
+- Public distribution: Windows `v0.6.0`, unsigned x64 NSIS, published from `d218c02`; macOS remains `v0.5.0`.
+- The maintainer explicitly accepted the remaining Windows hardware/environment gates for this release only on 2026-10-08. Owning native/hardware Issues stay open.
 
 ## Current Position
 
@@ -27,6 +27,12 @@ broad fidelity certification remain unstarted.
   `pnpm test:shared` (34 files, 204 tests), `pnpm build` via packaging, and
   `pnpm package:windows` pass. Native `verify.ps1` passes Host 41, Capture 93,
   Graphics 50 and Interop 35 tests. These are local results, not new cross-platform CI.
+- Release workflow 37674866971 and Windows/macOS CI at `d218c02` pass. The public
+  release is stable, its tag targets that commit, and the asset set is exactly the EXE,
+  latest.yml and SHA256SUMS. Downloaded public EXE SHA-256 matches SHA256SUMS:
+  `b5fc74e0f154be4224031d43df17a1957119a3530830677966ef277b7bfcdd6a`.
+  The maintainer confirmed installation of the public release. Further public-feed
+  runtime checking was stopped at the maintainer's request; no pass is claimed.
 - Installed updates: real local-source `0.6.0` → test-only `0.6.1` rejects a wrong
   SHA-512, supports network retry/progress, refuses install during capture and retains
   settings. The maintainer physically clicked download/restart and confirmed successful
@@ -51,9 +57,11 @@ broad fidelity certification remain unstarted.
 ## Execution Frontiers
 
 - [#24](https://github.com/sousouliao/lumiere/issues/24): local installed update acceptance
-  completed; no public publication. Next release work must observe the real GitHub feed.
+  completed and closed; Windows v0.6.0 is published. Real public-feed runtime observation
+  remains distinct from the successful local-feed update test.
 - [#20](https://github.com/sousouliao/lumiere/issues/20): current Windows shared seam checks
-  pass; record current macOS shared checks before closing its remaining cross-platform gate.
+  and independent macOS CI checks pass at `d218c02`; shared seam Issue closed. This does
+  not close native runtime acceptance or parent #19's remaining migration cleanup.
 - [#22](https://github.com/sousouliao/lumiere/issues/22): finish independent Windows
   display/hardware and compositor timing acceptance; do not substitute Mac multi-display evidence.
 - [#23](https://github.com/sousouliao/lumiere/issues/23): finish non-development-machine,
