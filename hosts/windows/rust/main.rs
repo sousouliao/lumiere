@@ -6,7 +6,7 @@ async fn main() -> std::io::Result<()> {
     lumiere_windows_host::serve(
         tokio::io::stdin(),
         tokio::io::stdout(),
-        Arc::new(WindowsEngine),
+        Arc::new(WindowsEngine::default()),
     )
     .await
 }

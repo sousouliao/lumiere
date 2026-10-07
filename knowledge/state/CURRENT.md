@@ -17,7 +17,9 @@ No Rust or Tauri runtime cutover is claimed yet.
 P1 adds the pinned Rust workspace, typed Windows v5/v6 contract and independent
 JSONL Host. It reserves captures before dispatch, processes controls concurrently,
 and waits for native release on cancellation, lease expiry, EOF and broken output.
-The Rust engine honestly reports unavailable until P2 ports capture.
+P2 implements cursor-targeted WGC Display capture, retained RGBA16F textures,
+target-aware DXGI/SDR-white conversion and shared PNG clipboard/folder delivery.
+An owned worker retains the MTA and D3D device; Region remains unavailable until P3.
 
 The accepted target removes Electron, .NET and all macOS-specific implementation
 from the final product. It keeps an independent Rust capture library, thin native
@@ -56,6 +58,14 @@ P1 verification: `cargo test --workspace` (4 protocol + 5 transport tests),
 (5 real-child responses against existing schemas) pass. Script ESLint/Prettier pass.
 [#27](https://github.com/sousouliao/lumiere/issues/27) owns this slice.
 
-Implement P2 WGC/D3D11 Display capture and equivalent conversion/PNG/clipboard/file
-delivery. Keep the old application as a migration reference until replacement
-verification passes; P3 owns native Region and P4 owns shell cutover.
+P2 verification: Cargo tests (4 protocol + 4 conversion/delivery + 5 transport),
+format and strict Clippy pass. The frozen .NET conversion fixture matches byte for
+byte at four scales. Real Release Host/schema capture succeeds. Explicit native
+both-delivery test passes on this machine: HDR 3840x2160, exact PNG clipboard/file
+equality, DIBV5 availability, partial folder failure; observed 1.32–1.38 seconds.
+These samples do not establish performance distribution or compositor visual parity.
+[#28](https://github.com/sousouliao/lumiere/issues/28) owns commands and limitations.
+
+Implement P3's native GPU Region overlay, same-frame crop, DPI geometry and
+cancellation/teardown. Keep the former shell as a reference until P4 replacement
+verification; SDR/topology/UI/upgrade/performance acceptance remains open.
