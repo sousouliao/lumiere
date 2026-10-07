@@ -20,6 +20,7 @@ Release platforms: Windows
 
 - Sharpen the Windows installer and place drive-root installations in a Lumiere subdirectory.
 - Remove rounded corners from the screenshot selection window.
+- Remove the HDR and output-semantics note from System settings.
 
 ### Known limitations
 

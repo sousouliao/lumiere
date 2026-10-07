@@ -63,4 +63,5 @@ broad fidelity certification remain unstarted.
   timing and Intel SDR acceptance remain independent; retain the staged shared fallback.
 
 Exact commands, artifact hashes, devices, observations and remaining criteria belong to
-their owning Issues. Separate UI-only footer removal remains unstaged and preserved.
+their owning Issues. Settings footer removal is committed at `9d9df61` and included in
+the Windows candidate; its targeted renderer tests pass (12 tests).
