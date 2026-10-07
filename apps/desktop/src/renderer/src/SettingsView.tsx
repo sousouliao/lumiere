@@ -590,10 +590,6 @@ function SystemSettings({
       ) : (
         <SettingsRow label="Version" value={currentVersion} />
       )}
-      <p className="settings-semantics-note">
-        Native HDR-aware capture. Everyday output is sRGB Visual Match. Copied and saved mean
-        delivered, not certified.
-      </p>
     </div>
   )
 }

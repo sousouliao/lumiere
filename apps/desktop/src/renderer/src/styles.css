@@ -936,17 +936,6 @@ button {
   font-size: var(--Lumiere-Dark-fontSizeCaption);
 }
 
-.settings-semantics-note {
-  margin: 0;
-  padding: 9px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--Lumiere-Dark-radiusControl);
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--surface-raised) 38%, var(--surface-window));
-  font-size: var(--Lumiere-Dark-fontSizeCaption);
-  line-height: 1.35;
-}
-
 @keyframes capture-pulse {
   from {
     opacity: 0.4;
