@@ -1,123 +1,66 @@
 # Current Project State
 
-- Updated: 2026-09-30
+- Updated: 2026-10-08
 - Milestone: 1 — Cross-platform HDR-aware MVP with sRGB Visual Match
-- Posture: native capture and shared product surface complete; macOS and Windows stable distribution is published, with Windows explicitly unsigned.
-- Issues #12, #15, and #16 were resolved on Windows on 2026-09-11; ADR 0018 makes signing independent of stable release status.
+- Public distribution: `v0.5.0`, including unsigned Windows x64 NSIS; not replaced or republished.
+- Windows candidate: `0.6.0`, update implementation at `88e1d60`; not ready for public finalization while applicable native/hardware gates remain open.
 
 ## Current Position
 
-Electron/React drives Swift and .NET Hosts through platform-host JSON Lines. Display
-capture and capability polling use v5; native Region requests use v6 on both platforms.
-Display and Region capture support Clipboard, Folder, and Both delivery.
-Main owns persisted output, save-directory, shortcut, after-capture, and HDR-reminder
-settings. Native Region presents the retained full-resolution Visual Match frame and
-crops that same backing frame after selection. Windows retains its v5 Electron preview
-path only as an explicit diagnostic fallback (`LUMIERE_WINDOWS_REGION_OVERLAY=electron`).
-The desktop shell starts resident without showing its main window: macOS runs as a
-menu-bar-only accessory app, while Windows retains the corresponding tray behavior in
-source pending current runtime verification. Explicit open/settings actions reveal the
-prewarmed window; missing macOS Screen Recording permission is the startup exception and
-shows guidance without automatically triggering the system prompt.
+Electron/React supervises Swift and .NET Hosts through JSON Lines. Capabilities and
+Display use v5; native Region uses v6 and request-id cancellation on both platforms.
+Native Region selects/crops the same full-resolution frozen Visual Match frame.
+The Windows Electron Region preview remains only an explicit diagnostic fallback;
+shared migration cleanup waits for independent platform acceptance under #19.
 
-Foundation and milestone 1A–1C are recorded complete in
-[#1](https://github.com/Mournerliao/lumiere/issues/1),
-[#4](https://github.com/Mournerliao/lumiere/issues/4),
-[#7](https://github.com/Mournerliao/lumiere/issues/7), and
-[#9](https://github.com/Mournerliao/lumiere/issues/9).
-HDR-preserved export and broader cross-platform fidelity certification remain unstarted.
+ADR 0020 enables unsigned Windows in-app updates independently of signing and sparse
+identity. Packaged builds check periodically, download only on request, show progress,
+and silently install/relaunch only on explicit restart after capture and Host shutdown.
+Ordinary quit does not install. macOS keeps manual release-page updates. Public v0.5.0
+needs one manual upgrade to obtain this capability. Windows still has unsigned warnings,
+application-control restrictions and the WGC capture border; HDR-preserved export and
+broad fidelity certification remain unstarted.
 
 ## Verification Boundary
 
-- **Quiet failure feedback — [#16](https://github.com/sousouliao/lumiere/issues/16):**
-  independent Toast removed; success/cancellation stay quiet, background failures use
-  silent system notifications, foreground failures use a footer summary with fixed-size
-  details, blocking recovery replaces the capture actions, and all recovery shares one
-  capture busy state. `pnpm check`, `pnpm test:shared` (27 files, 139 tests), and
-  `pnpm build` pass on this Mac.
-  Electron fixture checks cover notification routing/clicks, closed-window recovery,
-  stale actions, folder/permission recovery, and cancellation; renderer unit checks cover
-  fixed-size notice placement. Packaged macOS Display/Region output, cancellation, native
-  notification presentation, and notification click recovery pass. On Windows, an isolated
-  packaged `0.4.0` run produced a real background partial result: clipboard delivery passed,
-  folder delivery failed against a deliberately non-directory target, and the app returned
-  the expected folder-recovery notice through the system-notification path.
-- **macOS runtime:** recorded Display/Region delivery, settings persistence, cancellation,
-  frozen-frame commit, external-4K backing geometry, and bounded repeat checks pass.
-  Region latency on the named SDR target was 607 ms cold and 343.5 ms warm median
-  (311–415 ms). Built-in Retina XDR geometry still needs observation after the correction.
-- **macOS manual update check:** System settings checks the latest stable GitHub Release
-  through typed main/preload IPC, reports idle/checking/current/available/failure states,
-  and opens the fixed releases page for manual download. `pnpm check`, `pnpm test:shared`
-  (28 files, 151 tests), `pnpm test:macos` (2 files, 6 tests), the macOS Host suite
-  (34 tests), and `pnpm build` pass on this Mac. The development runtime reported
-  `0.2.0 · Up to date` before `v0.3.0` publication; installed-release behavior is not yet
-  separately observed.
-- **Multi-display Region repository slice:** platform-host v4 target tokens, the shared
-  display watcher, switching state, preview/session replacement, and stale-generation guards
-  are implemented. `pnpm test:shared` (27 files, 138 tests), `pnpm build`, and the macOS
-  Host suite (34 tests) pass on this Mac. The maintainer accepted real dual-display switching;
-  Windows build/runtime remains unverified.
-- **Windows runtime:** `hosts/windows/scripts/verify.ps1` passes with Host 33, Capture 85,
-  Graphics 48, and Interop 35 tests. On the named 3840×2160 HDR display at 150% scaling,
-  optimized Region preparation produced 2560×1440 previews: 950 ms cold and 666 ms warm
-  median across ten samples, versus 1821 ms cold and 2196.5 ms warm median from the installed
-  protocol-v3 baseline. Ten prepare/cancel cycles released successfully; a final 100×100
-  logical commit produced a 150×150 sRGB Visual Match PNG from the retained HDR frame.
-- **Distribution:** `v0.5.0` was published from `9482b1f` as the latest stable release with
-  separate macOS arm64/x64 DMGs and an unsigned Windows x64 NSIS installer. The unified CI
-  audit, shared checks, macOS integration and Swift Host tests, Windows Host verification,
-  all three builds, publication, exact asset-set inspection, and downloaded public-release
-  checksums pass. No additional manual platform runtime observation was performed for this
-  release; the prior recorded macOS and Windows evidence remains current. Windows stable
-  releases deliberately retain SmartScreen or unknown-publisher warnings, the WGC system
-  capture border, and manual updates. Signed sparse identity, borderless consent, verified
-  publisher identity, and automatic updates remain unavailable and unclaimed.
-- **Fidelity and CI:** named macOS bright/dark fixtures and one Windows HDR-target sRGB
-  reference passed. These do not certify broad fidelity or HDR preservation. The current
-  shell and both native Host CI checkpoint is release commit `9482b1f`.
-
-Exact prior commands, measurements, and platform qualifications remain available in the
-[Git version before this condensation](https://github.com/Mournerliao/lumiere/blob/e1b48d1dd691ab567b376d1ba27edf27428ba448/knowledge/state/CURRENT.md#verification-truth).
-Owning Issues hold acceptance criteria; new verification belongs there rather than in a
-running history here.
+- Windows candidate repository gates: `pnpm install --frozen-lockfile`, `pnpm check`,
+  `pnpm test:shared` (34 files, 204 tests), `pnpm build` via packaging, and
+  `pnpm package:windows` pass. Native `verify.ps1` passes Host 41, Capture 93,
+  Graphics 50 and Interop 35 tests. These are local results, not new cross-platform CI.
+- Installed updates: real local-source `0.6.0` → test-only `0.6.1` rejects a wrong
+  SHA-512, supports network retry/progress, refuses install during capture and retains
+  settings. The maintainer physically clicked download/restart and confirmed successful
+  `0.6.1` launch; the installed process uses `--updated`. Default/custom-path installation,
+  uninstall cleanup and reinstall were observed on this development machine. Public-source
+  observation and non-development Windows installation are distinct, outstanding gates.
+- RTX 5080, named 3840×2160 HDR target at 150%: packaged drag, Escape/right-click,
+  too-small selection, 60-second expiry, clipboard/folder/both, partial delivery and
+  Host-loss recovery observed. A red-to-blue underlying-window fixture retained the red
+  frozen crop, yielding a 450×225 sRGB PNG from a 300×150 logical selection.
+- 100 mixed cycles: 74 successes, 25 cancellations, one clipboard partial delivery
+  with successful file output; later captures recovered. A 30+ minute resident run
+  includes controlled Host replacement and settled memory/handle observations. Available
+  GPU memory checkpoints were stable; this is bounded evidence, not universal leak exclusion.
+- 30 hot injected-shortcut samples with screen-recording corroboration: software
+  callback → visible/foreground HWND p90 50 ms (26–59 ms). This does not certify the
+  compositor-visible/input-ready endpoint or physical-key latency. Windows SDR/scaling
+  coverage beyond the named target, multi-display/negative coordinates and sleep/reconnect
+  remain unaccepted. Standalone development preview also hit Electron GPU-process crashes;
+  the no-self-update policy passes configuration tests, but normal preview runtime is unverified.
 
 ## Execution Frontiers
 
-[Issue #19](https://github.com/sousouliao/lumiere/issues/19) owns the full-resolution
-native Region overlay, with [#20](https://github.com/sousouliao/lumiere/issues/20)
-for the shared v6 seam, [#21](https://github.com/sousouliao/lumiere/issues/21) for
-macOS, and [#22](https://github.com/sousouliao/lumiere/issues/22) for Windows. The
-v6 schema and macOS Region request are committed. The macOS Shell sends `captureRegion`
-to its prewarmed AppKit Host and no longer creates the Electron Region Overlay;
-capabilities and Display capture remain on v5. The Windows Host now accepts v6 native
-Region capture and request-ID cancellation: an owned STA window presents the frozen
-full-resolution GPU Visual Match surface and returns geometry for same-frame delivery.
-The Windows Shell now routes Region to v6 by default while native behavior is verified.
-On the named 3840×2160 SDR target at 150% scaling, one direct Host EXE smoke produced a
-225×150 sRGB PNG from a 150×100 logical selection; this used synthetic window messages
-and does not certify interactive input or presentation. `pwsh ./hosts/windows/scripts/verify.ps1`
-passes (Host 41, Capture 93, Graphics 50, Interop 35 tests); `pnpm check`,
-`pnpm test:shared` (31 files, 187 tests), and `pnpm build` pass on Windows. Native
-HDR and multi-display runtime behavior, packaged Shell routing, and recorded hot
-shortcut-to-visible latency remain to verify before accepting the Windows cutover.
-Three direct Host EXE timing probes on this SDR target measured 566 ms cold and 58/56 ms
-hot from JSONL write to visible HWND (10 ms polling); they do not include Electron,
-physical shortcut input, or a packaged build.
-After restarting `pnpm dev` from the main checkout, the maintainer observed near-immediate
-native overlay presentation and normal pointer interaction. Physical right-click cancelled
-selection; a physical drag selected a Region and the Debug Host completed Clipboard and
-Folder delivery of the same 1166×1533 sRGB Visual Match artifact. This confirms the
-development app on the named SDR display, not HDR or packaged latency.
-Both macOS application architectures package with the matching Host. The packaged arm64
-native overlay was observed with the frozen full-screen image, dimming, crosshair, hint,
-and input focus. A background-shortcut stall (Host stdin write deferred behind a microtask
-after the native shortcut callback) is fixed; with the main window closed, 23 packaged
-arm64 presses reached AppKit-visible at software-endpoint p90 151 ms, without physical-key
-or recorded corroboration. Packaged selection delivery and recorded ≥30-sample
-shortcut-to-visible timing remain open. Next: verify native presentation and selection
-on named HDR and multi-display targets, then record the packaged hot latency series and
-retire the v5 Electron fallback.
-Finish the two targeted macOS runtime checks before removing the staged v5 Region path.
-ADR 0018 continues to permit unsigned Windows stable distribution; broad fidelity,
-fresh-machine installation, and HDR-preserved export remain separate work.
+- [#24](https://github.com/sousouliao/lumiere/issues/24): local installed update acceptance
+  completed; no public publication. Next release work must observe the real GitHub feed.
+- [#20](https://github.com/sousouliao/lumiere/issues/20): current Windows shared seam checks
+  pass; record current macOS shared checks before closing its remaining cross-platform gate.
+- [#22](https://github.com/sousouliao/lumiere/issues/22): finish independent Windows
+  display/hardware and compositor timing acceptance; do not substitute Mac multi-display evidence.
+- [#23](https://github.com/sousouliao/lumiere/issues/23): finish non-development-machine,
+  sleep/reconnect and remaining desktop acceptance before release preparation.
+- [#21](https://github.com/sousouliao/lumiere/issues/21) and parent
+  [#19](https://github.com/sousouliao/lumiere/issues/19): macOS native selection, hardware,
+  timing and Intel SDR acceptance remain independent; retain the staged shared fallback.
+
+Exact commands, artifact hashes, devices, observations and remaining criteria belong to
+their owning Issues. Separate UI-only footer removal remains unstaged and preserved.
