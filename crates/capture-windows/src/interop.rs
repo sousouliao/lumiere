@@ -23,6 +23,7 @@ impl Drop for Apartment {
 pub(crate) struct Monitor {
     pub handle: HMONITOR,
     pub name: String,
+    pub bounds: windows::Win32::Foundation::RECT,
 }
 pub(crate) fn cursor_monitor() -> Result<Monitor> {
     let mut point = POINT::default();
@@ -38,7 +39,32 @@ pub(crate) fn cursor_monitor() -> Result<Monitor> {
         Ok(Monitor {
             handle,
             name: utf16(&info.szDevice),
+            bounds: info.monitorInfo.rcMonitor,
         })
+    }
+}
+
+pub(crate) struct DpiScope(windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT);
+impl DpiScope {
+    pub fn physical_coordinates() -> Result<Self> {
+        // SAFETY: Thread-local DPI context is restored by a non-Send guard on this worker.
+        let previous = unsafe {
+            windows::Win32::UI::HiDpi::SetThreadDpiAwarenessContext(
+                windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+            )
+        };
+        if previous.0.is_null() {
+            return Err(Error::from_thread());
+        }
+        Ok(Self(previous))
+    }
+}
+impl Drop for DpiScope {
+    fn drop(&mut self) {
+        // SAFETY: Restore this thread's saved valid DPI context.
+        unsafe {
+            windows::Win32::UI::HiDpi::SetThreadDpiAwarenessContext(self.0);
+        }
     }
 }
 pub(crate) fn utf16(value: &[u16]) -> String {

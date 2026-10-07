@@ -1,6 +1,8 @@
 use crate::interop::{Monitor, utf16};
 use half::f16;
+mod visual_match;
 use lumiere_capture_contract::DynamicRange;
+pub(crate) use visual_match::VisualMatch;
 use windows::{
     Win32::{
         Devices::Display::*,
@@ -75,7 +77,27 @@ impl Device {
         };
         texture.ok_or_else(|| Error::new(E_FAIL, "No frame texture"))
     }
-    pub fn readback(&self, texture: &ID3D11Texture2D, width: u32, height: u32) -> Result<Vec<u8>> {
+    pub fn readback(
+        &self,
+        texture: &ID3D11Texture2D,
+        width: u32,
+        height: u32,
+        crop: Option<crate::overlay::geometry::Crop>,
+    ) -> Result<Vec<u8>> {
+        let crop = crop.unwrap_or(crate::overlay::geometry::Crop {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        });
+        if crop.width == 0
+            || crop.height == 0
+            || crop.x.checked_add(crop.width).is_none_or(|x| x > width)
+            || crop.y.checked_add(crop.height).is_none_or(|y| y > height)
+        {
+            return Err(Error::new(E_FAIL, "Invalid source frame crop"));
+        }
+        let (width, height) = (crop.width, crop.height);
         let staging = self.texture(width, height, true)?;
         let row_bytes = (width as usize)
             .checked_mul(8)
@@ -86,7 +108,16 @@ impl Device {
         let mut map = D3D11_MAPPED_SUBRESOURCE::default();
         // SAFETY: Matching textures and exclusive immediate context use; mapped rows live until Unmap.
         unsafe {
-            self.context.CopyResource(&staging, texture);
+            let region = D3D11_BOX {
+                left: crop.x,
+                top: crop.y,
+                front: 0,
+                right: crop.x + width,
+                bottom: crop.y + height,
+                back: 1,
+            };
+            self.context
+                .CopySubresourceRegion(&staging, 0, 0, 0, 0, texture, 0, Some(&region));
             self.context
                 .Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut map))?;
         }

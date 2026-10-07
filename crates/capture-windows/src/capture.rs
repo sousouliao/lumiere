@@ -25,6 +25,7 @@ pub(crate) struct FrozenFrame {
     pub width: u32,
     pub height: u32,
     pub color: DisplayColor,
+    pub monitor: crate::interop::Monitor,
 }
 struct Session {
     session: Option<GraphicsCaptureSession>,
@@ -39,6 +40,18 @@ impl Drop for Session {
     }
 }
 struct Frame(Direct3D11CaptureFrame);
+struct DirectDevice(IDirect3DDevice);
+struct Surface(windows::Graphics::DirectX::Direct3D11::IDirect3DSurface);
+impl Drop for Surface {
+    fn drop(&mut self) {
+        let _ = self.0.Close();
+    }
+}
+impl Drop for DirectDevice {
+    fn drop(&mut self) {
+        let _ = self.0.Close();
+    }
+}
 impl Drop for Frame {
     fn drop(&mut self) {
         let _ = self.0.Close();
@@ -57,11 +70,11 @@ pub(crate) fn freeze(device: &Device, cancel: &Cancellation) -> Result<Option<Fr
         return Err(Error::new(E_FAIL, "Empty capture target"));
     }
     // SAFETY: Native device is owned and valid; keep the apartment-bound wrapper local.
-    let winrt: IDirect3DDevice = unsafe {
+    let winrt = DirectDevice(unsafe {
         CreateDirect3D11DeviceFromDXGIDevice(&device.native.cast::<IDXGIDevice>()?)?.cast()?
-    };
+    });
     let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(
-        &winrt,
+        &winrt.0,
         DirectXPixelFormat::R16G16B16A16Float,
         2,
         size,
@@ -103,7 +116,8 @@ pub(crate) fn freeze(device: &Device, cancel: &Cancellation) -> Result<Option<Fr
                 "Capture target changed size; retry capture",
             ));
         }
-        let access: IDirect3DDxgiInterfaceAccess = frame.0.Surface()?.cast()?;
+        let surface = Surface(frame.0.Surface()?);
+        let access: IDirect3DDxgiInterfaceAccess = surface.0.cast()?;
         // SAFETY: Surface access returns its owned D3D11 texture; copy has identical dimensions/format.
         let texture = unsafe {
             let source: ID3D11Texture2D = access.GetInterface()?;
@@ -138,6 +152,7 @@ pub(crate) fn freeze(device: &Device, cancel: &Cancellation) -> Result<Option<Fr
             width: size.Width as u32,
             height: size.Height as u32,
             color,
+            monitor,
         }));
     }
 }

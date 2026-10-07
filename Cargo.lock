@@ -112,6 +112,7 @@ dependencies = [
  "serde",
  "serde_json",
  "windows",
+ "windows-numerics",
 ]
 
 [[package]]
@@ -120,8 +121,10 @@ version = "0.1.0"
 dependencies = [
  "lumiere-capture-contract",
  "lumiere-capture-windows",
+ "png",
  "serde_json",
  "tokio",
+ "windows",
 ]
 
 [[package]]

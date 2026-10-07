@@ -10,6 +10,7 @@ mod capture;
 mod delivery;
 mod graphics;
 mod interop;
+mod overlay;
 
 #[derive(Clone, Default)]
 pub struct Cancellation(Arc<AtomicBool>);
@@ -41,6 +42,7 @@ pub struct WindowsEngine {
     startup_failure: Option<Failure>,
 }
 struct CaptureJob {
+    mode: CaptureMode,
     params: CaptureParams,
     cancel: Cancellation,
     reply: mpsc::SyncSender<CaptureOutcome>,
@@ -66,8 +68,17 @@ impl Default for WindowsEngine {
                     }
                 };
                 let mut device = None;
+                let mut shader = None;
+                let mut overlay = None;
                 while let Ok(job) = receive.recv() {
-                    let outcome = match Self::capture_display(&mut device, job.params, job.cancel) {
+                    let outcome = match Self::capture_native(
+                        &mut device,
+                        &mut shader,
+                        &mut overlay,
+                        job.mode,
+                        job.params,
+                        job.cancel,
+                    ) {
                         Ok(result) => result,
                         Err(error) => CaptureOutcome::Failed {
                             failure: Failure::capture(error.to_string()),
@@ -76,6 +87,8 @@ impl Default for WindowsEngine {
                     let _ = job.reply.send(outcome);
                 }
                 // Device is released on its owning thread, before the MTA apartment.
+                drop(overlay);
+                drop(shader);
                 drop(device);
             })
             .expect("create native capture worker");
@@ -128,7 +141,7 @@ impl CaptureEngine for WindowsEngine {
                 contract_version: version,
                 platform: "windows",
                 host_status: "available",
-                capture_modes: vec![CaptureMode::Display],
+                capture_modes: vec![CaptureMode::Region, CaptureMode::Display],
                 delivery_targets: vec![
                     lumiere_capture_contract::DeliveryTarget::Clipboard,
                     lumiere_capture_contract::DeliveryTarget::Folder,
@@ -149,17 +162,13 @@ impl CaptureEngine for WindowsEngine {
         if cancel.is_cancelled() {
             return CaptureOutcome::Cancelled;
         }
-        if mode != CaptureMode::Display {
-            return CaptureOutcome::Failed {
-                failure: Failure::capture("Native Region migration is not available yet."),
-            };
-        }
         if let Err(failure) = params.validate() {
             return CaptureOutcome::Failed { failure };
         }
         let (reply, result) = mpsc::sync_channel(1);
         if self.send.as_ref().is_none_or(|send| {
             send.send(CaptureJob {
+                mode,
                 params,
                 cancel,
                 reply,
@@ -177,28 +186,62 @@ impl CaptureEngine for WindowsEngine {
 }
 
 impl WindowsEngine {
-    fn capture_display(
+    fn capture_native(
         cache: &mut Option<graphics::Device>,
+        shader: &mut Option<graphics::VisualMatch>,
+        overlay: &mut Option<overlay::Overlay>,
+        mode: CaptureMode,
         params: CaptureParams,
         cancel: Cancellation,
     ) -> windows::core::Result<CaptureOutcome> {
+        let _dpi = interop::DpiScope::physical_coordinates()?;
+        let deadline = std::time::Instant::now()
+            + std::time::Duration::from_secs(lumiere_capture_contract::REGION_LEASE_SECONDS);
         if cache.is_none() {
             *cache = Some(graphics::Device::create()?);
         }
         let device = cache.as_ref().expect("device initialized");
         let result = (|| {
-            let Some(frame) = capture::freeze(device, &cancel)? else {
-                return Ok(CaptureOutcome::Cancelled);
+            let (frame, crop) = loop {
+                if cancel.is_cancelled()
+                    || (mode == CaptureMode::Region && std::time::Instant::now() >= deadline)
+                {
+                    return Ok(CaptureOutcome::Cancelled);
+                }
+                let Some(frame) = capture::freeze(device, &cancel)? else {
+                    return Ok(CaptureOutcome::Cancelled);
+                };
+                if mode == CaptureMode::Display {
+                    break (frame, None);
+                }
+                if shader.is_none() {
+                    *shader = Some(graphics::VisualMatch::new(device)?);
+                }
+                match overlay::select(
+                    overlay,
+                    device,
+                    shader.as_ref().expect("shader initialized"),
+                    &frame,
+                    &cancel,
+                    deadline,
+                )? {
+                    overlay::Selection::Selected(crop) => break (frame, Some(crop)),
+                    overlay::Selection::Cancelled => return Ok(CaptureOutcome::Cancelled),
+                    overlay::Selection::SwitchTarget => continue,
+                }
             };
             if cancel.is_cancelled() {
                 return Ok(CaptureOutcome::Cancelled);
             }
-            let source = device.readback(&frame.texture, frame.width, frame.height)?;
-            let pixels = graphics::rgba16f_to_rgba8(&source, frame.width, frame.color.scale);
+            let source = device.readback(&frame.texture, frame.width, frame.height, crop)?;
+            let (width, height) = crop
+                .map(|c| (c.width, c.height))
+                .unwrap_or((frame.width, frame.height));
+            let pixels = graphics::rgba16f_to_rgba8(&source, width, frame.color.scale);
             if cancel.is_cancelled() {
                 return Ok(CaptureOutcome::Cancelled);
             }
-            let png = delivery::encode_png(frame.width, frame.height, &pixels).map_err(|e| {
+            let png = delivery::encode_png(width, height, &pixels).map_err(|e| {
                 windows::core::Error::new(windows::Win32::Foundation::E_FAIL, e.to_string())
             })?;
             if cancel.is_cancelled() {
@@ -216,6 +259,8 @@ impl WindowsEngine {
         })();
         // Retry with fresh native resources after device removal or any acquisition/readback failure.
         if result.is_err() {
+            *overlay = None;
+            *shader = None;
             *cache = None;
         }
         result

@@ -19,7 +19,10 @@ JSONL Host. It reserves captures before dispatch, processes controls concurrentl
 and waits for native release on cancellation, lease expiry, EOF and broken output.
 P2 implements cursor-targeted WGC Display capture, retained RGBA16F textures,
 target-aware DXGI/SDR-white conversion and shared PNG clipboard/folder delivery.
-An owned worker retains the MTA and D3D device; Region remains unavailable until P3.
+An owned worker retains the MTA and D3D device. P3 adds native GPU Region selection
+with the baseline shader, D2D/DirectWrite affordances, same-frame crop and v6
+cancellation. A hidden HWND/presenter is reused; frozen source bindings are detached
+after selection. Both v5/v6 capabilities advertise the implemented modes.
 
 The accepted target removes Electron, .NET and all macOS-specific implementation
 from the final product. It keeps an independent Rust capture library, thin native
@@ -66,6 +69,16 @@ equality, DIBV5 availability, partial folder failure; observed 1.32–1.38 secon
 These samples do not establish performance distribution or compositor visual parity.
 [#28](https://github.com/sousouliao/lumiere/issues/28) owns commands and limitations.
 
-Implement P3's native GPU Region overlay, same-frame crop, DPI geometry and
-cancellation/teardown. Keep the former shell as a reference until P4 replacement
-verification; SDR/topology/UI/upgrade/performance acceptance remains open.
+P3 verification: Cargo tests (4 protocol + 6 conversion/geometry/delivery + 5
+transport), strict Clippy, format, layout and real-child schema checks pass.
+Explicit Release fixtures verify the retained HDR frame's exact 200x140 crop and
+30 native selection/Esc/right-click/remote-cancel cycles plus active-window EOF.
+Warm/final handles 667/659, USER 30/30, GDI 10/10; counters include driver retirement.
+Display both-delivery regression also passes. Hardware fixtures remain opt-in and
+synthetic input does not certify physical-input/compositor or multi-monitor behavior.
+[#29](https://github.com/sousouliao/lumiere/issues/29) owns evidence and decisions.
+
+Implement P4 Tauri shell and renderer bridge, preserving current Windows UI and
+behavior while creating/destroying the WebView on demand. Keep the former shell as
+a reference until replacement verification; SDR/topology/UI/upgrade/performance
+acceptance remains open.
