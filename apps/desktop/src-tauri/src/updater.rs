@@ -38,9 +38,9 @@ impl Updates {
     }
     fn failure(&self, app: &AppHandle, retry: &str, version: Option<&str>) {
         let mut state = json!({"status":"failed", "message": match retry {
-            "check" => "Couldn?t check for updates",
-            "download" => "Couldn?t download or verify the update",
-            _ => "Couldn?t start the installer",
+            "check" => "Couldn’t check for updates",
+            "download" => "Couldn’t download or verify the update",
+            _ => "Couldn’t start the installer",
         }, "retry":retry});
         if let Some(version) = version {
             state["availableVersion"] = json!(version);
