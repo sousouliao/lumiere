@@ -20,8 +20,20 @@ Only the private, checked backup tree is recursively removed. Unknown files and
 `pnpm package:windows` stages a local NSIS installer, signs its final bytes with the
 official Tauri signer and creates both `latest.yml` and `latest.json` for that same
 installer. `prepare-release` builds native files/manifests without an installer;
-`build-installer` packages already prepared files. This performs no publication or
-version decision. The source, package and Tauri versions must agree.
+`build-installer` requires the prepared version and file hashes to match, then packages
+those exact files. The standalone Release Host/helper statically link the CRT, as the
+Tauri shell already does; the locked build is shared by local packaging and CI.
+This performs no publication or version decision. The source, package and Tauri
+versions must agree. The official signer is the only updater-artifact signing path.
+
+For `--updated` handoff, NSIS waits for natural exit before starting a transaction.
+Each probe opens and closes a fresh RestartManager session scoped to the installed
+executable: reusing a session retained exited clients during acceptance. A monotonic
+15-second deadline bounds repeated probes; query failure or timeout aborts before
+replacement. Manual installation retains the upstream running-application check.
+Best-effort stages, version and installer PID append to
+`%TEMP%/Lumiere-installer-trace.jsonl`; helper errors remain in
+`%TEMP%/Lumiere-installer-error.txt`. Diagnostics do not control transaction success.
 
 Private signing material must stay outside Git. CI uses `TAURI_SIGNING_PRIVATE_KEY`
 or `TAURI_SIGNING_PRIVATE_KEY_PATH`, and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Local

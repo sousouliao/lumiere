@@ -49,6 +49,11 @@ installer and matching `latest.yml` / signed `latest.json` into
 fallback credentials live outside the repository at `%USERPROFILE%/.lumiere/updater`.
 Never commit or print private keys/passwords. CI requires separately provisioned secrets.
 
+`build:native` uses the same locked `prepare-release` path as packaging, with static CRT
+for the standalone Host/helper. `build-installer` consumes the prepared manifest and
+rejects version or native-byte drift; rerun preparation when either changes. Signing
+is performed once on the final NSIS bytes, not by a second Tauri artifact pipeline.
+
 `powershell -NoProfile -File scripts/verify-windows-installer.ps1` exercises isolated
 fresh/reinstall/legacy/official-updater fixtures. It temporarily exports the three owned
 HKCU registration keys, pins `/D` to fixture directories and waits for installer commit
@@ -67,3 +72,6 @@ Install rollback preserves originals and unknown files using an owned sibling ba
 On failure inspect structured stderr and `%TEMP%/Lumiere-installer-error.txt`; retry only
 after the prior installer exits. Never recursively remove an installation directory as
 recovery. See [release runbook](releasing.md) for separately authorized publication.
+Installer stages/version/PID also append to `%TEMP%/Lumiere-installer-trace.jsonl`.
+Update handoff polls fresh installation-scoped RestartManager sessions for natural exit,
+with a monotonic 15-second deadline; timeout/query failure aborts before replacement.

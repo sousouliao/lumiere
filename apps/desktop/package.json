@@ -6,7 +6,7 @@
   "description": "Windows Lumiere desktop shell",
   "scripts": {
     "build": "vite build --config vite.tauri.config.ts",
-    "build:native": "cargo build -p lumiere-windows-host --release && tauri build --no-bundle",
+    "build:native": "node ../../scripts/package-windows.mjs prepare-release",
     "check": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "predev": "cargo build -p lumiere-windows-host",
     "dev": "tauri dev",

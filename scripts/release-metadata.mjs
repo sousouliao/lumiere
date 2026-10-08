@@ -350,6 +350,12 @@ function argumentValue(name) {
 async function readRepositoryState({ publishing = false } = {}) {
   const changelog = await readFile(changelogPath, 'utf8')
   const desktopPackage = JSON.parse(await readFile(desktopPackagePath, 'utf8'))
+  const tauriConfig = JSON.parse(
+    await readFile(join(repositoryRoot, 'apps', 'desktop', 'src-tauri', 'tauri.conf.json'), 'utf8'),
+  )
+  if (desktopPackage.version !== tauriConfig.version) {
+    throw new Error('Desktop package and Tauri versions must agree before release operations.')
+  }
   const parsed = validateReleaseState({
     changelog,
     packageVersion: desktopPackage.version,

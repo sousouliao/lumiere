@@ -25,6 +25,12 @@ Preparation is complete when the candidate commit contains one valid `[Unrelease
 section, package and target versions agree, selected platforms have adequate evidence,
 and no reachable release blocker remains.
 
+Release metadata rejects package/Tauri version drift before proceeding. Windows CI and
+release builds share locked native preparation and consume its unchanged payload hashes.
+Multi-command native/check steps use explicit fail-fast Bash so an earlier failure cannot
+be hidden by the last command succeeding. A local equivalent run verifies local source;
+it does not establish remote Actions success for a commit absent from the remote branch.
+
 ## Publish
 
 1. Re-audit changes since the prepared commit. If product behavior changed, return to

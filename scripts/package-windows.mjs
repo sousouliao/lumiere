@@ -22,23 +22,36 @@ if (pkg.version !== config.version) throw new Error('Package and Tauri versions 
 await mkdir(staging, { recursive: true })
 await mkdir(release, { recursive: true })
 if (operation !== 'build-installer') {
-  await run('cargo', [
-    'build',
-    '--locked',
-    '--release',
-    '-p',
-    'lumiere-windows-host',
-    '-p',
-    'lumiere-installer',
-  ])
-  await run('pnpm', ['exec', 'tauri', 'build', '--no-bundle', '--ci'], { cwd: desktop })
+  await run(
+    'cargo',
+    ['build', '--locked', '--release', '-p', 'lumiere-windows-host', '-p', 'lumiere-installer'],
+    {
+      // Tauri already links its shell CRT statically. The standalone Host/helper
+      // must do the same rather than require the developer machine's VC runtime.
+      env: {
+        ...process.env,
+        RUSTFLAGS: `${process.env.RUSTFLAGS ?? ''} -C target-feature=+crt-static`.trim(),
+      },
+    },
+  )
+  await run('pnpm', ['exec', 'tauri', 'build', '--no-bundle', '--ci', '--', '--locked'], {
+    cwd: desktop,
+  })
 }
 const payload = { version: pkg.version, files: [] }
 for (const name of ['Lumiere.exe', 'lumiere-windows-host.exe']) {
   const bytes = await readFile(join(root, 'target', 'release', name))
   payload.files.push({ path: name, sha256: createHash('sha256').update(bytes).digest('hex') })
 }
-await writeFile(join(staging, 'payload.json'), `${JSON.stringify(payload, null, 2)}\n`)
+const payloadPath = join(staging, 'payload.json')
+if (operation === 'build-installer') {
+  const prepared = JSON.parse(await readFile(payloadPath, 'utf8'))
+  if (JSON.stringify(prepared) !== JSON.stringify(payload)) {
+    throw new Error('Prepared version or native bytes changed. Run prepare-release again.')
+  }
+} else {
+  await writeFile(payloadPath, `${JSON.stringify(payload, null, 2)}\n`)
+}
 // Raw NSIS, one payload and no in-place binary patch after the manifest is hashed.
 // Official updater infers the installer format from these bytes.
 const bundleConfig = join(staging, 'bundle.json')

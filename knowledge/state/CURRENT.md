@@ -36,7 +36,9 @@ P0-P5 evidence belongs to [#26](https://github.com/sousouliao/lumiere/issues/26)
 [#31](https://github.com/sousouliao/lumiere/issues/31). P6 repository checks, 5 shared test
 files / 37 retained tests, Rust workspace tests, strict Clippy/format, Vite/native Release,
 Windows schemas and local installer/updater checks pass. CI configuration now targets
-Rust/Tauri Windows; it has not been dispatched. #32 owns exact checks and artifact hashes.
+Rust/Tauri Windows. All local CI-equivalent commands pass with Node 22.23.3 and pinned
+Rust; workflow actionlint and first-command failure probes pass. Remote Actions has not
+verified this branch. #32 owns exact commands, corrections and final artifact hashes.
 
 Real HDR 3840x2160 both-delivery bytes and same-frame Region crop pass. The 30-cycle
 WebView fixture passes with settled native/React state before snapshots; warm/final shell
@@ -48,15 +50,20 @@ After 4 warm captures and 30 alternating resident Display folder captures per Ho
 Release Rust median/p90 1119/1176 ms vs frozen baseline 1409/1426 ms: -20.6%/-17.5%.
 Both report HDR. The earlier p90 regression was corrected by the exact transfer lookup.
 This establishes the observed Host hot path, not physical Region or UI-trigger latency.
-Local installer 3400788 bytes vs baseline 133323003; shell/Host 12640256/1067520 bytes.
+Final local installer 3488041 bytes vs baseline 133323003 (97.4% smaller), SHA256
+`4423b06cf8983766e990bd4ed6b49d1bbf2fc49f8476abd9074e52e296269105`.
+Shell/Host/helper import tables have no VC redistributable imports after static CRT
+packaging; Release capture/transaction tests under that configuration pass.
 
 Release GUI acceptance now pauses at matching idle/main/settings/closed states and
 uses the Release Host. Five Win32 process-tree samples per state include every live
-Host/Electron/WebView2 descendant. At synthetic 150% DPR, baseline/Tauri private bytes
-(MiB) are idle 210.0/26.6, main 215.8/222.3, settings 221.5/208.2, closed 220.8/19.6.
-Across 100/125/150/200%, idle decreases 87.4-88.0%, closed decreases 91.1-91.8%;
-visible main increases 1.4-3.1%. These are isolated Release integration fixtures,
-not shipping-binary or post-capture peak-memory measurements.
+Host/Electron/WebView2 descendant. Corrected baseline bootstrap explicitly hides its
+startup window before idle sampling. At synthetic 150% DPR, baseline/Tauri private
+bytes (MiB) are idle 199.22/25.69, main 219.65/221.65, settings 223.52/210.99,
+closed 221.89/19.54. Visible main is not a memory improvement. These are isolated
+Release integration fixtures, not post-capture peak-memory measurements. The final
+shipping executable, with isolated settings, measures idle/main/closed 25.0/219.83/18.23
+MiB across its complete process tree; settings bytes and descendant cleanup pass.
 
 Matched-viewport synthetic DPR screenshots establish exact main/settings body pixels
 at 100/150/200%. At 125%, equal CSS viewports produce a one-column preview-size
@@ -64,12 +71,22 @@ rounding difference and nonzero body differences; it does not pass pixel parity.
 Browser previews omit Electron native caption buttons, so full-window chrome and
 all interactive states remain unverified. Synthetic DPR does not certify OS DPI changes.
 
+Final NSIS fresh Unicode path, inherited reinstall, official signed updater/Host EOF,
+and full legacy inventory failure/retry fixtures pass. A cloned frozen production
+Electron client uses its genuine updater IPC/service with a loopback feed to install
+private fixture-only 0.6.1, restart and preserve settings/path/unknown files. Six serial
+journeys and one final deadline-regression journey pass. Update handoff now waits for
+natural exit using fresh RestartManager sessions; a deliberately live old client causes
+safe exit 2 in 15.34 seconds without replacement. This does not verify the public feed.
+Locked native preparation is shared by CI/packaging; stale manifests/version drift are
+rejected and only the official signer signs final installer bytes.
+
 Windows Sandbox and Hyper-V management are disabled (optional-feature state 2);
 no usable clean-machine environment is present. The remote migration branch returns
 404; latest successful remote CI verifies the old baseline, not this work. No signing
-secrets are configured. Clean-machine, installed legacy-client update, actual shipping
-process memory, physical input/compositor, SDR/topology, OS DPI and sleep/reconnect
-remain open. Earlier release waivers do not certify the replacement; #32 remains open.
+secrets are configured. Clean-machine, public-provider upgrade, physical input/compositor,
+SDR/topology, OS DPI and sleep/reconnect remain open. Earlier release waivers do not
+certify the replacement; #32 remains open and the product is not release-certified.
 
 The user's installed baseline at `D:\lumiere` remains restored/running after the P5 fixture
 incident recorded in #31. All 309 frozen hashes were verified again; original registration
@@ -78,6 +95,10 @@ installer commit before restoring the three owned HKCU keys.
 
 ## Next action
 
-Complete the remaining P6 equivalent-state Release memory and user-journey/hardware
-observations on the required environments, record them in #32 and close acceptance only
-when the evidence supports it. Do not publish or change the real installed baseline.
+The unattended local acceptance and pipeline cleanup are complete. The user must perform
+physical Region/keyboard/tray, complete UI states at real OS 100/125/150/200% DPI,
+SDR/HDR mixed-monitor/hotplug/compositor/clipboard viewing and sleep/hibernate/reconnect
+checks, plus a virgin Windows standard-user install/uninstall/reinstall. Remote CI needs
+separately authorized push of this source; public-provider update/signing provisioning
+needs an authorized release candidate. Record those observations in #32 before closing
+acceptance. Do not publish or change the real installed baseline.

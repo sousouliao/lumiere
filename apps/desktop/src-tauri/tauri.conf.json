@@ -21,7 +21,7 @@
     "icon": ["../resources/icons/windows/app.ico", "../resources/icons/windows/app.png"],
     "publisher": "Lumiere",
     "homepage": "https://github.com/sousouliao/lumiere",
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "resources": {
       "../../../target/release/lumiere-windows-host.exe": "lumiere-windows-host.exe"
     },

@@ -114,7 +114,7 @@ jobs:
         run: rustup show active-toolchain
 
       - name: Verify Rust workspace
-        shell: pwsh
+        shell: bash
         run: |
           cargo fmt --all -- --check
           cargo clippy --locked --workspace --all-targets --features lumiere-desktop/custom-protocol -- -D warnings

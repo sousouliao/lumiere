@@ -244,6 +244,7 @@ FunctionEnd
 {{/each}}
 
 Function .onInit
+  !insertmacro LumiereTrace "init"
   ${GetOptions} $CMDLINE "/P" $PassiveMode
   ${IfNot} ${Errors}
     StrCpy $PassiveMode 1
@@ -296,10 +297,12 @@ Function .onInit
   !if "${INSTALLMODE}" == "both"
     !insertmacro MULTIUSER_INIT
   !endif
+  !insertmacro LumiereTrace "initialized"
 FunctionEnd
 
 
 Section EarlyChecks
+  !insertmacro LumiereTrace "early-checks"
   ReadRegStr $R1 SHCTX "${UNINSTKEY}" "DisplayVersion"
   ${If} $R1 == ""
     ReadRegStr $R1 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\25f85616-d352-524a-a5cc-01558c0b783c" "DisplayVersion"
@@ -312,9 +315,11 @@ Section EarlyChecks
       ${EndIf}
     ${EndIf}
   !endif
+  !insertmacro LumiereTrace "early-checks-passed"
 SectionEnd
 
 Section WebView2
+  !insertmacro LumiereTrace "webview-check"
   ; Check if Webview2 is already installed and skip this section
   ${If} ${RunningX64}
     ReadRegStr $4 HKLM "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\${WEBVIEW2APPGUID}" "pv"
@@ -407,7 +412,15 @@ Section WebView2
 SectionEnd
 
 Section Install
-  !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  !insertmacro LumiereTrace "check-running"
+  ${If} $UpdateMode = 1
+    ; Updaters launch NSIS before their old process has finished exiting.
+    ; Do not race that shutdown with RestartManager's forced-close path.
+    Call LumiereWaitForUpdateExit
+  ${Else}
+    !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  ${EndIf}
+  !insertmacro LumiereTrace "running-check-passed"
   SetOutPath $INSTDIR
 
   !ifmacrodef NSIS_HOOK_PREINSTALL
@@ -512,6 +525,7 @@ Section Install
 SectionEnd
 
 Function .onInstFailed
+  !insertmacro LumiereTrace "failed"
   Call LumiereRollback
 FunctionEnd
 
@@ -672,6 +686,69 @@ Function RestorePreviousInstallLocation
       StrCpy $INSTDIR $4
     ${EndIf}
   ${EndIf}
+FunctionEnd
+
+Function LumiereWaitForUpdateExit
+  Push $R0
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+  StrCpy $LumiereUpdateExitReady 0
+  !insertmacro LumiereTrace "wait-update-exit"
+  System::Call 'kernel32::GetTickCount() i .r5'
+  lumiere_exit_wait_poll:
+    ; A session can retain exited applications in its cached list. Release each
+    ; probe before sleeping and query a fresh installation-scoped snapshot.
+    !insertmacro RestartManager_StartSession $R0
+    ${If} $R0 == ""
+      !insertmacro LumiereTrace "update-exit-query-failed"
+      Goto lumiere_exit_wait_done
+    ${EndIf}
+    !insertmacro RestartManager_RegisterFile $R0 "$INSTDIR\${MAINBINARYNAME}.exe"
+    ${If} $0 != 0
+      !insertmacro LumiereTrace "update-exit-query-failed"
+      Goto lumiere_exit_wait_done
+    ${EndIf}
+    StrCpy $1 0
+    StrCpy $2 0
+    StrCpy $3 0
+    System::Call 'RSTRTMGR::RmGetList(i R0, *i .r1, *i .r2, p 0, *i .r3) i .r4'
+    !insertmacro RestartManager_EndSession $R0
+    StrCpy $R0 ""
+    ${If} $4 = 0
+      StrCpy $LumiereUpdateExitReady 1
+      Goto lumiere_exit_wait_done
+    ${EndIf}
+    ${If} $4 != ${ERROR_MORE_DATA}
+      !insertmacro LumiereTrace "update-exit-query-failed"
+      Goto lumiere_exit_wait_done
+    ${EndIf}
+    System::Call 'kernel32::GetTickCount() i .r4'
+    ; Unsigned elapsed subtraction also handles the DWORD timer wrapping.
+    IntOp $4 $4 - $5
+    IntCmpU $4 15000 lumiere_exit_wait_timeout 0 lumiere_exit_wait_timeout
+    Sleep 100
+    Goto lumiere_exit_wait_poll
+  lumiere_exit_wait_timeout:
+    !insertmacro LumiereTrace "update-exit-timeout"
+  lumiere_exit_wait_done:
+  ${If} $R0 != ""
+    !insertmacro RestartManager_EndSession $R0
+  ${EndIf}
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+  Pop $R0
+  ${If} $LumiereUpdateExitReady != 1
+    Abort "Lumiere did not exit for the update. Close it and retry."
+  ${EndIf}
+  !insertmacro LumiereTrace "update-exit-confirmed"
 FunctionEnd
 
 Function Skip
