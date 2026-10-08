@@ -329,7 +329,7 @@ fn acceptance(app: &AppHandle, output: &std::path::Path) {
             );
             script(
                 &window,
-                "document.querySelector('[aria-label=\"System settings\"]').click(); true",
+                "document.querySelector('[aria-label=\"System and about\"]').click(); true",
             );
             wait_for(|| {
                 script(
