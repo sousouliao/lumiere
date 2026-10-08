@@ -113,6 +113,9 @@ jobs:
         shell: pwsh
         run: rustup show active-toolchain
 
+      - name: Prepare native release payload
+        run: pnpm --filter @lumiere/desktop build:native
+
       - name: Verify Rust workspace
         shell: bash
         run: |
@@ -129,7 +132,7 @@ jobs:
         shell: pwsh
         run: |
           if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Tauri updater signing key is required.' }
-          pnpm package:windows
+          pnpm package:windows build-installer
 
       - name: Verify updater signatures against the embedded public key
         shell: pwsh

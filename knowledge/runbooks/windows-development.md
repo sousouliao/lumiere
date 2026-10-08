@@ -15,6 +15,7 @@ pnpm install --frozen-lockfile
 pnpm check
 pnpm test:shared
 pnpm build
+pnpm --filter @lumiere/desktop build:native
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets --features lumiere-desktop/custom-protocol -- -D warnings
 cargo test --locked --workspace --features lumiere-desktop/custom-protocol
@@ -25,6 +26,10 @@ node scripts/verify-rust-protocol.mjs
 `pnpm dev` builds the Debug Host, starts Vite and the Tauri shell. Release native
 build: `pnpm --filter @lumiere/desktop build:native`. The shell supervises the adjacent
 Host; a missing or disconnected Host is a recoverable product state.
+On a fresh checkout, prepare native Release files before the workspace checks: Tauri's
+build script validates and copies the configured adjacent Release Host resource even
+for a Debug check. CI and the release workflow enforce this order and then bundle the
+prepared payload; a previously built local Host must not hide a missing prerequisite.
 
 Hardware/GUI tests are ignored by default. Read their specific prerequisites before
 explicitly running them. Native Region fixtures live in `hosts/windows/tests/native-region.rs`;

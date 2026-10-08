@@ -38,6 +38,9 @@ jobs:
         shell: pwsh
         run: rustup show active-toolchain
 
+      - name: Build native release shell and Host
+        run: pnpm --filter @lumiere/desktop build:native
+
       - name: Verify Rust workspace
         shell: bash
         run: |
@@ -46,6 +49,3 @@ jobs:
           cargo test --locked --workspace --features lumiere-desktop/custom-protocol
           cargo build --locked -p lumiere-windows-host
           node scripts/verify-rust-protocol.mjs
-
-      - name: Build native release shell and Host
-        run: pnpm --filter @lumiere/desktop build:native
