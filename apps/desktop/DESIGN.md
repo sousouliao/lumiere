@@ -1,4 +1,4 @@
-# Electron UI Implementation
+# Desktop UI Implementation
 
 This file governs implementation choices inside `apps/desktop`. Product behavior,
 copy, claims, and platform differences remain owned by the linked contracts and MVP
@@ -48,9 +48,8 @@ the relevant PDF boards at the intended window size and the implementation has c
 - generated-token use with no substitute hard-coded palette;
 - default, hover, pressed, disabled, and visible keyboard-focus states where applicable;
 - stable geometry during pointer and capture-state changes;
-- usable Electron zoom and reduced-motion behavior;
-- the named macOS and Windows chrome differences without projecting one platform's
-  runtime evidence to the other.
+- usable WebView zoom and reduced-motion behavior;
+- retained Windows chrome and layout without inferring all-state pixel parity from source checks.
 
 Keep verification proportional to the slice: run the repository gates and perform one
 real visual/runtime observation on the owning platform rather than building a parallel

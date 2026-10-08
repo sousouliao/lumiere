@@ -2,61 +2,52 @@
 
 ## Platform Baseline
 
-- Shared shell: Electron, React, TypeScript, and Chromium; Windows and macOS only.
-- Windows host: `.NET 10`, WGC, D3D11, DXGI, Vortice, `x64` / `win-x64`.
-- macOS host: Swift, ScreenCaptureKit, and native Apple color/GPU frameworks; the
-  distribution supports macOS 15 or newer with separate `arm64` and `x64` applications.
-  Apple Silicon owns HDR acquisition; Intel remains an SDR-only path.
-- MVP output: one shared semantic profile, RGBA8/sRGB Visual Match, delivered through
-  platform-native clipboard and file adapters.
-
-Do not introduce Electron desktop capture, renderer Canvas, `NativeImage`, GDI,
-cloud upload, or telemetry as the official capture/conversion foundation.
+Lumiere currently targets Windows x64. Stable Tauri 2 owns the native shell and
+on-demand WebView2; React/TypeScript owns the retained desktop UI. Rust owns the
+separate capture Host and independent WGC/D3D11/DXGI capture library. No other platform
+implementation, compatibility stub, or source archive is kept in the working tree.
+[ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md) owns this decision.
 
 ## Module Boundaries
 
 | Module | Responsibility |
 |---|---|
-| `apps/desktop` | Electron lifecycle, shared React UI, secure preload, platform-host orchestration |
-| `protocol/platform-host` | Language-neutral process protocol, compatibility rules, schema, and fixtures |
-| `hosts/macos` | Swift ScreenCaptureKit adapter, HDR-aware acquisition, sRGB Visual Match conversion, and native delivery |
-| `hosts/windows/src/Lumiere.Windows.Host` | .NET executable, protocol validation, capability queries, and capture-engine orchestration |
-| `hosts/windows/src/Lumiere.Windows.Capture` | WGC target resolution, frame-pool lifecycle, capture state |
-| `hosts/windows/src/Lumiere.Windows.Graphics` | D3D11/DXGI device state, HDR-aware readback, sRGB Visual Match, native delivery |
-| `hosts/windows/src/Lumiere.Windows.Interop` | Required COM/WinRT adapters, diagnostics, and native-resource wrappers |
+| `apps/desktop/src/renderer` | React components, generated tokens, typed product state |
+| `apps/desktop/src-tauri` | Native lifecycle, tray, shortcuts, settings, named IPC, Host supervision, signed updater |
+| `crates/capture-contract` | Typed v5/v6 JSONL commands, validation and results |
+| `crates/capture-windows` | WGC target/frame lifetime, DXGI HDR state, D3D conversion, native Region, PNG and delivery |
+| `hosts/windows/rust` | Separate executable, concurrent request dispatch, cancellation, structured stderr |
+| `protocol/platform-host` | Windows wire schemas and executable examples |
+| `tools/windows-installer` | Transactional install ownership, explicit legacy inventory cleanup and rollback |
 
-Both native Hosts communicate with Electron through the platform-host JSON Lines
-process interface. Electron selects and supervises the owning platform's executable;
-the Windows Host composes the Capture, Graphics, and Interop libraries.
+The native shell and Host remain resident. The WebView is created on demand and
+destroyed on close. The shell supervises one adjacent Host executable over UTF-8
+JSON Lines. Raw frames, textures, native handles and capture ownership never cross
+that process seam. WGC/DXGI/D3D11 and COM/WinRT lifetime details stay in capture-windows.
+Settings remain at `%APPDATA%/Lumiere/settings.json`; upgrades preserve that data.
 
-Platform APIs stay in their owning module. The shell consumes the platform-host
-interface but must not own WGC, DXGI, D3D11, ScreenCaptureKit, Metal, ColorSync,
-COM/WinRT, or native-resource lifetime details. IPC may carry commands, typed state,
-diagnostics identifiers, and artifact paths; it must not carry raw HDR frames.
+## WebView Security
 
-## Electron Security Invariants
+- Load packaged local content only; deny unexpected navigation and new windows.
+- Use CSP and the minimum Tauri capability ACL; expose named validated commands.
+- Do not give renderer code generic shell, filesystem or process access.
+- Keep capture/conversion in the native library, never renderer Canvas or browser capture.
 
-- Load packaged local content only.
-- Keep renderer sandboxing and context isolation enabled and Node integration disabled.
-- Expose one named preload method per command; never expose `ipcRenderer` directly.
-- Validate IPC sender and payload before crossing the platform-host seam.
-- Deny unexpected navigation and window creation.
+## Output And Lifetime
 
-## HDR Invariants
+- Retain native RGBA16F acquisition until fixed sRGB Visual Match conversion completes.
+- Probe HDR and SDR white level on the active target; missing required HDR input fails.
+- Region selects and crops the same frozen frame, with a 60-second native selection lease.
+- Clipboard and folder consume one encoded PNG; failures stay target-local.
+- Keep artifact success, visual match and HDR preservation separate under the claims contract.
+- Dispose native resources deterministically; log structured diagnostics to stderr.
+- Tests establish the seam and lifecycle; physical capture/compositor fidelity requires hardware evidence.
 
-- Preserve each platform's native high-dynamic-range acquisition semantics until the
-  shared sRGB Visual Match conversion is complete.
-- Assess HDR against the active target, not a global or first-monitor assumption.
-- Keep sRGB Visual Match conversion behind each native host but governed by one shared
-  semantic contract and fixed regression fixtures.
-- Separate artifact delivery success, visual-match evidence, and HDR preservation.
-- Keep platform capability and verification independent; one adapter cannot certify another.
-- Require the claims contract before changing public HDR language.
+## Distribution
 
-## Resource And Diagnostics Invariants
-
-- Dispose COM, DXGI, D3D11, WGC, ScreenCaptureKit, Metal, and related native resources deterministically.
-- Use structured platform logging; do not use ad-hoc console output for native failures.
-- Prefer typed results and explicit state transitions for expected platform failures.
-- Automated tests may cover configuration, state, projection, protocol, and lifecycle
-  seams; real capture/HDR presentation remains a platform hardware concern.
+NSIS installs per user and preserves the existing location, settings and unknown files.
+Only explicitly owned files may be replaced or removed. Never invoke the former recursive
+uninstaller. Interrupted or failed replacement rolls back from a sibling transaction backup.
+The official Tauri updater verifies minisign signatures and signed versions before readiness;
+installation waits for capture quiescence and confirmed Host exit. Both updater metadata
+formats reference the same installer bytes. No automatic install on ordinary quit.

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Lumiere",
+  "version": "0.7.0",
+  "identifier": "io.github.sousouliao.lumiere",
+  "build": {
+    "beforeDevCommand": "pnpm exec vite --config vite.tauri.config.ts",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../out/renderer",
+    "devUrl": "http://127.0.0.1:5173"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": ["nsis"],
+    "icon": ["../resources/icons/windows/app.ico", "../resources/icons/windows/app.png"],
+    "publisher": "Lumiere",
+    "homepage": "https://github.com/sousouliao/lumiere",
+    "createUpdaterArtifacts": false,
+    "resources": {
+      "../../../target/release/lumiere-windows-host.exe": "lumiere-windows-host.exe"
+    },
+    "windows": {
+      "allowDowngrades": false,
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "template": "../build/windows-installer/installer.nsi",
+        "installerHooks": "../build/windows-installer/transaction.nsh",
+        "languages": ["English"],
+        "displayLanguageSelector": false
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/sousouliao/lumiere/releases/latest/download/latest.json"],
+      "requireSignedVersion": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM1OTk0MjFDMjI4NEZEQUUKUldTdS9ZUWlIRUtaeFF1aTI3SlZ4cEh2ekYvdHllZm5tMktLb2xqQ0ZnOEFaakxkNFE0U2VWZloK",
+      "windows": {
+        "installMode": "quiet"
+      }
+    }
+  }
+}

@@ -8,12 +8,15 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig(
   globalIgnores([
+    '**/.dotnet/**',
     '**/artifacts/**',
     '**/bin/**',
     '**/coverage/**',
     '**/node_modules/**',
     '**/obj/**',
     '**/out/**',
+    'target/**',
+    'apps/desktop/src-tauri/gen/**',
   ]),
   {
     files: ['**/*.{js,mjs,cjs}'],
@@ -34,16 +37,6 @@ export default defineConfig(
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
-    },
-  },
-  {
-    files: [
-      'apps/desktop/electron.vite.config.ts',
-      'apps/desktop/src/main/**/*.ts',
-      'apps/desktop/src/preload/**/*.ts',
-    ],
-    languageOptions: {
-      globals: globals.node,
     },
   },
   {

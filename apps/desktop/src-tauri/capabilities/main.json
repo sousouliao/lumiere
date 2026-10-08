@@ -1,0 +1,32 @@
+{
+  "identifier": "main",
+  "description": "Local Lumiere settings and capture window",
+  "windows": ["main"],
+  "permissions": [
+    "allow-renderer-ready",
+    "allow-get-capture-surface-snapshot",
+    "allow-refresh-capture-surface",
+    "allow-get-capture-activity",
+    "allow-capture-display",
+    "allow-capture-region",
+    "allow-get-settings-snapshot",
+    "allow-choose-save-directory",
+    "allow-set-output-delivery",
+    "allow-set-after-capture-behavior",
+    "allow-set-hdr-status-reminders",
+    "allow-set-capture-shortcut",
+    "allow-set-shortcut-recording",
+    "allow-recover-capture",
+    "allow-get-update-snapshot",
+    "allow-check-for-updates",
+    "allow-download-update",
+    "allow-install-update",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close"
+  ]
+}

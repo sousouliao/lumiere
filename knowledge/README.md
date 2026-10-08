@@ -23,8 +23,7 @@ truth. Start with this map and disclose detail only when the current task needs 
 | What phase are we in and what is the frontier? | [`state/CURRENT.md`](state/CURRENT.md) |
 | What route and milestone gates are we following? | [`roadmap.md`](roadmap.md) |
 | Why was a durable choice made? | [`decisions/`](decisions/) |
-| How is shared-shell development performed? | [`runbooks/cross-platform-development.md`](runbooks/cross-platform-development.md) |
-| How is macOS native development performed? | [`runbooks/macos-development.md`](runbooks/macos-development.md) |
+| How is desktop-shell development performed? | [`runbooks/cross-platform-development.md`](runbooks/cross-platform-development.md) |
 | How is Windows native development performed? | [`runbooks/windows-development.md`](runbooks/windows-development.md) |
 | How is an on-demand release prepared and published? | [`runbooks/releasing.md`](runbooks/releasing.md) |
 | What exact checks apply to this platform? | [`runbooks/`](runbooks/) |

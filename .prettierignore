@@ -1,5 +1,6 @@
 **/artifacts/
 **/.build/
+**/.dotnet/
 **/bin/
 **/node_modules/
 **/obj/
@@ -8,3 +9,5 @@
 .github/ISSUE_TEMPLATE/
 knowledge/
 pnpm-lock.yaml
+/target/
+Cargo.lock

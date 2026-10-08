@@ -3,7 +3,7 @@ import type { CaptureCommandResult, CaptureSurfaceSnapshot } from '../../shared/
 import { resolveCaptureNotices } from './capture-notices'
 
 const readySnapshot: CaptureSurfaceSnapshot = {
-  platform: 'macos',
+  platform: 'windows',
   hostAvailable: true,
   captureModes: ['region', 'display'],
   hdrStatus: 'ready',
@@ -51,17 +51,7 @@ describe('capture notice placement', () => {
     ).toEqual({ activeNotice: blockingNotice, blockingNotice, detailNotice: undefined })
   })
 
-  it('places permission recovery in the action area and other failed results in details', () => {
-    const permissionResult: CaptureCommandResult = {
-      status: 'failed',
-      feedback: 'Permission required',
-      notice: {
-        tone: 'critical',
-        title: 'Screen recording permission is required',
-        detail: 'Nothing is captured until you allow it.',
-        recovery: 'permissions',
-      },
-    }
+  it('places partial delivery recovery in details', () => {
     const partialResult: CaptureCommandResult = {
       status: 'partial',
       feedback: 'Copied, but not saved',
@@ -73,16 +63,6 @@ describe('capture notice placement', () => {
       },
     }
 
-    expect(
-      resolveCaptureNotices({
-        snapshot: readySnapshot,
-        result: permissionResult,
-        loadFailed: false,
-      }),
-    ).toMatchObject({
-      blockingNotice: permissionResult.notice,
-      detailNotice: undefined,
-    })
     expect(
       resolveCaptureNotices({ snapshot: readySnapshot, result: partialResult, loadFailed: false }),
     ).toMatchObject({

@@ -2,7 +2,7 @@
 
 ## Direction
 
-Lumiere should feel like a calm, precise desktop tool on Windows and macOS. Capture
+Lumiere should feel like a calm, precise desktop tool on Windows. Capture
 speed, accuracy, and trust take priority over decorative product presentation.
 
 - Respect platform window, menu, shortcut, typography, focus, and permission conventions.
@@ -24,7 +24,7 @@ delays capture or confirmation.
   registry as the default source for reusable animated components. Copy only
   components the product uses; the checked-in source is owned and adapted by Lumiere.
 - Prefer semantic HTML controls and restrained shared styling before custom primitives.
-- Use Electron platform facilities for windows, menus, tray/menu-bar, and shortcuts;
+- Use Tauri native facilities for windows, menus, tray and shortcuts;
   use native hosts for capture permission and platform-owned failure flows.
 - Custom UI is appropriate for overlay, crop handles, magnifier, result preview,
   and future annotation canvas, but does not establish HDR fidelity.

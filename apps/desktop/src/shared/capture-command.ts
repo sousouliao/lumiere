@@ -1,38 +1,6 @@
-import type {
-  CaptureGeometry,
-  CaptureMode,
-  LogicalSize,
-  LumierePlatform,
-  OutputDelivery,
-} from './platform-contract'
+import type { CaptureMode, LumierePlatform, OutputDelivery } from './platform-contract'
 import type { LumiereSettingsApi } from './settings-command'
 import type { LumiereUpdateApi } from './update-command'
-import type { LumiereMacOSPermissionRecoveryApi } from './macos-permission-recovery-command'
-
-export const captureCommandChannels = {
-  captureDisplay: 'capture:display',
-  captureRegion: 'capture:region',
-  getActivity: 'capture:get-activity',
-  activityChanged: 'capture:activity-changed',
-  refreshSurface: 'capture:refresh-surface',
-  recover: 'capture:recover',
-  showRequested: 'capture:show-requested',
-  getSurfaceSnapshot: 'capture:get-surface-snapshot',
-  surfaceChanged: 'capture:surface-changed',
-  regionOverlayHostReady: 'region-overlay:host-ready',
-  regionOverlayActivated: 'region-overlay:activated',
-  regionOverlayReset: 'region-overlay:reset',
-  regionOverlayReady: 'region-overlay:ready',
-  cancelRegionOverlay: 'region-overlay:cancel',
-  submitRegionSelection: 'region-overlay:submit-selection',
-} as const
-
-export interface RegionOverlaySnapshot {
-  generation: number
-  targetSize: LogicalSize
-  previewPixelSize: LogicalSize
-  previewUrl: string
-}
 
 export type ProductHdrStatus = 'ready' | 'unavailable' | 'unvalidated'
 
@@ -40,7 +8,7 @@ export interface CaptureNotice {
   tone: 'critical' | 'caution'
   title: string
   detail: string
-  recovery?: 'permissions' | 'folder' | 'output'
+  recovery?: 'folder' | 'output'
 }
 
 export interface CaptureCompletion {
@@ -54,23 +22,13 @@ export interface CaptureActivity {
   lastCompletion: CaptureCompletion | null
 }
 
-export type CaptureRecoveryAction =
-  'capture-again' | 'open-permissions' | 'choose-folder' | 'open-settings' | 'refresh'
+export type CaptureRecoveryAction = 'capture-again' | 'choose-folder' | 'open-settings' | 'refresh'
 
 export function captureRecoveryActions(
   result: CaptureCommandResult,
-  platform: LumierePlatform,
 ): { action: CaptureRecoveryAction; label: string }[] {
   if (result.status !== 'failed' && result.status !== 'partial') return []
   switch (result.notice.recovery) {
-    case 'permissions':
-      return [
-        {
-          action: platform === 'macos' ? 'open-permissions' : 'open-settings',
-          label: platform === 'macos' ? 'Open System Settings' : 'Open settings',
-        },
-        { action: 'refresh', label: 'Check again' },
-      ]
     case 'folder':
       return [
         { action: 'choose-folder', label: 'Choose save folder' },
@@ -124,8 +82,7 @@ export type CaptureCommandResult =
       notice: CaptureNotice
     }
 
-export interface LumiereRendererApi
-  extends LumiereSettingsApi, LumiereUpdateApi, LumiereMacOSPermissionRecoveryApi {
+export interface LumiereRendererApi extends LumiereSettingsApi, LumiereUpdateApi {
   readonly platform: LumierePlatform
   getCaptureSurfaceSnapshot(): Promise<CaptureSurfaceSnapshot>
   onCaptureSurfaceChanged(listener: (snapshot: CaptureSurfaceSnapshot) => void): () => void
@@ -136,10 +93,4 @@ export interface LumiereRendererApi
   refreshCaptureSurface(): Promise<CaptureSurfaceSnapshot>
   recoverCapture(id: number, action: CaptureRecoveryAction): Promise<void>
   onShowCaptureRequested(listener: () => void): () => void
-  onRegionOverlayActivated(listener: (snapshot: RegionOverlaySnapshot) => void): () => void
-  onRegionOverlayReset(listener: () => void): () => void
-  regionOverlayHostReady(): void
-  regionOverlayReady(generation: number): void
-  cancelRegionOverlay(generation: number): void
-  submitRegionSelection(generation: number, geometry: CaptureGeometry): void
 }

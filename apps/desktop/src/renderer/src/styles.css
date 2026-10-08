@@ -32,12 +32,7 @@
   color: var(--text-primary);
   color-scheme: dark;
   background: var(--surface-window);
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: Inter, 'Segoe UI', sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -199,7 +194,6 @@ button {
   justify-content: center;
   min-width: 0;
   border-bottom: 1px solid var(--border-subtle);
-  -webkit-app-region: drag;
   user-select: none;
 }
 
@@ -216,6 +210,34 @@ button {
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.window-controls {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+}
+
+.window-control {
+  width: 46px;
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+  color: var(--text-primary);
+}
+
+.window-control svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.window-control--close:hover {
+  /* Windows system-caption color, separate from the product accent palette. */
+  background: #e81123;
+  color: #fff;
 }
 
 .capture-panel {
@@ -503,7 +525,6 @@ button {
   color: var(--text-secondary);
   background: transparent;
   cursor: pointer;
-  -webkit-app-region: no-drag;
 }
 
 .settings-link:hover {
@@ -530,7 +551,6 @@ button {
   align-items: center;
   justify-content: center;
   background: color-mix(in srgb, var(--surface-raised) 26%, var(--surface-window));
-  -webkit-app-region: drag;
   user-select: none;
 }
 
@@ -548,14 +568,14 @@ button {
 
 .settings-title-bar--windows {
   justify-content: flex-start;
-  gap: 9px;
-  padding: 0 138px 0 14px;
+  gap: 8px;
+  padding: 0 138px 0 7px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-window);
 }
 
 .settings-title-bar--windows h1 {
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-weight: 400;
 }
 
@@ -565,11 +585,10 @@ button {
   height: 32px;
   padding: 0;
   border: 0;
-  border-radius: var(--Lumiere-Dark-radiusChip);
-  color: var(--text-primary);
+  border-radius: var(--Lumiere-Dark-radiusControl);
+  color: var(--text-secondary);
   background: transparent;
   cursor: pointer;
-  -webkit-app-region: no-drag;
 }
 
 .settings-back svg {
@@ -583,6 +602,7 @@ button {
 }
 
 .settings-back:hover {
+  color: var(--text-primary);
   background: var(--surface-hover);
 }
 
@@ -591,32 +611,6 @@ button {
 }
 
 .settings-back:focus-visible {
-  outline: 2px solid var(--accent-base);
-  outline-offset: 1px;
-}
-
-.settings-done {
-  position: absolute;
-  top: 9px;
-  right: 14px;
-  height: 26px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--Lumiere-Dark-radiusChip);
-  color: var(--text-secondary);
-  background: transparent;
-  font-size: var(--Lumiere-Dark-fontSizeMeta);
-  font-weight: 580;
-  cursor: pointer;
-  transition: color 120ms ease;
-  -webkit-app-region: no-drag;
-}
-
-.settings-done:hover {
-  color: var(--text-primary);
-}
-
-.settings-done:focus-visible {
   outline: 2px solid var(--accent-base);
   outline-offset: 1px;
 }
@@ -637,7 +631,6 @@ button {
   background: color-mix(in srgb, var(--surface-window) 82%, black);
   box-shadow: none;
   backdrop-filter: none;
-  -webkit-app-region: no-drag;
 }
 
 .settings-dock-item {
@@ -743,7 +736,6 @@ button {
 
 .settings-switch {
   display: inline-flex;
-  -webkit-app-region: no-drag;
 }
 
 .settings-switch > button {
@@ -804,7 +796,6 @@ button {
   background: var(--surface-raised);
   font-size: var(--Lumiere-Dark-fontSizeMeta);
   line-height: 1;
-  -webkit-app-region: no-drag;
 }
 
 .settings-inline-action:hover:not(:disabled),
@@ -830,13 +821,6 @@ button {
   min-width: 112px;
 }
 
-.update-check-button--available,
-.update-check-button--available:hover:not(:disabled) {
-  border-color: var(--accent-border);
-  color: var(--text-on-accent);
-  background: var(--accent-base);
-}
-
 .shortcut-setting-error {
   margin: -3px 0 3px;
   color: var(--status-caution);
@@ -846,7 +830,6 @@ button {
 .settings-select {
   z-index: 1;
   min-width: 160px;
-  -webkit-app-region: no-drag;
 }
 
 .settings-select:focus-within {
@@ -897,7 +880,6 @@ button {
   justify-content: space-between;
   gap: 8px;
   overflow: hidden;
-  -webkit-app-region: no-drag;
 }
 
 .settings-select-content {
@@ -936,17 +918,6 @@ button {
   font-size: var(--Lumiere-Dark-fontSizeCaption);
 }
 
-.settings-semantics-note {
-  margin: 0;
-  padding: 9px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--Lumiere-Dark-radiusControl);
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--surface-raised) 38%, var(--surface-window));
-  font-size: var(--Lumiere-Dark-fontSizeCaption);
-  line-height: 1.35;
-}
-
 @keyframes capture-pulse {
   from {
     opacity: 0.4;
@@ -960,7 +931,7 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .capture-action,
   .settings-link,
-  .settings-done,
+  .settings-back,
   .settings-dock-item,
   .settings-control-trigger,
   .settings-select-item,

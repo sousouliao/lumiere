@@ -9,7 +9,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const changelogPath = join(repositoryRoot, 'CHANGELOG.md')
 const desktopPackagePath = join(repositoryRoot, 'apps', 'desktop', 'package.json')
 const readmePath = join(repositoryRoot, 'README.md')
-const repositoryUrl = 'https://github.com/Mournerliao/lumiere'
+const repositoryUrl = 'https://github.com/sousouliao/lumiere'
 const semverPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/
 const categoryOrder = ['Added', 'Changed', 'Fixed', 'Known limitations']
@@ -206,6 +206,12 @@ export function validateReleaseState({ changelog, packageVersion, publishing = f
   if (publishing && parsed.candidate) {
     throw new Error('The Unreleased section must be finalized before publishing.')
   }
+  if (parsed.candidate && parsed.candidate.platforms.join(', ') !== 'Windows') {
+    throw new Error('New release candidates support Windows only.')
+  }
+  if (publishing && parsed.releases[0]?.platforms.join(', ') !== 'Windows') {
+    throw new Error('The active release lane supports Windows only.')
+  }
   const expectedVersion = parsed.candidate?.targetVersion ?? parsed.releases[0]?.version
   if (!expectedVersion) throw new Error('CHANGELOG.md contains no candidate or released version.')
   if (packageVersion !== expectedVersion) {
@@ -294,22 +300,15 @@ export function createReleaseNotes(release) {
   const changes = release.categories
     .map((category) => `## ${category.name}\n\n${category.content}`)
     .join('\n\n')
-  const downloads = release.platforms.flatMap((platform) => {
-    if (platform === 'macOS') {
-      return [
-        `- macOS Apple Silicon: \`Lumiere-${release.version}-macos-arm64.dmg\``,
-        `- macOS Intel: \`Lumiere-${release.version}-macos-x64.dmg\``,
-      ]
-    }
-    return [`- Windows: \`Lumiere-Setup-${release.version}-x64.exe\``]
-  })
+  const downloads = [`- Windows: ` + '`' + `Lumiere-Setup-${release.version}-x64.exe` + '`']
+
   return [
     changes,
     '',
     '## Downloads',
     '',
     ...downloads,
-    '- Integrity: verify the downloaded installer or disk image against `SHA256SUMS`.',
+    '- Integrity: verify the downloaded installer against `SHA256SUMS`.',
     '',
     `See the [versioned installation instructions](${repositoryUrl}/blob/v${release.version}/README.md) before first launch.`,
     '',
@@ -328,7 +327,7 @@ async function findReleaseBinaries(directory) {
   for (const entry of entries) {
     const path = join(directory, entry.name)
     if (entry.isDirectory()) files.push(...(await findReleaseBinaries(path)))
-    else if (['.dmg', '.exe'].includes(extname(entry.name))) files.push(path)
+    else if (extname(entry.name) === '.exe') files.push(path)
   }
   return files.sort()
 }
@@ -351,6 +350,12 @@ function argumentValue(name) {
 async function readRepositoryState({ publishing = false } = {}) {
   const changelog = await readFile(changelogPath, 'utf8')
   const desktopPackage = JSON.parse(await readFile(desktopPackagePath, 'utf8'))
+  const tauriConfig = JSON.parse(
+    await readFile(join(repositoryRoot, 'apps', 'desktop', 'src-tauri', 'tauri.conf.json'), 'utf8'),
+  )
+  if (desktopPackage.version !== tauriConfig.version) {
+    throw new Error('Desktop package and Tauri versions must agree before release operations.')
+  }
   const parsed = validateReleaseState({
     changelog,
     packageVersion: desktopPackage.version,
@@ -398,14 +403,13 @@ async function main() {
       const result = {
         version: release.version,
         platforms: release.platforms,
-        macos: release.platforms.includes('macOS'),
         windows: release.platforms.includes('Windows'),
         prerelease: parseSemver(release.version).prerelease.length > 0,
       }
       if (outputPath) {
         await writeFile(
           outputPath,
-          `version=${result.version}\nmacos=${String(result.macos)}\nwindows=${String(result.windows)}\nprerelease=${String(result.prerelease)}\n`,
+          `version=${result.version}\nwindows=${String(result.windows)}\nprerelease=${String(result.prerelease)}\n`,
           { encoding: 'utf8', flag: 'a' },
         )
       } else console.log(JSON.stringify(result))

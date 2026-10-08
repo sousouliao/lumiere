@@ -1,4 +1,4 @@
-import type { CaptureMode as PlatformCaptureMode, LumierePlatform } from './platform-contract'
+import type { CaptureMode as PlatformCaptureMode } from './platform-contract'
 
 export type CaptureMode = PlatformCaptureMode
 export type CaptureShortcuts = Record<CaptureMode, string | null>
@@ -34,15 +34,15 @@ const SPECIAL_KEYS: Readonly<Record<string, string>> = {
   ArrowUp: 'Up',
 }
 
-export function shortcutFromKeyInput(input: ShortcutKeyInput, platform: LumierePlatform): string {
+export function shortcutFromKeyInput(input: ShortcutKeyInput): string {
   const key = normalizeKey(input.key)
   const modifiers: string[] = []
-  if (platform === 'macos' && input.metaKey) modifiers.push('Command')
+  if (input.metaKey) modifiers.push('Command')
   if (input.ctrlKey) modifiers.push('Control')
   if (input.altKey) modifiers.push('Alt')
   if (input.shiftKey) modifiers.push('Shift')
   if (!modifiers.some((modifier) => PRIMARY_MODIFIERS.has(modifier))) {
-    throw new ShortcutContractError('Include Command, Control, or Alt in the shortcut.')
+    throw new ShortcutContractError('Include Super, Control, or Alt in the shortcut.')
   }
   return parseShortcutAccelerator([...modifiers, key].join('+'))
 }
@@ -87,21 +87,9 @@ export function parseShortcutAccelerator(value: unknown): string {
   return [...MODIFIERS.filter((modifier) => modifiers.includes(modifier)), key].join('+')
 }
 
-export function formatShortcutAccelerator(
-  accelerator: string | null,
-  platform: LumierePlatform,
-): string {
+export function formatShortcutAccelerator(accelerator: string | null): string {
   if (!accelerator) return 'Not configured'
   const parts = parseShortcutAccelerator(accelerator).split('+')
-  if (platform === 'macos') {
-    const labels: Readonly<Record<string, string>> = {
-      Command: '⌘',
-      Control: '⌃',
-      Alt: '⌥',
-      Shift: '⇧',
-    }
-    return parts.map((part) => labels[part] ?? part).join('')
-  }
   const labels: Readonly<Record<string, string>> = {
     Command: 'Super',
     Control: 'Ctrl',

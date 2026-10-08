@@ -7,7 +7,7 @@ target-aware HDR state do not prove that an output artifact preserves HDR.
 
 Approved language:
 
-- "HDR-aware screenshots for Windows and macOS."
+- "HDR-aware screenshots for Windows."
 - "Native capture with a platform-aware HDR pipeline."
 - "sRGB output tuned for visual match in everyday clipboard and file use."
 - "HDR-preserved export is not yet a supported public path."
@@ -22,7 +22,7 @@ Prohibited without named hardware and viewer verification on every claimed platf
 ## MVP Output Semantics
 
 sRGB Visual Match is the only official MVP path. Clipboard and folder delivery on
-both platforms must consume the same fixed semantic conversion; target- or platform-
+Windows must consume the same fixed semantic conversion; target- or platform-
 specific tone mapping drift beyond recorded tolerance is a Lumiere defect.
 
 The default conversion must:
@@ -40,7 +40,7 @@ The MVP must not ship when Lumiere causes any of these in supported scenarios:
 - obvious overexposure, large dead-white regions, washed-out output, or gray output;
 - ordinary desktop UI that is visibly too dark, color-shifted, or collapsed in contrast;
 - obvious clipboard/folder visual drift for the same converted capture;
-- unexplained Windows/macOS drift for the same fixed fixture beyond recorded tolerance.
+- unexplained baseline conversion drift for the same fixed fixture beyond recorded tolerance.
 
 Narrow target-app recoloring/compression and loss of fine detail in an extreme HDR
 scene may be recorded as limitations only when Lumiere's source artifact is valid.
@@ -53,9 +53,8 @@ metadata policy, named viewer assumptions, target-aware display state, and obser
 hardware verification on every claimed platform. A codec or high-bit-depth pixel
 format existing proves implementation only, never product behavior.
 
-## Stage Three: Cross-Platform HDR Fidelity Gate
+## Wider Fidelity Gate
 
-Cross-platform fidelity language requires fixed-scene verification across a named Windows
-and macOS display/viewer matrix. It must describe measured tolerances and known tone
-mapping differences. "Identical everywhere" and equivalent universal claims remain
-prohibited.
+Any future wider support claim needs fixed-scene verification across its named display
+and viewer matrix, measured tolerances and known differences. No unimplemented platform
+or unobserved hardware is supported by inference. Universal claims remain prohibited.

@@ -7,18 +7,24 @@ import {
 } from './shortcut-command'
 
 describe('shortcut command contract', () => {
-  it('normalizes supported macOS and Windows key combinations', () => {
+  it('normalizes supported Windows key combinations', () => {
     expect(
-      shortcutFromKeyInput(
-        { key: '4', metaKey: true, ctrlKey: false, altKey: false, shiftKey: true },
-        'macos',
-      ),
+      shortcutFromKeyInput({
+        key: '4',
+        metaKey: true,
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: true,
+      }),
     ).toBe('Command+Shift+4')
     expect(
-      shortcutFromKeyInput(
-        { key: 'l', metaKey: false, ctrlKey: true, altKey: false, shiftKey: true },
-        'windows',
-      ),
+      shortcutFromKeyInput({
+        key: 'l',
+        metaKey: false,
+        ctrlKey: true,
+        altKey: false,
+        shiftKey: true,
+      }),
     ).toBe('Control+Shift+L')
   })
 
@@ -27,7 +33,7 @@ describe('shortcut command contract', () => {
     { key: 'Shift', metaKey: true, ctrlKey: false, altKey: false, shiftKey: true },
     { key: '`', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false },
   ])('rejects unsafe or unsupported key input', (input) => {
-    expect(() => shortcutFromKeyInput(input, 'macos')).toThrow(ShortcutContractError)
+    expect(() => shortcutFromKeyInput(input)).toThrow(ShortcutContractError)
   })
 
   it('parses a narrow shortcut update payload and supports clearing', () => {
@@ -45,8 +51,8 @@ describe('shortcut command contract', () => {
   })
 
   it('formats registered accelerators with platform conventions', () => {
-    expect(formatShortcutAccelerator('Command+Alt+Shift+L', 'macos')).toBe('⌘⌥⇧L')
-    expect(formatShortcutAccelerator('Control+Shift+L', 'windows')).toBe('Ctrl+Shift+L')
-    expect(formatShortcutAccelerator(null, 'macos')).toBe('Not configured')
+    expect(formatShortcutAccelerator('Command+Alt+Shift+L')).toBe('Super+Alt+Shift+L')
+    expect(formatShortcutAccelerator('Control+Shift+L')).toBe('Ctrl+Shift+L')
+    expect(formatShortcutAccelerator(null)).toBe('Not configured')
   })
 })

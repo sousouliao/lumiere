@@ -5,20 +5,17 @@ import {
   type CaptureCompletion,
   type CaptureRecoveryAction,
 } from '../../shared/capture-command'
-import type { LumierePlatform } from '../../shared/platform-contract'
 
 export function RecoveryActions({
   completion,
-  platform,
   disabled = false,
 }: {
   completion: CaptureCompletion
-  platform: LumierePlatform
   disabled?: boolean
 }): React.JSX.Element | null {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const actions = captureRecoveryActions(completion.result, platform)
+  const actions = captureRecoveryActions(completion.result)
   if (!actions.length) return null
   const recover = async (action: CaptureRecoveryAction): Promise<void> => {
     setPending(true)

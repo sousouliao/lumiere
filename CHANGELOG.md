@@ -4,6 +4,52 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-08
+
+Release platforms: Windows
+
+### Changed
+
+- Replace the Windows desktop runtime with Tauri and Rust while retaining the existing interface, screenshot modes, settings and shortcuts.
+- Reduce installer size and background memory use by opening the interface only when needed and releasing it when closed.
+
+### Fixed
+
+- Preserve settings, installation location and user-owned files when upgrading from the previous Windows client, and safely remove replaced application files.
+- Verify in-app updates with signed installer bytes and versions, and wait for the previous client to exit before replacing it.
+- Keep update controls visible while checking for updates and after the check completes.
+
+### Known limitations
+
+- The Windows installer is not Authenticode signed; Windows may show an unknown-publisher or SmartScreen warning, or block execution. Updater integrity signatures do not establish publisher identity.
+- Windows Graphics Capture retains its system capture border. Output remains sRGB Visual Match PNG, not HDR-preserved export.
+- Windows x64 is the only supported platform. Existing v0.5.0 clients require a manual upgrade to obtain in-app updates.
+
+## [0.6.0] - 2026-10-08
+
+Release platforms: Windows
+
+### Added
+
+- Check for Windows updates in the app, download on request with progress, then restart into the new version without an installer wizard.
+
+### Changed
+
+- Select Windows Regions over a full-resolution native frozen-frame overlay instead of an encoded Electron preview.
+
+### Fixed
+
+- Sharpen the Windows installer and place drive-root installations in a Lumiere subdirectory.
+- Remove rounded corners from the screenshot selection window.
+- Remove the HDR and output-semantics note from System settings.
+
+### Known limitations
+
+- The Windows installer and updates remain unsigned; Windows may display warnings or block execution. The system capture border remains.
+- Existing v0.5.0 installations require one manual upgrade before in-app updates are available.
+- Native Region has been tested on a single 4K HDR display at 150% scaling; broader display configurations and installation on a clean Windows machine remain unverified.
+- Recorded Region latency covers a software visibility/focus endpoint, not the full display-presentation latency.
+
 ## [0.5.0] - 2026-09-11
 
 Release platforms: macOS, Windows
@@ -137,6 +183,8 @@ Release platforms: macOS
 - HDR-preserved export is not supported; the official output is sRGB Visual Match.
 - Windows release artifacts are not included in this version.
 
+[0.7.0]: https://github.com/sousouliao/lumiere/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/Mournerliao/lumiere/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Mournerliao/lumiere/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Mournerliao/lumiere/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/Mournerliao/lumiere/compare/v0.3.1...v0.3.2

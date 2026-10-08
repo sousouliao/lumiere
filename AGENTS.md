@@ -1,8 +1,7 @@
 # AGENTS.md
 
-Lumiere is a Windows and macOS HDR-aware screenshot tool. It uses an Electron/React
-shell with native platform capture hosts: WGC/D3D11/DXGI on Windows and
-ScreenCaptureKit on macOS.
+Lumiere is a Windows HDR-aware screenshot tool. Tauri/React owns the desktop shell;
+Rust owns a resident JSONL Host and independent WGC/D3D11/DXGI capture library.
 This file is a map, not a project manual.
 
 ## Start
@@ -39,9 +38,9 @@ planner, evaluator, sub-agent, and Ralph mechanisms are conditional escalation t
 - Follow `knowledge/contracts/architecture.md` for platform and module ownership.
 - Follow `knowledge/contracts/claims.md` for output semantics and HDR language.
 - Follow `knowledge/contracts/ui.md` for shared desktop UI work.
-- Read `apps/desktop/DESIGN.md` before changing Electron renderer surfaces or reusable UI components.
+- Read `apps/desktop/DESIGN.md` before changing React renderer surfaces or reusable UI components.
 - Follow existing code patterns before introducing abstractions.
-- Use deterministic native-resource disposal and structured `ILogger` logging.
+- Use deterministic native-resource disposal and structured native logging.
 - Keep artifact success, visual match, and HDR preservation separate.
 
 ## Verification And Handoff

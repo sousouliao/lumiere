@@ -12,23 +12,18 @@ import type { CaptureMode, ShortcutUpdate } from '../../shared/shortcut-command'
 import type { SettingsSnapshot } from '../../shared/settings-command'
 import type { AfterCaptureBehavior } from '../../shared/settings-command'
 import { SettingsView, type SettingsSection, type UpdateViewState } from './SettingsView'
-import { RegionOverlay } from './RegionOverlay'
 import { RecoveryActions } from './RecoveryActions'
 import { CAPTURE_LOAD_FAILURE, resolveCaptureNotices } from './capture-notices'
-import type { MacOSPermissionRecoverySnapshot } from '../../shared/macos-permission-recovery-command'
-import { MacOSPermissionRecovery } from './MacOSPermissionRecovery'
-import { macOSPermissionRecoveryContent } from './macos-permission-recovery-content'
+import { WindowControls } from './WindowControls'
 
 export function App(): React.JSX.Element {
-  if (new URLSearchParams(window.location.search).get('surface') === 'region-overlay') {
-    return <RegionOverlay />
-  }
-
   return <ApplicationSurface />
 }
 
 function ApplicationSurface(): React.JSX.Element {
-  const [view, setView] = useState<'capture' | 'settings'>('capture')
+  const [view, setView] = useState<'capture' | 'settings'>(() =>
+    new URLSearchParams(window.location.search).get('view') === 'settings' ? 'settings' : 'capture',
+  )
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('output')
   const [activity, setActivity] = useState<CaptureActivity>({
     activeMode: null,
@@ -37,9 +32,6 @@ function ApplicationSurface(): React.JSX.Element {
   const [captureResult, setCaptureResult] = useState<CaptureCommandResult | null>(null)
   const [surfaceSnapshot, setSurfaceSnapshot] = useState<CaptureSurfaceSnapshot | null>(null)
   const [surfaceLoadFailed, setSurfaceLoadFailed] = useState(false)
-  const [permissionRecovery, setPermissionRecovery] = useState<MacOSPermissionRecoverySnapshot>({
-    phase: 'inactive',
-  })
 
   useEffect(() => {
     let isCurrent = true
@@ -51,14 +43,6 @@ function ApplicationSurface(): React.JSX.Element {
     const stopCaptureViewListening = window.lumierePlatform.onShowCaptureRequested(() => {
       setView('capture')
     })
-    const stopPermissionRecoveryListening =
-      window.lumierePlatform.onMacOSPermissionRecoveryChanged(setPermissionRecovery)
-    void window.lumierePlatform
-      .getMacOSPermissionRecoverySnapshot()
-      .then((snapshot) => {
-        if (isCurrent) setPermissionRecovery(snapshot)
-      })
-      .catch(() => undefined)
     let receivedActivity = false
     const stopCaptureListening = window.lumierePlatform.onCaptureActivityChanged((next) => {
       receivedActivity = true
@@ -101,7 +85,6 @@ function ApplicationSurface(): React.JSX.Element {
       stopSettingsListening()
       stopCaptureListening()
       stopCaptureViewListening()
-      stopPermissionRecoveryListening()
       stopSurfaceListening()
     }
   }, [])
@@ -120,7 +103,6 @@ function ApplicationSurface(): React.JSX.Element {
       loadFailed={surfaceLoadFailed}
       result={captureResult ?? activity.lastCompletion?.result ?? null}
       activity={activity}
-      permissionRecovery={permissionRecovery}
       onResultChange={setCaptureResult}
       onOpenSettings={(section = 'output') => {
         setSettingsSection(section)
@@ -135,7 +117,6 @@ function MainWindow({
   loadFailed,
   result,
   activity,
-  permissionRecovery,
   onResultChange,
   onOpenSettings,
 }: {
@@ -143,7 +124,6 @@ function MainWindow({
   loadFailed: boolean
   result: CaptureCommandResult | null
   activity: CaptureActivity
-  permissionRecovery: MacOSPermissionRecoverySnapshot
   onResultChange: (result: CaptureCommandResult | null) => void
   onOpenSettings: (section?: SettingsSection) => void
 }): React.JSX.Element {
@@ -189,17 +169,7 @@ function MainWindow({
     result,
     snapshot,
   })
-  const permissionRecoveryContent = macOSPermissionRecoveryContent(permissionRecovery.phase)
-  const permissionRecoveryNotice = permissionRecoveryContent
-    ? {
-        tone: permissionRecoveryContent.tone,
-        title: permissionRecoveryContent.title,
-        detail: permissionRecoveryContent.detail,
-      }
-    : undefined
-  const activeNotice = permissionRecoveryNotice ?? resolvedNotices.activeNotice
-  const blockingNotice = permissionRecoveryNotice ?? resolvedNotices.blockingNotice
-  const detailNotice = permissionRecoveryNotice ? undefined : resolvedNotices.detailNotice
+  const { activeNotice, blockingNotice, detailNotice } = resolvedNotices
   const resultCompletion =
     activity.lastCompletion?.result === result ? activity.lastCompletion : null
   const completionNotice =
@@ -232,8 +202,12 @@ function MainWindow({
       <header
         className={`title-bar title-bar--${window.lumierePlatform.platform}`}
         aria-label="Lumiere window"
+        data-tauri-drag-region
       >
-        <span className="window-title">Lumiere</span>
+        <span className="window-title" data-tauri-drag-region>
+          Lumiere
+        </span>
+        <WindowControls />
       </header>
 
       <section
@@ -258,12 +232,7 @@ function MainWindow({
           />
         ) : (
           <>
-            {permissionRecoveryContent ? (
-              <MacOSPermissionRecovery
-                snapshot={permissionRecovery}
-                disabled={capturingMode !== null}
-              />
-            ) : blockingNotice ? (
+            {blockingNotice ? (
               <BlockingRecovery
                 notice={blockingNotice}
                 completion={blockingNotice === completionNotice ? resultCompletion : null}
@@ -368,7 +337,6 @@ function MainWindow({
                 capturingMode,
                 result,
                 snapshot,
-                permissionRecoveryStatus: permissionRecoveryContent?.status,
               })}
             </span>
             {!detailsOpen ? <ChevronRightIcon /> : null}
@@ -384,7 +352,6 @@ function MainWindow({
                 capturingMode,
                 result,
                 snapshot,
-                permissionRecoveryStatus: permissionRecoveryContent?.status,
               })}
             </span>
           </div>
@@ -420,6 +387,7 @@ function SettingsWindow({
   const [savingShortcut, setSavingShortcut] = useState<CaptureMode | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [updateState, setUpdateState] = useState<UpdateViewState>({ status: 'loading' })
+  const [captureBusy, setCaptureBusy] = useState(false)
 
   useEffect(() => {
     let isCurrent = true
@@ -456,29 +424,52 @@ function SettingsWindow({
       .catch(() => {
         // Keep the update control disabled when local version metadata is unavailable.
       })
+    const stopUpdates = window.lumierePlatform.onUpdateChanged((nextSnapshot) => {
+      if (isCurrent) setUpdateState({ status: 'idle', ...nextSnapshot })
+    })
+    const stopCapture = window.lumierePlatform.onCaptureActivityChanged((activity) => {
+      if (isCurrent) setCaptureBusy(activity.activeMode !== null)
+    })
+    void window.lumierePlatform
+      .getCaptureActivity()
+      .then((activity) => {
+        if (isCurrent) setCaptureBusy(activity.activeMode !== null)
+      })
+      .catch(() => {
+        if (isCurrent) setCaptureBusy(true)
+      })
     return () => {
+      stopUpdates()
+      stopCapture()
       isCurrent = false
     }
   }, [])
 
+  const performWindowsUpdate = async (action: 'download' | 'install'): Promise<void> => {
+    try {
+      const next =
+        action === 'download'
+          ? await window.lumierePlatform.downloadUpdate()
+          : await window.lumierePlatform.installUpdate()
+      setUpdateState({ status: 'idle', ...next })
+    } catch {
+      setError('The update could not be completed. Try again.')
+    }
+  }
+
   const checkForUpdates = async (): Promise<void> => {
     if (updateState.status === 'loading') return
     const { currentVersion } = updateState
-    setUpdateState({ status: 'checking', currentVersion })
+    setUpdateState({ status: 'checking', currentVersion, windowsUpdate: { status: 'checking' } })
     setError(null)
     try {
       setUpdateState(await window.lumierePlatform.checkForUpdates())
     } catch {
-      setUpdateState({ status: 'failed', currentVersion })
-    }
-  }
-
-  const openLatestRelease = async (): Promise<void> => {
-    setError(null)
-    try {
-      await window.lumierePlatform.openLatestRelease()
-    } catch {
-      setError('The release page could not be opened. Try again.')
+      setUpdateState({
+        status: 'failed',
+        currentVersion,
+        windowsUpdate: { status: 'failed', message: 'Couldn’t check for updates', retry: 'check' },
+      })
     }
   }
 
@@ -568,7 +559,9 @@ function SettingsWindow({
         return window.lumierePlatform.setShortcutRecording(recording)
       }}
       onCheckForUpdates={() => void checkForUpdates()}
-      onOpenLatestRelease={() => void openLatestRelease()}
+      onDownloadUpdate={() => void performWindowsUpdate('download')}
+      onInstallUpdate={() => void performWindowsUpdate('install')}
+      captureBusy={captureBusy}
     />
   )
 }
@@ -603,12 +596,7 @@ function BlockingRecovery({
       </div>
       {completion &&
       (completion.result.status === 'failed' || completion.result.status === 'partial') ? (
-        <RecoveryActions
-          key={completion.id}
-          completion={completion}
-          platform={window.lumierePlatform.platform}
-          disabled={disabled}
-        />
+        <RecoveryActions key={completion.id} completion={completion} disabled={disabled} />
       ) : notice.tone === 'critical' ? (
         <Button
           variant="ghost"
@@ -658,11 +646,7 @@ function NoticeDetails({
         <p>{notice.detail}</p>
       </div>
       {completion ? (
-        <RecoveryActions
-          completion={completion}
-          platform={window.lumierePlatform.platform}
-          disabled={disabled}
-        />
+        <RecoveryActions completion={completion} disabled={disabled} />
       ) : (
         <Button
           variant="ghost"
@@ -686,7 +670,6 @@ interface StatusMessageInput {
   captureBlocked: boolean
   interactionHint: string | null
   capturingMode: 'region' | 'display' | null
-  permissionRecoveryStatus?: string
 }
 
 function statusMessage({
@@ -694,11 +677,9 @@ function statusMessage({
   captureBlocked,
   interactionHint,
   capturingMode,
-  permissionRecoveryStatus,
   result,
   snapshot,
 }: StatusMessageInput): string {
-  if (permissionRecoveryStatus) return permissionRecoveryStatus
   if (capturingMode) {
     return capturingMode === 'region' ? 'Capturing region' : 'Capturing display'
   }

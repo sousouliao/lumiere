@@ -35,8 +35,7 @@ During `0.x` development:
   and internal changes;
 - use Minor for any new user capability, newly released platform, default-behavior change,
   or compatibility break;
-- use `1.0.0` only when the product contract's core experience, Windows and macOS
-  distribution lanes, and their stability claims are all verified and supportable.
+- use `1.0.0` only when the product contract's core experience, Windows distribution lane, and their stability claims are all verified and supportable.
 
 After `1.0.0`, use SemVer normally: compatible fixes are Patch, compatible capabilities
 are Minor, and incompatible behavior or data changes are Major. The amount of code or
@@ -45,18 +44,19 @@ user explicitly requests a Preview, Beta, or RC.
 
 ## Platform Decision
 
-Choose macOS, Windows, or both from the behavior changed and the evidence available. A
-single version and GitHub Release may contain one or both platforms, while each platform
-retains its independent build and verification truth. Never project one platform's result
-onto the other.
+The active artifact set is Windows x64 only. Historical changelog platform entries
+remain factual history and do not authorize building removed implementations.
 
 ## Signing Posture
 
 Stable and prerelease status describe product maturity and are independent of platform
 code-signing status. Windows releases may use the unsigned NSIS distribution selected by
 ADR 0018 when no signing provider is configured. Such releases must publish a checksum and
-disclose the unknown-publisher warning, retained WGC system capture border, and absence of
-automatic updates. They must not claim publisher identity, sparse identity, or borderless
+disclose the unknown-publisher warning, retained WGC system capture border, and potential
+application-control restrictions. ADR 0021 retains explicit download/restart updates with the official Tauri updater.
+Minisign signatures and signed versions verify update integrity independently of Authenticode;
+latest.yml and signed latest.json reference the same installer bytes.
+They must not claim publisher identity, sparse identity, or borderless
 capture consent.
 
 ## Changelog
@@ -66,7 +66,7 @@ notable user-visible changes. It is not a task ledger or commit log. During prep
 populate `[Unreleased]` with exactly:
 
 1. `Target version: \`X.Y.Z\``;
-2. `Release platforms: macOS`, `Windows`, or `macOS, Windows` in that order;
+2. `Release platforms: Windows`;
 3. one or more nonempty `Added`, `Changed`, `Fixed`, or `Known limitations` lists.
 
 Write outcomes in user language. Omit empty categories. Preserve released entries; correct
@@ -84,5 +84,5 @@ to `main`.
 
 The workflow may publish only after every selected platform artifact succeeds. The public
 release must contain release notes derived from the matching changelog entry, the selected
-installers, Windows updater metadata only when an active signed route requires it, and one
-checksum manifest covering all installer or disk-image bytes.
+installers, matching Windows updater metadata when Windows is selected, and one
+checksum manifest covering all installer bytes.

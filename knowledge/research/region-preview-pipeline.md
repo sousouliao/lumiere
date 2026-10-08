@@ -1,5 +1,7 @@
 # Region Preview Pipeline：冻结帧不等于全尺寸 PNG 往返
 
+> 2026-09-14 复核：本文保留为原方案的调研依据，其中“Electron 没有公开 shared texture 导入 API”的判断对当前 43.4.1 已不成立；见[固定版本传输复核](region-preview-transport-2026-09.md)。逻辑尺寸 PNG 优化后的实际瓶颈与后续建议见[本轮延迟诊断](region-capture-latency-2026-09.md)。下文的 full-resolution 路径属于优化前实现，不代表当前运行代码。
+
 - 调研日期：2026-09-04
 - 跟踪 Issue：[GitHub Issue #15](https://github.com/sousouliao/lumiere/issues/15)
 - 范围：Flameshot、ShareX、ksnip 的官方源码，Apple ScreenCaptureKit/Core Image/IOSurface，以及 Windows.Graphics.Capture/D3D11

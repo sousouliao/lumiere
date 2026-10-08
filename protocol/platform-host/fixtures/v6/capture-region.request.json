@@ -1,0 +1,9 @@
+{
+  "version": 6,
+  "id": "region-1",
+  "method": "captureRegion",
+  "params": {
+    "delivery": "both",
+    "saveDirectory": "/tmp/Lumiere"
+  }
+}

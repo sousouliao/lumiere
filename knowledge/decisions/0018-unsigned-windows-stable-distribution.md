@@ -33,6 +33,9 @@ verification.
 
 ## Consequences
 
+ADR 0020 supersedes this decision's updater prohibition for explicit unsigned Windows
+in-app updates. The signing and sparse-identity boundaries below remain unchanged.
+
 - Windows stable releases may show SmartScreen or unknown-publisher warnings after download.
 - Users must verify the installer against `SHA256SUMS` before making a local trust decision.
 - Sparse identity, borderless-capture consent, automatic updates, and signed publisher

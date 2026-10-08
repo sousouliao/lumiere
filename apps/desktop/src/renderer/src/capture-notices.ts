@@ -27,16 +27,8 @@ export function resolveCaptureNotices({
 } {
   const resultNotice =
     result?.status === 'failed' || result?.status === 'partial' ? result.notice : undefined
-  const blockingNotice =
-    resultNotice?.recovery === 'permissions'
-      ? resultNotice
-      : loadFailed
-        ? CAPTURE_LOAD_FAILURE
-        : snapshot?.blockingNotice
-  const detailNotice =
-    resultNotice?.recovery !== 'permissions'
-      ? (resultNotice ?? snapshot?.advisoryNotice)
-      : undefined
+  const blockingNotice = loadFailed ? CAPTURE_LOAD_FAILURE : snapshot?.blockingNotice
+  const detailNotice = resultNotice ?? snapshot?.advisoryNotice
   return {
     activeNotice: resultNotice ?? blockingNotice ?? snapshot?.advisoryNotice,
     blockingNotice,
