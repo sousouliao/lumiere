@@ -1,12 +1,9 @@
 # Lumiere
 
-Lumiere is a Windows HDR-aware screenshot tool. The development implementation uses
+Lumiere is a Windows HDR-aware screenshot tool. Windows v0.7.0 uses
 Tauri 2, the retained React UI and an independent Rust WGC/D3D11/DXGI capture library
 behind a resident JSONL Host. Region and Display deliver fixed sRGB Visual Match PNGs.
 The native shell/Host stay resident; the WebView opens on demand and closes completely.
-
-This migration is not publicly released. See current state for outstanding verification;
-public Windows v0.6.0 still uses the former implementation.
 
 Lumiere does not currently claim HDR-preserved export support.
 
@@ -45,10 +42,13 @@ only when the digest matches `SHA256SUMS` from the official release. The assiste
 per user, allows a custom destination, and can create desktop and Start menu shortcuts. Uninstall
 Lumiere through Windows Settings or its Start menu shortcut. Windows releases intentionally exclude
 the production borderless-capture identity, so Windows Graphics Capture keeps its system capture border.
-Windows v0.6.0 checks for updates periodically; download and silent restart installation are
+Lumiere checks for updates periodically; download and silent restart installation are
 explicit actions in System settings. Ordinary quit does not install. Existing v0.5.0 users need
 one manual upgrade to obtain this capability. Public v0.5.0 has no in-app updater.
 Unsigned updates can still be blocked by Windows application-control policies.
+From v0.7.0, the app verifies updater signatures and signed versions independently of
+Windows publisher identity. Upgrading from v0.6.0 preserves settings and the existing
+installation location; user-owned files are retained while old application files are removed.
 
 ## Repository Layout
 

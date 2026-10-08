@@ -11,8 +11,8 @@ alongside the artifact, and do not enable production sparse identity. Explicit i
 signatures and signed versions independently of Windows publisher identity.
 Stable status describes the application release rather than a verified publisher identity.
 Private keys are never stored in this repository. An authorized release requires the matching
-Tauri updater signing key/password in protected GitHub Actions secrets; these have not been
-provisioned by the migration. Local keys stay outside Git with restricted access.
+Tauri updater signing key/password in protected GitHub Actions secrets. Matching secrets
+were provisioned for the authorized v0.7.0 release. Local keys stay outside Git with restricted access.
 
 ## Team roles
 

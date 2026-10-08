@@ -1,10 +1,10 @@
 # Current Project State
 
 - Updated: 2026-10-08
-- Frontier: P6 final acceptance, [#32](https://github.com/sousouliao/lumiere/issues/32), under [#25](https://github.com/sousouliao/lumiere/issues/25).
+- Frontier: maintainer-accepted P6 and authorized Windows v0.7.0 publication, [#32](https://github.com/sousouliao/lumiere/issues/32), under [#25](https://github.com/sousouliao/lumiere/issues/25).
 - Approved decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
 - Branch: `codex/windows-rust-migration`; frozen baseline: `cc0c011af0bc53be696d4f84bda803df24315f6e`.
-- Public distribution remains Windows `v0.6.0` from `d218c02`. Migration does not authorize push, tag, workflow dispatch, public release or a new release version.
+- Public distribution remains Windows `v0.6.0` from `d218c02` until publication succeeds. The maintainer authorized publication and selected `v0.7.0` on 2026-10-08; this supersedes the earlier no-push/no-publication boundary.
 
 ## Implementation
 
@@ -28,7 +28,10 @@ it preserves install location, settings and unknown files and never runs the leg
 recursive uninstaller. Official Tauri updates verify minisign signatures and signed versions,
 retire capture/Host before handoff and pin the existing path. Download/install are explicit;
 debug updates are disabled. Matching `latest.yml` and signed `latest.json` use the same NSIS.
-Private keys stay outside Git; release CI secrets have not been provisioned.
+Private keys stay outside Git; matching encrypted release CI secrets are provisioned.
+Manual checks retain the complete updater snapshot and the checking/retry control;
+Release keeps scheduled checks, download progress and explicit restart installation.
+Debug intentionally disables update operations.
 
 ## Verification posture
 
@@ -82,11 +85,12 @@ Locked native preparation is shared by CI/packaging; stale manifests/version dri
 rejected and only the official signer signs final installer bytes.
 
 Windows Sandbox and Hyper-V management are disabled (optional-feature state 2);
-no usable clean-machine environment is present. The remote migration branch returns
-404; latest successful remote CI verifies the old baseline, not this work. No signing
-secrets are configured. Clean-machine, public-provider upgrade, physical input/compositor,
-SDR/topology, OS DPI and sleep/reconnect remain open. Earlier release waivers do not
-certify the replacement; #32 remains open and the product is not release-certified.
+no usable clean-machine environment was available to the agent. On 2026-10-08 the
+maintainer reported all outstanding manual acceptance completed without issues and
+authorized publication; #32 records this as maintainer evidence, not agent observation
+or invented hardware measurements. Synthetic 125% differences remain recorded.
+Remote CI and public updater endpoints/signatures will be verified during publication;
+earlier successful remote runs cover only the old baseline.
 
 The user's installed baseline at `D:\lumiere` remains restored/running after the P5 fixture
 incident recorded in #31. All 309 frozen hashes were verified again; original registration
@@ -95,10 +99,8 @@ installer commit before restoring the three owned HKCU keys.
 
 ## Next action
 
-The unattended local acceptance and pipeline cleanup are complete. The user must perform
-physical Region/keyboard/tray, complete UI states at real OS 100/125/150/200% DPI,
-SDR/HDR mixed-monitor/hotplug/compositor/clipboard viewing and sleep/hibernate/reconnect
-checks, plus a virgin Windows standard-user install/uninstall/reinstall. Remote CI needs
-separately authorized push of this source; public-provider update/signing provisioning
-needs an authorized release candidate. Record those observations in #32 before closing
-acceptance. Do not publish or change the real installed baseline.
+Finish the Release manual-update-control regression check, finalize v0.7.0 with the
+2026-10-08 publication date, push the candidate to main and verify Windows CI before
+dispatching the release workflow. Verify public assets/checksums, both updater feeds,
+signature and tag target; then record publication in a later documentation commit.
+Keep the user's installed baseline out of automated fixture lifecycle actions.

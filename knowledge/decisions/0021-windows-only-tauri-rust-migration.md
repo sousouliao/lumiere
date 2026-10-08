@@ -1,6 +1,6 @@
 # ADR 0021: Replace Electron and .NET with a Windows-only Tauri/Rust product
 
-- Status: Accepted; implementation in progress
+- Status: Accepted; implemented and maintainer-accepted under #25 / #32
 - Date: 2026-10-08
 - Owner: [Issue #25](https://github.com/sousouliao/lumiere/issues/25)
 

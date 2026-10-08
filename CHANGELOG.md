@@ -4,6 +4,26 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.7.0`
+Release platforms: Windows
+
+### Changed
+
+- Replace the Windows desktop runtime with Tauri and Rust while retaining the existing interface, screenshot modes, settings and shortcuts.
+- Reduce installer size and background memory use by opening the interface only when needed and releasing it when closed.
+
+### Fixed
+
+- Preserve settings, installation location and user-owned files when upgrading from the previous Windows client, and safely remove replaced application files.
+- Verify in-app updates with signed installer bytes and versions, and wait for the previous client to exit before replacing it.
+- Keep update controls visible while checking for updates and after the check completes.
+
+### Known limitations
+
+- The Windows installer is not Authenticode signed; Windows may show an unknown-publisher or SmartScreen warning, or block execution. Updater integrity signatures do not establish publisher identity.
+- Windows Graphics Capture retains its system capture border. Output remains sRGB Visual Match PNG, not HDR-preserved export.
+- Windows x64 is the only supported platform. Existing v0.5.0 clients require a manual upgrade to obtain in-app updates.
+
 ## [0.6.0] - 2026-10-08
 
 Release platforms: Windows
