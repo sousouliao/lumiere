@@ -292,6 +292,59 @@ fn exercise(app: &AppHandle, output: &std::path::Path) {
     .unwrap();
 }
 
+// Explicit acceptance mode pauses at matching idle/visible/closed states so an
+// external observer can sum the entire process tree, including WebView2 and Host.
+fn acceptance_phase(output: &std::path::Path, phase: &str) {
+    std::fs::write(
+        output.join("phase.json"),
+        serde_json::to_vec(&json!({"phase":phase,"pid":std::process::id()})).unwrap(),
+    )
+    .unwrap();
+    let acknowledgment = output.join(format!("{phase}.ack"));
+    wait_for(|| acknowledgment.exists());
+}
+
+fn acceptance(app: &AppHandle, output: &std::path::Path) {
+    let controller = app.state::<Controller>();
+    wait_for(|| tauri::async_runtime::block_on(controller.host_process_id()).is_some());
+    acceptance_phase(output, "idle");
+    for (settings, phase) in [(false, "main"), (true, "settings")] {
+        show_window(app, settings).unwrap();
+        let window = app.get_webview_window("main").unwrap();
+        wait_for(|| window.is_visible().unwrap_or(false));
+        wait_for(|| {
+            script(
+                &window,
+                if settings {
+                    "Boolean(document.querySelector('button[aria-label^=\"Choose save folder.\"]:not(:disabled)'))"
+                } else {
+                    "(() => { const b = [...document.querySelectorAll('.capture-action')]; return b.length === 2 && b.every(x => !x.disabled); })()"
+                },
+            ) == true
+        });
+        // Synthetic browser-scale comparisons must supply the reference client size;
+        // changing browser DPR alone does not change the owning monitor's OS DPI.
+        if let Ok(size) = std::env::var("LUMIERE_GUI_RASTER_SIZE") {
+            let [width, height]: [u32; 2] = serde_json::from_str(&size).unwrap();
+            assert!((400..=2000).contains(&width) && (300..=2000).contains(&height));
+            window
+                .set_size(tauri::PhysicalSize::new(width, height))
+                .unwrap();
+        }
+        std::thread::sleep(Duration::from_millis(500));
+        preview(&window, output.join(format!("{phase}.png")));
+        std::fs::write(output.join(format!("{phase}-viewport.json")), serde_json::to_vec_pretty(&script(&window, "({width:innerWidth,height:innerHeight,dpr:devicePixelRatio,main:document.querySelector('main').className})")).unwrap()).unwrap();
+        acceptance_phase(output, phase);
+    }
+    let window = app.get_webview_window("main").unwrap();
+    script(
+        &window,
+        "document.querySelector('[aria-label=Close]').click(); true",
+    );
+    wait_for(|| app.webview_windows().is_empty());
+    acceptance_phase(output, "closed");
+}
+
 #[test]
 #[ignore = "requires interactive Windows/WebView2; build renderer and native Host first"]
 fn native_shell_webview_lifecycle() {
@@ -299,12 +352,18 @@ fn native_shell_webview_lifecycle() {
         .join("../../..")
         .canonicalize()
         .unwrap();
-    let output = root.join("artifacts/windows/tauri-shell");
+    let output = std::env::var_os("LUMIERE_GUI_ACCEPTANCE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("artifacts/windows/tauri-shell"));
     std::fs::create_dir_all(&output).unwrap();
     let settings = output.join("settings.json");
     std::fs::write(&settings,serde_json::to_vec(&json!({"version":5,"outputDelivery":"folder","saveDirectory":output.join("captures"),"captureShortcuts":{"region":null,"display":null},"afterCaptureBehavior":"do-nothing","hdrStatusReminders":true})).unwrap()).unwrap();
     let app = builder(Paths {
-        host: root.join("target/debug/lumiere-windows-host.exe"),
+        host: root.join(if cfg!(debug_assertions) {
+            "target/debug/lumiere-windows-host.exe"
+        } else {
+            "target/release/lumiere-windows-host.exe"
+        }),
         settings,
     })
     .any_thread()
@@ -320,7 +379,11 @@ fn native_shell_webview_lifecycle() {
             let output = output.clone();
             std::thread::spawn(move || {
                 let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    exercise(&app, &output);
+                    if std::env::var_os("LUMIERE_GUI_ACCEPTANCE_DIR").is_some() {
+                        acceptance(&app, &output);
+                    } else {
+                        exercise(&app, &output);
+                    }
                 }));
                 tauri::async_runtime::block_on(app.state::<Controller>().shutdown());
                 let _ = tx.send(outcome.map_err(|_| "Windows GUI fixture failed"));

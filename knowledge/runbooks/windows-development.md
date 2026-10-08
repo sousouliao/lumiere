@@ -32,6 +32,14 @@ on-demand WebView/settings/shortcut fixtures live in the shell's `src/tests.rs`.
 `node scripts/verify-rust-display.mjs` performs real capture and delivery. Fixtures do
 not certify physical input, compositor fidelity or other display/DPI combinations.
 
+For equivalent-state Release sampling, build the Host and GUI test with `--release`.
+`LUMIERE_GUI_ACCEPTANCE_DIR` selects an isolated output/settings directory and pauses
+`native_shell_webview_lifecycle` at `idle`, `main`, `settings`, and `closed`. An external
+observer reads `phase.json`, sums the root and every live descendant, then creates
+`<phase>.ack` within 15 seconds. Use a new directory for each run. Optional
+`LUMIERE_GUI_RASTER_SIZE` is a JSON `[width,height]` physical client size for synthetic
+browser-DPR comparisons only; never treat that fixture as OS per-monitor DPI evidence.
+
 ## Local Packaging
 
 `pnpm package:windows` builds locked native payloads, transaction manifests, the NSIS

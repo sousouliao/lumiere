@@ -50,12 +50,26 @@ Both report HDR. The earlier p90 regression was corrected by the exact transfer 
 This establishes the observed Host hot path, not physical Region or UI-trigger latency.
 Local installer 3400788 bytes vs baseline 133323003; shell/Host 12640256/1067520 bytes.
 
-Process-tree sampling includes Host/WebView2: installed baseline hidden idle private bytes
-225710080; Debug GUI fixture ranges 6209536-307015680 while children start/exit and capture/
-update/window states differ. These samples are not an equivalent-state Release memory gate.
-All-state/DPI, physical input/compositor, SDR/topology, sleep/reconnect, clean-machine,
-installed legacy-client update and equivalent-state total-memory acceptance remain open.
-Earlier release waivers do not certify the replacement; #32 remains open.
+Release GUI acceptance now pauses at matching idle/main/settings/closed states and
+uses the Release Host. Five Win32 process-tree samples per state include every live
+Host/Electron/WebView2 descendant. At synthetic 150% DPR, baseline/Tauri private bytes
+(MiB) are idle 210.0/26.6, main 215.8/222.3, settings 221.5/208.2, closed 220.8/19.6.
+Across 100/125/150/200%, idle decreases 87.4-88.0%, closed decreases 91.1-91.8%;
+visible main increases 1.4-3.1%. These are isolated Release integration fixtures,
+not shipping-binary or post-capture peak-memory measurements.
+
+Matched-viewport synthetic DPR screenshots establish exact main/settings body pixels
+at 100/150/200%. At 125%, equal CSS viewports produce a one-column preview-size
+rounding difference and nonzero body differences; it does not pass pixel parity.
+Browser previews omit Electron native caption buttons, so full-window chrome and
+all interactive states remain unverified. Synthetic DPR does not certify OS DPI changes.
+
+Windows Sandbox and Hyper-V management are disabled (optional-feature state 2);
+no usable clean-machine environment is present. The remote migration branch returns
+404; latest successful remote CI verifies the old baseline, not this work. No signing
+secrets are configured. Clean-machine, installed legacy-client update, actual shipping
+process memory, physical input/compositor, SDR/topology, OS DPI and sleep/reconnect
+remain open. Earlier release waivers do not certify the replacement; #32 remains open.
 
 The user's installed baseline at `D:\lumiere` remains restored/running after the P5 fixture
 incident recorded in #31. All 309 frozen hashes were verified again; original registration
