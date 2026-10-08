@@ -323,8 +323,9 @@ fn acceptance(app: &AppHandle, output: &std::path::Path) {
             ) == true
         });
         if settings && std::env::var_os("LUMIERE_GUI_UPDATE_ACCEPTANCE").is_some() {
-            assert!(
-                !cfg!(debug_assertions),
+            assert_ne!(
+                app.state::<updater::Updates>().snapshot(app)["windowsUpdate"]["status"],
+                "disabled",
                 "update acceptance requires Release"
             );
             script(
