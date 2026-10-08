@@ -39,6 +39,10 @@ observer reads `phase.json`, sums the root and every live descendant, then creat
 `<phase>.ack` within 15 seconds. Use a new directory for each run. Optional
 `LUMIERE_GUI_RASTER_SIZE` is a JSON `[width,height]` physical client size for synthetic
 browser-DPR comparisons only; never treat that fixture as OS per-monitor DPI evidence.
+With a Release build, `LUMIERE_GUI_UPDATE_ACCEPTANCE=1` also exercises the System
+update button through the real renderer IPC and records the returned snapshot and
+post-check preview. It asserts that the check response retains `windowsUpdate` and
+the action remains visible after completion. Debug disables updater operations.
 
 ## Local Packaging
 

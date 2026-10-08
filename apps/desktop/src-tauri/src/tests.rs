@@ -322,6 +322,52 @@ fn acceptance(app: &AppHandle, output: &std::path::Path) {
                 },
             ) == true
         });
+        if settings && std::env::var_os("LUMIERE_GUI_UPDATE_ACCEPTANCE").is_some() {
+            assert!(
+                !cfg!(debug_assertions),
+                "update acceptance requires Release"
+            );
+            script(
+                &window,
+                "document.querySelector('[aria-label=\"System settings\"]').click(); true",
+            );
+            wait_for(|| {
+                script(
+                    &window,
+                    "Boolean(document.querySelector('.update-check-button:not(:disabled)'))",
+                ) == true
+            });
+            script(
+                &window,
+                "window.__updateResult=null; const originalCheck=window.lumierePlatform.checkForUpdates; window.lumierePlatform.checkForUpdates=async()=>{const result=await originalCheck();window.__updateResult=result;return result;}; document.querySelector('.update-check-button').click(); true",
+            );
+            assert_eq!(
+                script(
+                    &window,
+                    "Boolean(document.querySelector('.update-check-button'))"
+                ),
+                true
+            );
+            let deadline = Instant::now() + Duration::from_secs(45);
+            while script(&window, "window.__updateResult").is_null() {
+                assert!(Instant::now() < deadline, "update check did not complete");
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            let response = script(&window, "window.__updateResult");
+            assert!(response["windowsUpdate"]["status"].is_string());
+            wait_for(|| {
+                script(
+                    &window,
+                    "Boolean(document.querySelector('.update-check-button:not(:disabled)'))",
+                ) == true
+            });
+            std::fs::write(
+                output.join("update-check-result.json"),
+                serde_json::to_vec_pretty(&response).unwrap(),
+            )
+            .unwrap();
+            preview(&window, output.join("update-check.png"));
+        }
         // Synthetic browser-scale comparisons must supply the reference client size;
         // changing browser DPR alone does not change the owning monitor's OS DPI.
         if let Ok(size) = std::env::var("LUMIERE_GUI_RASTER_SIZE") {
@@ -358,6 +404,12 @@ fn native_shell_webview_lifecycle() {
     std::fs::create_dir_all(&output).unwrap();
     let settings = output.join("settings.json");
     std::fs::write(&settings,serde_json::to_vec(&json!({"version":5,"outputDelivery":"folder","saveDirectory":output.join("captures"),"captureShortcuts":{"region":null,"display":null},"afterCaptureBehavior":"do-nothing","hdrStatusReminders":true})).unwrap()).unwrap();
+    let mut context = tauri::generate_context!();
+    // Keep the fixture's single-instance mutex separate from a running user app.
+    context.config_mut().identifier = format!(
+        "io.github.sousouliao.lumiere.gui-fixture-{}",
+        std::process::id()
+    );
     let app = builder(Paths {
         host: root.join(if cfg!(debug_assertions) {
             "target/debug/lumiere-windows-host.exe"
@@ -367,7 +419,7 @@ fn native_shell_webview_lifecycle() {
         settings,
     })
     .any_thread()
-    .build(tauri::generate_context!())
+    .build(context)
     .unwrap();
     let (tx, rx) = mpsc::channel();
     let mut started = false;

@@ -67,6 +67,9 @@ function Legacy-Registration([string]$root) {
 }
 New-Item -ItemType Directory -Path $fixture -Force | Out-Null
 Restore-Registration
+# Compile outside registration isolation; linking can exceed the handoff timeout.
+& cargo test --locked --release -p lumiere-desktop --features custom-protocol --no-run
+if ($LASTEXITCODE -ne 0) { throw 'Release updater fixture build failed before registration isolation' }
 New-Item -ItemType Directory -Path $backup -Force | Out-Null
 $present = @()
 for ($i = 0; $i -lt $keys.Count; $i++) {
@@ -96,7 +99,7 @@ try {
   $beforeUpdate = (Get-Item -LiteralPath (Join-Path $fresh '.lumiere-install.json')).LastWriteTimeUtc
   $env:LUMIERE_TEST_UPDATE_HANDOFF = $fresh
   try {
-    $cargoArguments = 'test -p lumiere-desktop --features custom-protocol official_updater_accepts_signed_bytes_and_rejects_tampering -- --ignored --nocapture'
+    $cargoArguments = 'test --locked --release -p lumiere-desktop --features custom-protocol official_updater_accepts_signed_bytes_and_rejects_tampering -- --ignored --nocapture'
     $updateTest = Start-Process -FilePath 'cargo.exe' -ArgumentList $cargoArguments -WorkingDirectory $repository -WindowStyle Hidden -RedirectStandardOutput (Join-Path $fixture 'updater-handoff.stdout') -RedirectStandardError (Join-Path $fixture 'updater-handoff.stderr') -PassThru
     $null = $updateTest.Handle
     if (!$updateTest.WaitForExit(120000)) { throw 'Updater handoff test timed out' }

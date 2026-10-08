@@ -14,11 +14,8 @@ export type WindowsUpdateState =
       availableVersion?: string
     }
 
-export type UpdateCheckResult =
-  | (UpdateSnapshot & { status: 'idle' })
-  | { status: 'up-to-date'; currentVersion: string }
-  | { status: 'available'; currentVersion: string; availableVersion: string }
-  | { status: 'failed'; currentVersion: string }
+export type UpdateCheckResult = UpdateSnapshot &
+  ({ status: 'idle' | 'up-to-date' | 'failed' } | { status: 'available'; availableVersion: string })
 
 export interface LumiereUpdateApi {
   getUpdateSnapshot(): Promise<UpdateSnapshot>

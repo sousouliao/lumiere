@@ -109,6 +109,10 @@ describe('SettingsView', () => {
   })
 
   it.each([
+    [{ status: 'idle' }, 'Check for updates'],
+    [{ status: 'checking' }, 'Checking…'],
+    [{ status: 'up-to-date' }, 'Check again'],
+    [{ status: 'failed', retry: 'check', message: 'Couldn’t check for updates' }, 'Try again'],
     [{ status: 'available', availableVersion: '0.6.1' }, 'Download update'],
     [{ status: 'downloading', availableVersion: '0.6.1', percent: 42 }, 'Downloading 42%'],
     [{ status: 'ready', availableVersion: '0.6.1' }, 'Restart to update'],

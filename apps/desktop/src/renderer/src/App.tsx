@@ -460,12 +460,16 @@ function SettingsWindow({
   const checkForUpdates = async (): Promise<void> => {
     if (updateState.status === 'loading') return
     const { currentVersion } = updateState
-    setUpdateState({ status: 'checking', currentVersion })
+    setUpdateState({ status: 'checking', currentVersion, windowsUpdate: { status: 'checking' } })
     setError(null)
     try {
       setUpdateState(await window.lumierePlatform.checkForUpdates())
     } catch {
-      setUpdateState({ status: 'failed', currentVersion })
+      setUpdateState({
+        status: 'failed',
+        currentVersion,
+        windowsUpdate: { status: 'failed', message: 'Couldn’t check for updates', retry: 'check' },
+      })
     }
   }
 

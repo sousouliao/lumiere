@@ -24,6 +24,14 @@ impl Updates {
     pub fn snapshot(&self, app: &AppHandle) -> Value {
         json!({"currentVersion": app.package_info().version.to_string(), "windowsUpdate": self.state.lock().unwrap().clone()})
     }
+    fn check_result(&self, app: &AppHandle, status: &str, version: Option<&str>) -> Value {
+        let mut result = self.snapshot(app);
+        result["status"] = json!(status);
+        if let Some(version) = version {
+            result["availableVersion"] = json!(version);
+        }
+        result
+    }
     fn set(&self, app: &AppHandle, state: Value) {
         *self.state.lock().unwrap() = state;
         let _ = app.emit("update-changed", self.snapshot(app));
@@ -49,7 +57,11 @@ impl Updates {
         };
         // A scheduled check must never discard an explicitly downloaded installer.
         if payload.verified.is_some() {
-            return json!({"status":"available", "currentVersion":current, "availableVersion":payload.update.as_ref().unwrap().version});
+            return self.check_result(
+                app,
+                "available",
+                Some(&payload.update.as_ref().unwrap().version),
+            );
         }
         self.set(app, json!({"status":"checking"}));
         let install_directory = match std::env::current_exe()
@@ -59,7 +71,7 @@ impl Updates {
             Some(path) => path,
             None => {
                 self.failure(app, "check", None);
-                return json!({"status":"failed", "currentVersion":current});
+                return self.check_result(app, "failed", None);
             }
         };
         let result = match app
@@ -85,12 +97,12 @@ impl Updates {
                     app,
                     json!({"status":"available", "availableVersion":version}),
                 );
-                json!({"status":"available", "currentVersion":current, "availableVersion":version})
+                self.check_result(app, "available", Some(&version))
             }
             Ok(None) => {
                 payload.update = None;
                 self.set(app, json!({"status":"up-to-date"}));
-                json!({"status":"up-to-date", "currentVersion":current})
+                self.check_result(app, "up-to-date", None)
             }
             Err(error) => {
                 eprintln!(
@@ -98,7 +110,7 @@ impl Updates {
                     json!({"level":"warn", "event":"update-check-failed", "error":error.to_string()})
                 );
                 self.failure(app, "check", None);
-                json!({"status":"failed", "currentVersion":current})
+                self.check_result(app, "failed", None)
             }
         }
     }
