@@ -1,17 +1,19 @@
 # Current Project State
 
-- Updated: 2026-10-08
-- Frontier: Windows v0.7.0 is published; P0–P6 migration is maintainer-accepted under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32).
+- Updated: 2026-10-09
+- Frontier: Windows v0.7.1 is published and maintainer-verified after installation; P0–P6 migration remains accepted under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32).
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
-- Public release: [v0.7.0](https://github.com/sousouliao/lumiere/releases/tag/v0.7.0), stable Windows x64; tag/source commit `bbbbf902707a268c5730787331ce6248eb84e4d9`.
-- Installer: 3485657 bytes; SHA256 `1e9e7c39865a576842c2607ade5b6a7d3d2daf0be98b18324579c97d36a2d264`.
-- The maintainer authorized publication and explicitly selected v0.7.0, superseding the earlier unattended no-push/no-publication restriction.
+- Public release: [v0.7.1](https://github.com/sousouliao/lumiere/releases/tag/v0.7.1), stable Windows x64; tag/source commit `8f6184d3fc034d7d6177a1f6c2d703a38ee0e140`.
+- Installer: 3524429 bytes; SHA256 `699b308656bb72fcdc654f77d7d069e0ec939d10953f673158da06f7d20ab4b3`.
+- The maintainer authorized publication and reported the installed latest release working without issues on 2026-10-09.
 
 ## Product
 
 Tauri 2.12.1 / retained React owns the Windows shell; an independent Rust capture
 library and supervised resident JSONL Host own WGC/D3D11/DXGI. Shell/Host remain
-resident, while the WebView opens on demand and is destroyed on close. Native tray,
+resident, while the main WebView opens on demand and is destroyed on close. The dark
+tray menu WebView is preloaded and reused; its icon follows Windows system theme
+notifications without polling. Native tray,
 shortcuts, quiet capture and v1–v5 settings migration are retained. No Electron,
 .NET or macOS implementation/resource/stub remains; Git owns history.
 
@@ -31,8 +33,15 @@ Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
 
-Exact commands, measurements, failed-to-fixed attempts and original evidence belong
-to [#32](https://github.com/sousouliao/lumiere/issues/32). P0–P5 evidence remains in #26–#31.
+The v0.7.1 patch evidence is:
+
+- [Release 37827856922](https://github.com/sousouliao/lumiere/actions/runs/37827856922) succeeded for the tagged commit, including shared checks, Windows Rust checks/build and updater signature verification.
+- Downloaded all five public assets; their SHA256 digests match GitHub metadata. The installer matches `SHA256SUMS`, both updater feeds identify v0.7.1, legacy SHA512 matches the downloaded installer, and the public tag targets the release commit. Release is non-draft/non-prerelease.
+- Local `cargo test --locked -p lumiere-desktop tray_` passed 3 tests; `cargo test --locked -p lumiere-capture-windows` passed 7 with 2 hardware tests ignored; `pnpm --filter @lumiere/desktop test:shared` passed 41 tests. TypeScript, scoped ESLint, build, Clippy and formatting passed. Local full lint/format excluded ignored `.cache` tooling; remote shared checks passed unchanged.
+- Before publication the maintainer confirmed Region, reviewed tray actions and theme changes; after publication they installed the latest release and reported no issues. This is maintainer evidence, not an agent hardware observation or a wider platform claim.
+
+The following v0.7.0 migration evidence remains owned by
+[#32](https://github.com/sousouliao/lumiere/issues/32); P0–P5 evidence remains in #26–#31:
 
 - [Windows CI 37795791946](https://github.com/sousouliao/lumiere/actions/runs/37795791946) and [Release 37796168720](https://github.com/sousouliao/lumiere/actions/runs/37796168720) succeeded for the tagged commit; shared tests are 5 files / 41 tests.
 - Public release is non-draft/non-prerelease. Five assets, tag target, SHA256 manifest, SHA512 legacy metadata, signed Tauri metadata and latest-download aliases agree. Official verification of downloaded public bytes rejects tampered bytes/signature/version.
