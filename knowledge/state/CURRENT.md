@@ -1,106 +1,54 @@
 # Current Project State
 
 - Updated: 2026-10-08
-- Frontier: maintainer-accepted P6 and authorized Windows v0.7.0 publication, [#32](https://github.com/sousouliao/lumiere/issues/32), under [#25](https://github.com/sousouliao/lumiere/issues/25).
-- Approved decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
-- Branch: `codex/windows-rust-migration`; frozen baseline: `cc0c011af0bc53be696d4f84bda803df24315f6e`.
-- Public distribution remains Windows `v0.6.0` from `d218c02` until publication succeeds. The maintainer authorized publication and selected `v0.7.0` on 2026-10-08; this supersedes the earlier no-push/no-publication boundary.
+- Frontier: Windows v0.7.0 is published; P0–P6 migration is maintainer-accepted under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32).
+- Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
+- Public release: [v0.7.0](https://github.com/sousouliao/lumiere/releases/tag/v0.7.0), stable Windows x64; tag/source commit `bbbbf902707a268c5730787331ce6248eb84e4d9`.
+- Installer: 3485657 bytes; SHA256 `1e9e7c39865a576842c2607ade5b6a7d3d2daf0be98b18324579c97d36a2d264`.
+- The maintainer authorized publication and explicitly selected v0.7.0, superseding the earlier unattended no-push/no-publication restriction.
 
-## Implementation
+## Product
 
-The source cutover targets Windows x64 only: stable Tauri 2.12.1, retained React
-components/tokens, an independent Rust capture library and resident supervised JSONL
-Host. The native shell/Host remain resident; WebView2 is created on demand and destroyed
-on close. Native tray, transactional shortcuts/recording, v1-v5 settings migration at
-`%APPDATA%/Lumiere/settings.json`, quiet capture and failure recovery are implemented.
-Former Electron/.NET/macOS implementation, resources, tests and configuration are removed.
-No source archive or platform stub remains; Git owns history. Historical ADRs, release
-entries and design variants do not imply current platform support.
+Tauri 2.12.1 / retained React owns the Windows shell; an independent Rust capture
+library and supervised resident JSONL Host own WGC/D3D11/DXGI. Shell/Host remain
+resident, while the WebView opens on demand and is destroyed on close. Native tray,
+shortcuts, quiet capture and v1–v5 settings migration are retained. No Electron,
+.NET or macOS implementation/resource/stub remains; Git owns history.
 
-Windows v5 capabilities/Display and v6 native Region/cancellation retain WGC RGBA16F,
-active-target DXGI/SDR-white state, fixed sRGB Visual Match and one PNG for clipboard/folder.
-Region selects/crops the same frozen frame, owns native cancellation and a 60-second lease.
-An exact half-domain transfer lookup removes repeated per-pixel curve evaluation without
-changing the baseline conversion bytes. No HDR-preserved or compositor-fidelity claim.
+Windows v5 Display and v6 same-frame Region/cancellation retain floating-point
+acquisition and fixed sRGB Visual Match, with the same PNG for clipboard and folder.
+No HDR-preserved export, borderless capture or wider compositor-fidelity claim.
+Installer Authenticode status remains NotSigned; updater integrity signatures do
+not establish Windows publisher identity.
 
-NSIS owns transactional replacement/rollback and explicit legacy inventory cleanup;
-it preserves install location, settings and unknown files and never runs the legacy
-recursive uninstaller. Official Tauri updates verify minisign signatures and signed versions,
-retire capture/Host before handoff and pin the existing path. Download/install are explicit;
-debug updates are disabled. Matching `latest.yml` and signed `latest.json` use the same NSIS.
-Private keys stay outside Git; matching encrypted release CI secrets are provisioned.
-Manual checks retain the complete updater snapshot and the checking/retry control;
-Release keeps scheduled checks, download progress and explicit restart installation.
-Debug intentionally disables update operations.
+Updates check after 30 seconds and every 6 hours; download and restart installation
+are explicit, and ordinary quit does not install. Release System settings retains
+check/progress/retry/restart controls. Debug intentionally disables update operations.
+Both update feeds reference one NSIS; Tauri verifies minisign bytes and signed versions.
+Natural-exit handoff, transactional replacement/rollback and explicit legacy cleanup
+preserve installation location, settings and unknown files. Private keys stay outside
+Git; matching encrypted Actions signing secrets are configured.
 
-## Verification posture
+## Verification
 
-P0-P5 evidence belongs to [#26](https://github.com/sousouliao/lumiere/issues/26) through
-[#31](https://github.com/sousouliao/lumiere/issues/31). P6 repository checks, 5 shared test
-files / 37 retained tests, Rust workspace tests, strict Clippy/format, Vite/native Release,
-Windows schemas and local installer/updater checks pass. CI configuration now targets
-Rust/Tauri Windows. All local CI-equivalent commands pass with Node 22.23.3 and pinned
-Rust; workflow actionlint and first-command failure probes pass. Remote Actions has not
-verified this branch. #32 owns exact commands, corrections and final artifact hashes.
+Exact commands, measurements, failed-to-fixed attempts and original evidence belong
+to [#32](https://github.com/sousouliao/lumiere/issues/32). P0–P5 evidence remains in #26–#31.
 
-Real HDR 3840x2160 both-delivery bytes and same-frame Region crop pass. The 30-cycle
-WebView fixture passes with settled native/React state before snapshots; warm/final shell
-handles 461/463 and private bytes 14127104/15339520. Vendor late-close PostMessage warnings
-remain without fixture failure. Main/settings geometry was reviewed at 150% DPI; complete
-state-by-state pixel parity is not established.
+- [Windows CI 37795791946](https://github.com/sousouliao/lumiere/actions/runs/37795791946) and [Release 37796168720](https://github.com/sousouliao/lumiere/actions/runs/37796168720) succeeded for the tagged commit; shared tests are 5 files / 41 tests.
+- Public release is non-draft/non-prerelease. Five assets, tag target, SHA256 manifest, SHA512 legacy metadata, signed Tauri metadata and latest-download aliases agree. Official verification of downloaded public bytes rejects tampered bytes/signature/version.
+- A cloned frozen production 0.6.0 client using its original GitHub provider discovers/downloads 0.7.0; downloaded cache SHA matches the public installer. This observation did not invoke installation. Local full legacy upgrade and four v0.7.0 installer/updater fixtures already pass.
+- Release WebView manual checking against the public endpoint returns `up-to-date` with the complete snapshot and visible `Check again`; pre-publication failure/retry also passed. GUI fixtures use an isolated singleton identity and settings; no user development instance was closed.
+- The maintainer reported all outstanding physical input, OS DPI/UI-state, SDR/HDR/multi-display/topology, sleep/reconnect and clean-machine checks completed without issues on 2026-10-08. This is maintainer evidence, not agent observation or an invented hardware matrix.
+- P6 automated synthetic-DPR body pixels match at 100/150/200%; 125% retains a one-column rounding difference and nonzero differences. That raw result remains unchanged and does not claim complete-window/all-state pixel equality.
 
-After 4 warm captures and 30 alternating resident Display folder captures per Host,
-Release Rust median/p90 1119/1176 ms vs frozen baseline 1409/1426 ms: -20.6%/-17.5%.
-Both report HDR. The earlier p90 regression was corrected by the exact transfer lookup.
-This establishes the observed Host hot path, not physical Region or UI-trigger latency.
-Final local installer 3488041 bytes vs baseline 133323003 (97.4% smaller), SHA256
-`4423b06cf8983766e990bd4ed6b49d1bbf2fc49f8476abd9074e52e296269105`.
-Shell/Host/helper import tables have no VC redistributable imports after static CRT
-packaging; Release capture/transaction tests under that configuration pass.
-
-Release GUI acceptance now pauses at matching idle/main/settings/closed states and
-uses the Release Host. Five Win32 process-tree samples per state include every live
-Host/Electron/WebView2 descendant. Corrected baseline bootstrap explicitly hides its
-startup window before idle sampling. At synthetic 150% DPR, baseline/Tauri private
-bytes (MiB) are idle 199.22/25.69, main 219.65/221.65, settings 223.52/210.99,
-closed 221.89/19.54. Visible main is not a memory improvement. These are isolated
-Release integration fixtures, not post-capture peak-memory measurements. The final
-shipping executable, with isolated settings, measures idle/main/closed 25.0/219.83/18.23
-MiB across its complete process tree; settings bytes and descendant cleanup pass.
-
-Matched-viewport synthetic DPR screenshots establish exact main/settings body pixels
-at 100/150/200%. At 125%, equal CSS viewports produce a one-column preview-size
-rounding difference and nonzero body differences; it does not pass pixel parity.
-Browser previews omit Electron native caption buttons, so full-window chrome and
-all interactive states remain unverified. Synthetic DPR does not certify OS DPI changes.
-
-Final NSIS fresh Unicode path, inherited reinstall, official signed updater/Host EOF,
-and full legacy inventory failure/retry fixtures pass. A cloned frozen production
-Electron client uses its genuine updater IPC/service with a loopback feed to install
-private fixture-only 0.6.1, restart and preserve settings/path/unknown files. Six serial
-journeys and one final deadline-regression journey pass. Update handoff now waits for
-natural exit using fresh RestartManager sessions; a deliberately live old client causes
-safe exit 2 in 15.34 seconds without replacement. This does not verify the public feed.
-Locked native preparation is shared by CI/packaging; stale manifests/version drift are
-rejected and only the official signer signs final installer bytes.
-
-Windows Sandbox and Hyper-V management are disabled (optional-feature state 2);
-no usable clean-machine environment was available to the agent. On 2026-10-08 the
-maintainer reported all outstanding manual acceptance completed without issues and
-authorized publication; #32 records this as maintainer evidence, not agent observation
-or invented hardware measurements. Synthetic 125% differences remain recorded.
-Remote CI and public updater endpoints/signatures will be verified during publication;
-earlier successful remote runs cover only the old baseline.
-
-The user's installed baseline at `D:\lumiere` remains restored/running after the P5 fixture
-incident recorded in #31. All 309 frozen hashes were verified again; original registration
-and settings remain intact. Fixed fixtures retain process handles, pin `/D` and wait for
-installer commit before restoring the three owned HKCU keys.
+P6 process-tree memory and hot-path comparisons establish their recorded fixture/
+hardware scope, not universal performance or public-binary peak memory. The user's
+`D:\lumiere` baseline still matches all 309 frozen file hashes; fixture registration
+backups are restored and no isolated installer/legacy-download processes remain.
 
 ## Next action
 
-Finish the Release manual-update-control regression check, finalize v0.7.0 with the
-2026-10-08 publication date, push the candidate to main and verify Windows CI before
-dispatching the release workflow. Verify public assets/checksums, both updater feeds,
-signature and tag target; then record publication in a later documentation commit.
-Keep the user's installed baseline out of automated fixture lifecycle actions.
+Maintain the published Windows product through scoped Issues. Future versions follow
+the [release contract](../contracts/releases.md) and [runbook](../runbooks/releasing.md);
+published bytes/tags are immutable. Do not recreate a migration backlog or reinterpret
+maintainer reports and synthetic fixtures as broader platform guarantees.
