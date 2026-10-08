@@ -100,8 +100,11 @@ if (operation === 'prepare-release') {
 }
 function run(command, args, options = {}) {
   return new Promise((resolveRun, reject) => {
-    const executable = command === 'pnpm' ? process.execPath : command
-    const arguments_ = command === 'pnpm' ? [process.env.npm_execpath, ...args] : args
+    // pnpm/setup installs a standalone .exe; Corepack provides a JS entry point.
+    const pnpmEntry = process.env.npm_execpath
+    const nativePnpm = pnpmEntry?.toLowerCase().endsWith('.exe')
+    const executable = command === 'pnpm' ? (nativePnpm ? pnpmEntry : process.execPath) : command
+    const arguments_ = command === 'pnpm' && !nativePnpm ? [pnpmEntry, ...args] : args
     const child = spawn(executable, arguments_, { cwd: root, stdio: 'inherit', ...options })
     child.on('error', reject)
     child.on('exit', (code) =>
