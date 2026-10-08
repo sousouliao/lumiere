@@ -1,5 +1,6 @@
 //! Explicit Windows GUI fixture; never included in the shipped executable.
 use super::*;
+use serde_json::json;
 use std::{
     sync::mpsc,
     time::{Duration, Instant},
@@ -148,6 +149,23 @@ fn exercise(app: &AppHandle, output: &std::path::Path) {
     assert!(!app.global_shortcut().is_registered("Ctrl+Alt+F24"));
     std::fs::remove_dir(&settings).unwrap();
     std::fs::rename(&backup, &settings).unwrap();
+    let old_host = tauri::async_runtime::block_on(controller.host_process_id()).unwrap();
+    assert_eq!(old_host, host_id);
+    tauri::async_runtime::block_on(controller.prepare_update()).unwrap();
+    assert!(controller.shortcuts_suspended());
+    assert!(tauri::async_runtime::block_on(controller.host_process_id()).is_none());
+    assert_eq!(
+        tauri::async_runtime::block_on(controller.capture(app, CaptureMode::Display))["status"],
+        "failed"
+    );
+    controller.finish_update_exit();
+    controller.resume_after_update_failure();
+    controller.resume_notifications();
+    assert_ne!(
+        tauri::async_runtime::block_on(controller.host_process_id()).unwrap(),
+        old_host
+    );
+    let host_id = tauri::async_runtime::block_on(controller.host_process_id()).unwrap();
     let mut samples = Vec::new();
     let cycles = std::env::var("LUMIERE_GUI_CYCLES")
         .ok()

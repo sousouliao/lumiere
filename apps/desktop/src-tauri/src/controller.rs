@@ -28,6 +28,7 @@ struct Data {
     settings: Settings,
     registered: Shortcuts,
     recording: bool,
+    updating: bool,
     active: Option<(CaptureMode, String)>,
     completion: Option<Value>,
     completion_id: u64,
@@ -40,6 +41,7 @@ impl Controller {
                 settings: Settings::load(&settings_path),
                 registered: Shortcuts::default(),
                 recording: false,
+                updating: false,
                 active: None,
                 completion: None,
                 completion_id: 0,
@@ -54,10 +56,13 @@ impl Controller {
         }
     }
     async fn host(&self) -> Result<Arc<Host>, String> {
-        if self.quitting.load(Ordering::Acquire) {
+        if self.quitting.load(Ordering::Acquire) || self.data.lock().unwrap().updating {
             return Err("Lumiere is shutting down".into());
         }
         let mut slot = self.host.lock().await;
+        if self.data.lock().unwrap().updating {
+            return Err("Lumiere is updating".into());
+        }
         if slot.as_ref().is_some_and(|host| !host.is_alive())
             && let Some(host) = slot.take()
         {
@@ -74,6 +79,34 @@ impl Controller {
         if let Some(host) = self.host.lock().await.take() {
             host.shutdown().await;
         }
+    }
+    pub async fn prepare_update(&self) -> Result<(), String> {
+        {
+            let mut data = self.data.lock().map_err(|_| "Capture state unavailable")?;
+            if data.active.is_some() || data.updating || self.quitting.load(Ordering::Acquire) {
+                return Err("Finish the capture before restarting to update".into());
+            }
+            data.updating = true;
+        }
+        self.notifications.clear();
+        let mut slot = self.host.lock().await;
+        if let Some(host) = slot.take()
+            && let Err(error) = host.shutdown_checked().await
+        {
+            *slot = Some(host);
+            self.data.lock().unwrap().updating = false;
+            return Err(format!("Native capture Host could not exit: {error}"));
+        }
+        Ok(())
+    }
+    pub fn resume_after_update_failure(&self) {
+        self.data.lock().unwrap().updating = false;
+    }
+    pub fn resume_notifications(&self) {
+        self.notifications.restart();
+    }
+    pub fn finish_update_exit(&self) {
+        self.notifications.shutdown();
     }
     #[cfg(test)]
     pub async fn host_process_id(&self) -> Option<u32> {
@@ -241,7 +274,7 @@ impl Controller {
     }
     pub fn shortcuts_suspended(&self) -> bool {
         let data = self.data.lock().expect("Controller state poisoned");
-        data.recording || self.quitting.load(Ordering::Acquire)
+        data.recording || data.updating || self.quitting.load(Ordering::Acquire)
     }
     pub async fn surface(&self) -> Value {
         let capabilities = self.request(5, "getCapabilities", json!({})).await;
@@ -310,7 +343,7 @@ impl Controller {
         let snapshot = self.settings_snapshot();
         let (surface, busy) = {
             let data = self.data.lock().expect("Controller state poisoned");
-            (data.surface.clone(), data.active.is_some())
+            (data.surface.clone(), data.active.is_some() || data.updating)
         };
         if let Some(surface) = surface {
             crate::update_tray(app, &surface, &snapshot, busy);
@@ -319,7 +352,7 @@ impl Controller {
     pub async fn capture(&self, app: &AppHandle, mode: CaptureMode) -> Value {
         let (id, settings) = {
             let mut data = self.data.lock().expect("Controller state poisoned");
-            if data.active.is_some() {
+            if data.active.is_some() || data.updating || self.quitting.load(Ordering::Acquire) {
                 return failed(notice(
                     "caution",
                     "A capture is already in progress",

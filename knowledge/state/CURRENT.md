@@ -1,7 +1,7 @@
 # Current Project State
 
 - Updated: 2026-10-08
-- Frontier: P5 installer and signed updates, [#31](https://github.com/sousouliao/lumiere/issues/31), under [#25](https://github.com/sousouliao/lumiere/issues/25).
+- Frontier: P6 Windows-only cutover and final verification, [#32](https://github.com/sousouliao/lumiere/issues/32), under [#25](https://github.com/sousouliao/lumiere/issues/25).
 - Approved decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
 - Branch: `codex/windows-rust-migration`; frozen baseline: `cc0c011af0bc53be696d4f84bda803df24315f6e`.
 - Public distribution remains Windows `v0.6.0` from `d218c02`; historical macOS is `v0.5.0`.
@@ -15,7 +15,9 @@ components/tokens. Native tray, global shortcuts, settings v1-v5 at the existing
 notifications live in Rust. Shortcut registration/persistence is transactional;
 recording temporarily releases native bindings. The native shell and supervised
 Host stay resident; the WebView is created on demand and destroyed on close.
-The updater is explicitly disabled in this P4 development shell until P5 lands.
+The signed updater now verifies bytes and signed versions; download/install are explicit.
+An update locks capture, confirms Host retirement and pins the current installation path.
+Debug builds disable updates.
 Installed/public users still run the former Electron/.NET distribution.
 
 The independent Rust Host implements Windows v5 capabilities/Display and v6 native
@@ -62,8 +64,24 @@ and [#24](https://github.com/sousouliao/lumiere/issues/24) evidence/waivers do n
 certify the replacement. Baseline +10% hot median/p90 and smaller total memory/artifact
 gates still require independent final comparison.
 
+[#31](https://github.com/sousouliao/lumiere/issues/31) owns P5's six transaction
+unit tests, four real NSIS/official updater fixtures, signed-byte/version rejection
+and update quiescence/recovery. Last local installer 3397058 bytes vs baseline
+133323003; shell/Host 12659200/1065984 bytes. `latest.yml` and signed `latest.json`
+reference those same NSIS bytes. Signing secrets stay outside Git. Updated 30-cycle
+shell handles 461/464 and private bytes 14233600/15056896; no total-memory claim.
+
+The first handoff fixture restored registry state too early after a null PowerShell
+exit code and unintentionally upgraded the existing `D:\lumiere`. All 309 frozen
+files were restored and hash-verified; its original uninstaller was extracted from
+the baseline, original registration restored and the baseline restarted hidden
+(PID 32360). The `app.asar` hash again matches the frozen inventory and settings
+retain their earlier last-write time. Fixtures now retain process handles, pin `/D`
+and await installer commit before restoring registration; subsequent full checks pass.
+This incident and recovery are recorded in #31.
+
 ## Next action
 
-Implement P5's safe upgrade transaction, NSIS payload, signed Tauri updater and
-matching legacy/new metadata; verify rollback and installed upgrades. Then perform
-P6 cleanup, CI/contracts and the remaining final acceptance without publication.
+Remove the replaced Electron/.NET/macOS paths, adapt the retained renderer contracts,
+update Windows-only CI/contracts, then complete available final comparisons and record
+remaining hardware acceptance in #32. Do not publish.

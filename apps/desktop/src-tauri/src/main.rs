@@ -7,11 +7,12 @@ mod notification;
 mod settings;
 #[cfg(test)]
 mod tests;
+mod updater;
 
 use controller::Controller;
 use lumiere_capture_contract::{CaptureMode, Delivery};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::Value;
 use settings::AfterCapture;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -191,23 +192,21 @@ async fn recover_capture(app: AppHandle, id: u64, action: RecoveryAction) -> Res
     }
     Ok(())
 }
-// P5 owns signed updater integration. During P4 the development shell advertises
-// disabled updates instead of pretending that a download/install is implemented.
-#[tauri::command]
-fn get_update_snapshot() -> Value {
-    json!({"currentVersion":env!("CARGO_PKG_VERSION"),"windowsUpdate":{"status":"disabled"}})
+#[tauri::command(async)]
+fn get_update_snapshot(app: AppHandle) -> Value {
+    app.state::<updater::Updates>().snapshot(&app)
 }
 #[tauri::command]
-fn check_for_updates() -> Value {
-    json!({"status":"idle","currentVersion":env!("CARGO_PKG_VERSION"),"windowsUpdate":{"status":"disabled"}})
+async fn check_for_updates(app: AppHandle) -> Value {
+    app.state::<updater::Updates>().check(&app).await
 }
 #[tauri::command]
-fn download_update() -> Result<Value, String> {
-    Err("Updates are disabled in this development shell".into())
+async fn download_update(app: AppHandle) -> Result<Value, String> {
+    app.state::<updater::Updates>().download(&app).await
 }
 #[tauri::command]
-fn install_update() -> Result<Value, String> {
-    Err("Updates are disabled in this development shell".into())
+async fn install_update(app: AppHandle) -> Result<Value, String> {
+    app.state::<updater::Updates>().install(&app).await
 }
 #[tauri::command]
 fn open_latest_release(app: AppHandle) -> Result<(), String> {
@@ -359,6 +358,7 @@ fn builder(paths: Paths) -> tauri::Builder<tauri::Wry> {
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_opener::Builder::new()
                 .open_js_links_on_click(false)
@@ -391,6 +391,8 @@ fn builder(paths: Paths) -> tauri::Builder<tauri::Wry> {
                 paths.settings,
                 app.path().picture_dir()?.join("Lumiere"),
             ));
+            app.manage(updater::Updates::new());
+            updater::schedule(app.handle());
             app.state::<Controller>().initialize_shortcuts(app.handle());
             setup_tray(app.handle())?;
             let handle = app.handle().clone();

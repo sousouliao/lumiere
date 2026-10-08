@@ -28,6 +28,22 @@ async function main() {
     `releaseDate: '${new Date().toISOString()}'`,
     '',
   ].join('\n')
+  const signature = (await readFile(`${installerPath}.sig`, 'utf8')).trim()
+  const tauriMetadata = {
+    version: desktopPackage.version,
+    pub_date: new Date().toISOString(),
+    platforms: {
+      'windows-x86_64': {
+        signature,
+        url: `https://github.com/sousouliao/lumiere/releases/download/v${desktopPackage.version}/${fileName}`,
+      },
+    },
+  }
+  await writeFile(
+    join(releaseRoot, 'latest.json'),
+    `${JSON.stringify(tauriMetadata, null, 2)}\n`,
+    'utf8',
+  )
   await writeFile(join(releaseRoot, 'latest.yml'), latest, 'utf8')
   await writeFile(join(releaseRoot, 'SHA256SUMS'), `${sha256}  ${fileName}\n`, 'utf8')
 }

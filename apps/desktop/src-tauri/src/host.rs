@@ -140,21 +140,41 @@ impl Host {
     /// EOF asks the Host to cancel/join active native work before exit. The bounded
     /// fallback kills a broken process; kill_on_drop also covers shell failure.
     pub async fn shutdown(&self) {
+        if let Err(error) = self.shutdown_checked().await {
+            eprintln!(
+                "{}",
+                serde_json::json!({"level":"warn","event":"host-shutdown-failed","error":error})
+            );
+        }
+    }
+    pub async fn shutdown_checked(&self) -> Result<(), String> {
         self.alive.store(false, Ordering::Release);
         self.input.lock().await.take();
-        if let Some(mut child) = self.child.lock().await.take()
-            && tokio::time::timeout(Duration::from_secs(12), child.wait())
-                .await
-                .is_err()
-        {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
+        let mut slot = self.child.lock().await;
+        if let Some(mut child) = slot.take() {
+            let result = match tokio::time::timeout(Duration::from_secs(12), child.wait()).await {
+                Ok(Ok(_)) => Ok(()),
+                _ => match child.kill().await {
+                    Ok(()) => child
+                        .wait()
+                        .await
+                        .map(|_| ())
+                        .map_err(|error| error.to_string()),
+                    Err(error) => Err(error.to_string()),
+                },
+            };
+            if let Err(error) = result {
+                *slot = Some(child);
+                return Err(error);
+            }
         }
+        drop(slot);
         if let Some(reader) = self.reader.lock().await.take() {
             reader.abort();
             let _ = reader.await;
         }
         fail_pending(&self.pending, "Native capture host stopped");
+        Ok(())
     }
 }
 

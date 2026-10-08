@@ -48,6 +48,12 @@ impl Notifications {
         });
         Self(Mutex::new(Some(Worker { sender, thread })))
     }
+    pub fn restart(&self) {
+        let mut slot = self.0.lock().unwrap();
+        if slot.is_none() {
+            *slot = Self::new().0.lock().unwrap().take();
+        }
+    }
     pub fn show(&self, app: &AppHandle, id: u64, title: &str, detail: &str) {
         if let Some(worker) = self.0.lock().unwrap().as_ref() {
             let _ = worker.sender.send(Command::Show(

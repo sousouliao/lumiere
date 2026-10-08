@@ -18,6 +18,36 @@
   "bundle": {
     "active": false,
     "targets": ["nsis"],
-    "icon": ["../resources/icons/windows/app.ico", "../resources/icons/windows/app.png"]
+    "icon": ["../resources/icons/windows/app.ico", "../resources/icons/windows/app.png"],
+    "publisher": "Lumiere",
+    "homepage": "https://github.com/sousouliao/lumiere",
+    "createUpdaterArtifacts": true,
+    "resources": {
+      "../../../target/release/lumiere-windows-host.exe": "lumiere-windows-host.exe"
+    },
+    "windows": {
+      "allowDowngrades": false,
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "template": "../build/windows-installer/installer.nsi",
+        "installerHooks": "../build/windows-installer/transaction.nsh",
+        "languages": ["English"],
+        "displayLanguageSelector": false
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/sousouliao/lumiere/releases/latest/download/latest.json"],
+      "requireSignedVersion": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM1OTk0MjFDMjI4NEZEQUUKUldTdS9ZUWlIRUtaeFF1aTI3SlZ4cEh2ekYvdHllZm5tMktLb2xqQ0ZnOEFaakxkNFE0U2VWZloK",
+      "windows": {
+        "installMode": "quiet"
+      }
+    }
   }
 }
