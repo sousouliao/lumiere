@@ -13,6 +13,9 @@ pub(crate) struct Crop {
     pub height: u32,
 }
 impl Rect {
+    pub fn is_valid_selection(self, scale: f64) -> bool {
+        self.right - self.left >= 32.0 * scale && self.bottom - self.top >= 24.0 * scale
+    }
     pub fn drag(start: (f64, f64), end: (f64, f64), width: f64, height: f64) -> Option<Self> {
         if ![start.0, start.1, end.0, end.1, width, height]
             .iter()
@@ -84,6 +87,26 @@ impl Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn selection_minimum_matches_logical_size_at_scaled_dpi() {
+        let scale = 1.5;
+        let minimum = Rect::drag((0.0, 0.0), (48.0, 36.0), 100.0, 100.0).unwrap();
+        assert!(minimum.is_valid_selection(scale));
+        assert!(
+            !Rect {
+                right: 47.0,
+                ..minimum
+            }
+            .is_valid_selection(scale)
+        );
+        assert!(
+            !Rect {
+                bottom: 35.0,
+                ..minimum
+            }
+            .is_valid_selection(scale)
+        );
+    }
     #[test]
     fn reverse_drag_and_fractional_dpi_crop_round_outwards() {
         let rect = Rect::drag((110.25, 90.5), (10.1, 20.1), 2560.0, 1440.0).unwrap();

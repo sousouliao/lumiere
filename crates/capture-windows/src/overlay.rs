@@ -137,8 +137,7 @@ unsafe extern "system" fn window_proc(
                     state.origin = None;
                     state.capture = Some(false);
                     if let Some(rect) = rect
-                        && rect.right - rect.left >= 32.0 * state.scale
-                        && rect.bottom - rect.top >= 24.0 * state.scale
+                        && rect.is_valid_selection(state.scale)
                     {
                         state.selected = Some(rect);
                     }
@@ -272,7 +271,7 @@ impl Overlay {
             self.presenter = None;
         }
         if let Some(presenter) = &mut self.presenter {
-            presenter.attach(&surface)?;
+            presenter.attach(&surface, self.state.scale as f32)?;
         } else {
             self.presenter = Some(presenter::Presenter::new(
                 device,
@@ -280,13 +279,14 @@ impl Overlay {
                 &surface,
                 frame.width,
                 frame.height,
+                self.state.scale as f32,
             )?);
             self.size = (frame.width, frame.height);
         }
         self.presenter
             .as_ref()
             .expect("presenter initialized")
-            .draw(None, self.state.pointer)?;
+            .draw(None, self.state.pointer, false)?;
         // SAFETY: Present the matching frame while hidden, then activate exactly this worker-owned HWND.
         unsafe {
             SetWindowPos(
@@ -311,7 +311,7 @@ impl Overlay {
         }
         Ok(())
     }
-    fn finish(&mut self) {
+    pub(crate) fn finish(&mut self) {
         self.state.active = false;
         self.state.origin = None;
         self.state.capture = None;
@@ -343,6 +343,12 @@ impl Overlay {
                 return Ok(Selection::Cancelled);
             }
             if let Some(rect) = self.state.selected {
+                self.presenter.as_ref().expect("prepared presenter").draw(
+                    Some(rect),
+                    self.state.pointer,
+                    true,
+                )?;
+                self.state.active = false;
                 return rect
                     .crop(
                         (self.state.width, self.state.height),
@@ -382,10 +388,11 @@ impl Overlay {
             }
             if self.state.dirty {
                 self.state.dirty = false;
-                self.presenter
-                    .as_ref()
-                    .expect("prepared presenter")
-                    .draw(self.state.rect(), self.state.pointer)?;
+                self.presenter.as_ref().expect("prepared presenter").draw(
+                    self.state.rect(),
+                    self.state.pointer,
+                    false,
+                )?;
             }
             std::thread::sleep(Duration::from_millis(2));
         }
@@ -418,6 +425,10 @@ pub(crate) fn select(
     let result = overlay
         .prepare(device, shader, frame)
         .and_then(|_| overlay.run(frame, cancel, deadline));
-    overlay.finish();
+    // Keep the frozen selection/status visible through conversion and delivery.
+    // The capture owner finishes it on every completion/error/cancellation path.
+    if !matches!(&result, Ok(Selection::Selected(_))) {
+        overlay.finish();
+    }
     result
 }

@@ -257,6 +257,9 @@ impl WindowsEngine {
                 deliveries,
             })
         })();
+        if let Some(overlay) = overlay.as_mut() {
+            overlay.finish();
+        }
         // Retry with fresh native resources after device removal or any acquisition/readback failure.
         if result.is_err() {
             *overlay = None;

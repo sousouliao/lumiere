@@ -56,6 +56,7 @@ fn retained_gpu_frame_crop_is_exact_after_the_overlay_was_visible() {
     )
     .unwrap();
     controller.join().unwrap();
+    overlay.as_mut().unwrap().finish();
     let Selection::Selected(crop) = selected else {
         panic!("Fixture selection was cancelled");
     };
