@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { CaptureSurfaceSnapshot } from '../../shared/capture-command'
 import type { LumierePlatform, OutputDelivery } from '../../shared/platform-contract'
+import { WindowControls } from './WindowControls'
 import {
   formatShortcutAccelerator,
   shortcutFromKeyInput,
@@ -102,6 +103,7 @@ export function SettingsView({
       <header
         className={`settings-title-bar settings-title-bar--${platform}`}
         aria-label="Lumiere settings window"
+        data-tauri-drag-region
       >
         {platform === 'windows' ? (
           <Button
@@ -119,7 +121,8 @@ export function SettingsView({
             </svg>
           </Button>
         ) : null}
-        <h1>Settings</h1>
+        <h1 data-tauri-drag-region>Settings</h1>
+        <WindowControls />
         {platform !== 'windows' ? (
           <Button
             variant="ghost"

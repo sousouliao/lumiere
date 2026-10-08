@@ -6,12 +6,12 @@
   "description": "Cross-platform Lumiere desktop shell",
   "main": "./out/main/index.js",
   "scripts": {
-    "build": "electron-vite build",
+    "build": "vite build --config vite.tauri.config.ts",
+    "build:native": "cargo build -p lumiere-windows-host --release && tauri build --no-bundle",
     "check": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "predev": "node ../../scripts/prepare-development-electron.mjs && node ../../scripts/prepare-development-host.mjs",
-    "dev": "electron-vite dev",
-    "prestart": "node ../../scripts/prepare-development-electron.mjs",
-    "start": "electron-vite preview",
+    "predev": "cargo build -p lumiere-windows-host",
+    "dev": "tauri dev",
+    "start": "../../target/release/Lumiere.exe",
     "test": "pnpm test:shared",
     "test:macos": "vitest run --config vitest.macos.config.ts",
     "test:shared": "vitest run --config vitest.shared.config.ts",
@@ -21,10 +21,12 @@
     "ui:view": "shadcn view"
   },
   "dependencies": {
+    "@tauri-apps/api": "2.11.1",
     "electron-updater": "6.8.9"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",
+    "@tauri-apps/cli": "2.12.1",
     "@types/node": "26.2.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",

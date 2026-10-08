@@ -15,6 +15,8 @@ export default defineConfig(
     '**/node_modules/**',
     '**/obj/**',
     '**/out/**',
+    'target/**',
+    'apps/desktop/src-tauri/gen/**',
   ]),
   {
     files: ['**/*.{js,mjs,cjs}'],
