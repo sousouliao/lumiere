@@ -4,6 +4,27 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.7.1`
+
+Release platforms: Windows
+
+### Changed
+
+- Match the region selection overlay to the dark design, with coral borders, live pixel dimensions, small-selection hints and capture progress feedback.
+- Refresh the tray menu with a compact dark layout, keyboard navigation, registered shortcuts and positioning aligned to the tray icon.
+- Preload and reuse the tray menu for faster opening; its hidden WebView remains resident between uses.
+- Adapt the tray icon to the Windows system theme: white on dark taskbars and dark on light taskbars, with notification-driven updates.
+
+### Fixed
+
+- Align the Windows settings back button and title with the desktop design.
+
+### Known limitations
+
+- The Windows installer is not Authenticode signed; Windows may show an unknown-publisher or SmartScreen warning, or block execution. Updater integrity signatures do not establish publisher identity.
+- Windows Graphics Capture retains its system capture border. Output remains sRGB Visual Match PNG, not HDR-preserved export.
+- Windows x64 is the only supported platform.
+
 ## [0.7.0] - 2026-10-08
 
 Release platforms: Windows
