@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.metadata.outputs.version }}
-      macos: ${{ steps.metadata.outputs.macos }}
       windows: ${{ steps.metadata.outputs.windows }}
       prerelease: ${{ steps.metadata.outputs.prerelease }}
     steps:
@@ -91,42 +90,6 @@ jobs:
           path: artifacts/release-notes.md
           if-no-files-found: error
 
-  macos:
-    name: Build macOS release
-    needs: audit
-    if: needs.audit.outputs.macos == 'true'
-    runs-on: macos-latest
-    steps:
-      - name: Checkout release commit
-        uses: actions/checkout@v7
-
-      - name: Setup pnpm and Node
-        uses: pnpm/setup@v2
-        with:
-          runtime: node@22
-          cache: true
-          install: false
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Verify macOS integration and Host
-        run: |
-          pnpm test:macos
-          swift test --package-path hosts/macos
-
-      - name: Build macOS release artifact
-        run: pnpm release:macos
-
-      - name: Upload macOS release artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-macos
-          path: |
-            artifacts/macos/Lumiere-${{ needs.audit.outputs.version }}-macos-arm64.dmg
-            artifacts/macos/Lumiere-${{ needs.audit.outputs.version }}-macos-x64.dmg
-          if-no-files-found: error
-
   windows:
     name: Build Windows release
     needs: audit
@@ -143,37 +106,52 @@ jobs:
           cache: true
           install: false
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 10.0.x
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify Windows Host
+      - name: Install pinned Rust toolchain
         shell: pwsh
-        run: ./hosts/windows/scripts/verify.ps1
+        run: rustup show active-toolchain
 
-      - name: Build unsigned Windows installer
-        run: pnpm package:windows
+      - name: Verify Rust workspace
+        shell: pwsh
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --workspace --all-targets --features lumiere-desktop/custom-protocol -- -D warnings
+          cargo test --locked --workspace --features lumiere-desktop/custom-protocol
+          cargo build --locked -p lumiere-windows-host
+          node scripts/verify-rust-protocol.mjs
 
-      - name: Upload unsigned Windows artifact
+      - name: Build Windows installer and signed updater metadata
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        shell: pwsh
+        run: |
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Tauri updater signing key is required.' }
+          pnpm package:windows
+
+      - name: Verify updater signatures against the embedded public key
+        shell: pwsh
+        run: cargo test --locked -p lumiere-desktop --features custom-protocol official_updater_accepts_signed_bytes_and_rejects_tampering -- --ignored --nocapture
+
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
         with:
           name: release-windows
           path: |
-            artifacts/windows/build/Lumiere-Setup-*-x64.exe
-            artifacts/windows/build/latest.yml
+            artifacts/windows/release/Lumiere-Setup-*-x64.exe
+            artifacts/windows/release/latest.yml
+            artifacts/windows/release/latest.json
+            artifacts/windows/release/*.exe.sig
           if-no-files-found: error
 
   publish:
     name: Publish GitHub Release
-    needs: [audit, macos, windows]
+    needs: [audit, windows]
     if: >-
       always() &&
       needs.audit.result == 'success' &&
-      (needs.macos.result == 'success' || needs.macos.result == 'skipped') &&
       (needs.windows.result == 'success' || needs.windows.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
@@ -196,13 +174,6 @@ jobs:
         with:
           name: release-notes
           path: artifacts/metadata
-
-      - name: Download macOS artifact
-        if: needs.audit.outputs.macos == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: release-macos
-          path: artifacts/publish
 
       - name: Download Windows artifacts
         if: needs.audit.outputs.windows == 'true'

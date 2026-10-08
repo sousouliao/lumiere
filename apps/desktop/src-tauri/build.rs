@@ -19,7 +19,6 @@ fn main() {
             "check_for_updates",
             "download_update",
             "install_update",
-            "open_latest_release",
         ]),
     ))
     .expect("Tauri build failed")

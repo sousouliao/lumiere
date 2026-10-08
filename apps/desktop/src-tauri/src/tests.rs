@@ -182,6 +182,18 @@ fn exercise(app: &AppHandle, output: &std::path::Path) {
                 "Boolean(window.lumierePlatform && document.querySelector('main'))",
             ) == true
         });
+        // Mounted markup precedes asynchronous native snapshots. Capture the
+        // settled product state, not the temporary disabled/loading surface.
+        wait_for(|| {
+            script(
+                &window,
+                if cycle % 2 == 0 {
+                    "(() => { const buttons = [...document.querySelectorAll('.capture-action')]; return buttons.length === 2 && buttons.every(button => !button.disabled); })()"
+                } else {
+                    "Boolean(document.querySelector('button[aria-label^=\"Choose save folder.\"]:not(:disabled)'))"
+                },
+            ) == true
+        });
         let title = script(&window, "document.querySelector('main').className");
         assert_eq!(
             title,

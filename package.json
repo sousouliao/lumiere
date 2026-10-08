@@ -16,10 +16,8 @@
     "icons:check": "node ./scripts/check-icons.mjs",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
-    "package:macos": "node ./scripts/package-macos.mjs",
     "package:windows": "node ./scripts/package-windows.mjs",
     "release:windows:finalize": "node ./scripts/finalize-windows-release.mjs",
-    "release:macos": "node ./scripts/release-macos.mjs",
     "release:check": "node ./scripts/release-metadata.mjs check",
     "release:finalize": "node ./scripts/release-metadata.mjs finalize",
     "release:inspect": "node ./scripts/release-metadata.mjs inspect",
@@ -27,7 +25,6 @@
     "prepare": "simple-git-hooks",
     "start": "pnpm --filter @lumiere/desktop start",
     "test": "pnpm test:shared",
-    "test:macos": "pnpm --filter @lumiere/desktop test:macos",
     "test:shared": "pnpm --filter @lumiere/desktop test:shared"
   },
   "lint-staged": {

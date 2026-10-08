@@ -1,39 +1,18 @@
-# Windows Host And Engine
+# Windows Rust Host
 
-Windows host adaptation is the active Milestone 1B frontier. The
-`Lumiere.Windows.Host` executable owns the platform-host v2 JSON Lines process boundary;
-it connects the retained engine for Display and target-token-bound Region capture, one
-sRGB Visual Match conversion, and Clipboard, Folder, or Both delivery. Region is advertised
-only when the current target supplies a reconstructable native snapshot plus target-local
-logical geometry. It does not restore a WinUI product shell.
+`lumiere-windows-host.exe` is a separate resident JSONL process supervised by Tauri.
+Its transport lives in `rust/`; the independent native engine lives in
+[`crates/capture-windows`](../../crates/capture-windows). The renderer never receives
+raw frames or native handles.
 
-The retained modules are:
+Capabilities and Display use v5; native Region and request-id cancellation use v6.
+Region retains one WGC RGBA16F frame, presents it at native resolution, and crops that
+same frame. The fixed sRGB Visual Match conversion precedes clipboard/folder delivery.
+An HDR-active target requires its current Windows SDR white level. Missing data fails
+rather than producing an unverified artifact.
 
-- `Lumiere.Windows.Capture` for WGC target resolution, session state, and frame lifetime.
-- `Lumiere.Windows.Graphics` for D3D11/DXGI, HDR-aware input, sRGB Visual Match, PNG,
-  clipboard, and folder delivery.
-- `Lumiere.Windows.Interop` for the COM/WinRT and diagnostic implementation those
-  modules require.
-- `Lumiere.Windows.Host` for stdin/stdout protocol handling and structured stderr
-  diagnostics.
-
-The capture interface owns target resolution, target-aware HDR probing, target-local
-logical-to-pixel Region conversion, first-frame acquisition, one sRGB Visual Match
-conversion, requested delivery, cancellation, and native teardown. On an HDR-active target,
-the conversion normalizes captured scRGB input against that display's current Windows SDR
-white level before tone mapping; if that value cannot be resolved, capture fails instead of
-claiming an unverified Visual Match artifact. Issued Region tokens
-are short-lived and bind to an opaque Capture-owned target snapshot. A caller supplies a
-correlation ID but never owns a raw frame, monitor handle, texture, capture session, or
-output cache. Call
-`WindowsDisplayCaptureEngine.ConfigureLogging` before creating the engine when the
-process needs a structured stderr logger.
-
-The executable conforms to `../../protocol/platform-host/v2.schema.json`. A Debug build
-lives at
-`src/Lumiere.Windows.Host/bin/x64/Debug/net10.0-windows10.0.26100.0/win-x64/Lumiere.Windows.Host.exe`;
-the Electron development launcher builds and selects that artifact before a Release
-fallback. `LUMIERE_WINDOWS_HOST_PATH` remains the authoritative development override.
-
-Run `./scripts/verify.ps1` on Windows to restore, Release-build, test, and format-check
-the Host and retained engine.
+Build with `cargo build --locked -p lumiere-windows-host` from the repository root.
+Debug and Release executables live in `target/debug` and `target/release`; packaged
+shells use the adjacent executable. See the [Windows runbook](../../knowledge/runbooks/windows-development.md)
+for tests and explicit hardware fixtures. Protocol stdout is reserved for newline-delimited
+responses; structured diagnostics use stderr. EOF cancels and joins active native work.

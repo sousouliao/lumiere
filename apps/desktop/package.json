@@ -3,8 +3,7 @@
   "version": "0.6.0",
   "private": true,
   "productName": "Lumiere",
-  "description": "Cross-platform Lumiere desktop shell",
-  "main": "./out/main/index.js",
+  "description": "Windows Lumiere desktop shell",
   "scripts": {
     "build": "vite build --config vite.tauri.config.ts",
     "build:native": "cargo build -p lumiere-windows-host --release && tauri build --no-bundle",
@@ -13,7 +12,6 @@
     "dev": "tauri dev",
     "start": "../../target/release/Lumiere.exe",
     "test": "pnpm test:shared",
-    "test:macos": "vitest run --config vitest.macos.config.ts",
     "test:shared": "vitest run --config vitest.shared.config.ts",
     "ui:add": "shadcn add",
     "ui:dry-run": "shadcn add --dry-run",
@@ -21,8 +19,7 @@
     "ui:view": "shadcn view"
   },
   "dependencies": {
-    "@tauri-apps/api": "2.11.1",
-    "electron-updater": "6.8.9"
+    "@tauri-apps/api": "2.11.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",
@@ -33,9 +30,6 @@
     "@vitejs/plugin-react": "5.2.0",
     "ajv": "8.17.1",
     "clsx": "2.1.1",
-    "electron": "43.4.1",
-    "electron-builder": "26.15.7",
-    "electron-vite": "5.0.0",
     "motion": "13.1.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

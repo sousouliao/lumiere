@@ -1,12 +1,3 @@
-export const updateCommandChannels = {
-  getSnapshot: 'update:get-snapshot',
-  check: 'update:check',
-  openLatestRelease: 'update:open-latest-release',
-  download: 'update:download',
-  install: 'update:install',
-  changed: 'update:changed',
-} as const
-
 export interface UpdateSnapshot {
   currentVersion: string
   windowsUpdate?: WindowsUpdateState
@@ -32,7 +23,6 @@ export type UpdateCheckResult =
 export interface LumiereUpdateApi {
   getUpdateSnapshot(): Promise<UpdateSnapshot>
   checkForUpdates(): Promise<UpdateCheckResult>
-  openLatestRelease(): Promise<void>
   downloadUpdate(): Promise<UpdateSnapshot>
   installUpdate(): Promise<UpdateSnapshot>
   onUpdateChanged(listener: (snapshot: UpdateSnapshot) => void): () => void

@@ -2,9 +2,11 @@
 
 - 状态：原型设计基线
 - 适用里程碑：Milestone 1 — HDR-aware MVP
-- 适用平台：Windows、macOS
+- 当前适用平台：Windows；历史 macOS 设计不属于当前实现范围
 - 读者：产品设计、UI/UX 设计、产品与工程评审者
 - 上位约束：[产品合同](../contracts/product.md)、[UI 合同](../contracts/ui.md)、[宣称与输出合同](../contracts/claims.md)
+
+当前工程范围由 [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md) 和现行产品、UI 合同约束：采用 Tauri/React 与独立 Rust Windows 捕获层，保留既有 Windows UI。下文和导出画板中的 macOS 设计、旧运行时描述仅作为历史设计背景，不代表现有支持、源码保留或实施任务。
 
 ## 1. 文档目的
 

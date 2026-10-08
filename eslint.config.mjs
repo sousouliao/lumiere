@@ -40,16 +40,6 @@ export default defineConfig(
     },
   },
   {
-    files: [
-      'apps/desktop/electron.vite.config.ts',
-      'apps/desktop/src/main/**/*.ts',
-      'apps/desktop/src/preload/**/*.ts',
-    ],
-    languageOptions: {
-      globals: globals.node,
-    },
-  },
-  {
     files: ['apps/desktop/src/renderer/**/*.{ts,tsx}'],
     extends: [reactHooks.configs.flat['recommended-latest'], reactRefresh.configs.vite],
     languageOptions: {

@@ -1,18 +1,6 @@
 import { deliveryTargetsFor, type DeliveryTarget, type OutputDelivery } from './platform-contract'
 import type { CaptureShortcutSnapshot, ShortcutUpdate } from './shortcut-command'
 
-export const settingsCommandChannels = {
-  changed: 'settings:changed',
-  getSnapshot: 'settings:get-snapshot',
-  setAfterCaptureBehavior: 'settings:set-after-capture-behavior',
-  setCaptureShortcut: 'settings:set-capture-shortcut',
-  setHdrStatusReminders: 'settings:set-hdr-status-reminders',
-  setOutputDelivery: 'settings:set-output-delivery',
-  chooseSaveDirectory: 'settings:choose-save-directory',
-  setShortcutRecording: 'settings:set-shortcut-recording',
-  showRequested: 'settings:show-requested',
-} as const
-
 export const outputDeliveryOptions: readonly OutputDelivery[] = ['clipboard', 'folder', 'both']
 export const afterCaptureBehaviorOptions = ['do-nothing', 'show-in-folder'] as const
 export type AfterCaptureBehavior = (typeof afterCaptureBehaviorOptions)[number]

@@ -66,7 +66,6 @@ interface SettingsViewProps {
   onShortcutChange: (update: ShortcutUpdate) => Promise<void>
   onShortcutRecordingChange: (recording: boolean) => Promise<void>
   onCheckForUpdates: () => void
-  onOpenLatestRelease: () => void
   onDownloadUpdate?: () => void
   onInstallUpdate?: () => void
   captureBusy?: boolean
@@ -89,7 +88,6 @@ export function SettingsView({
   onShortcutChange,
   onShortcutRecordingChange,
   onCheckForUpdates,
-  onOpenLatestRelease,
   onDownloadUpdate,
   onInstallUpdate,
   captureBusy = false,
@@ -105,7 +103,7 @@ export function SettingsView({
         aria-label="Lumiere settings window"
         data-tauri-drag-region
       >
-        {platform === 'windows' ? (
+        {
           <Button
             variant="ghost"
             size="icon"
@@ -120,21 +118,9 @@ export function SettingsView({
               <path d="M13 8H3M7 4L3 8L7 12" />
             </svg>
           </Button>
-        ) : null}
+        }
         <h1 data-tauri-drag-region>Settings</h1>
         <WindowControls />
-        {platform !== 'windows' ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            hoverScale={1}
-            pressScale={0.98}
-            className="settings-done"
-            onClick={onDone}
-          >
-            Done
-          </Button>
-        ) : null}
       </header>
 
       <nav className="settings-dock-slot" aria-label="Settings sections">
@@ -191,7 +177,6 @@ export function SettingsView({
             hdrStatusReminders={snapshot?.hdrStatusReminders ?? true}
             isSaving={isSaving}
             shortcuts={snapshot?.captureShortcuts ?? null}
-            platform={platform}
             savingShortcut={savingShortcut}
             onShortcutChange={onShortcutChange}
             onShortcutRecordingChange={onShortcutRecordingChange}
@@ -202,10 +187,8 @@ export function SettingsView({
         {section === 'system' ? (
           <SystemSettings
             snapshot={surfaceSnapshot}
-            platform={platform}
             updateState={updateState}
             onCheckForUpdates={onCheckForUpdates}
-            onOpenLatestRelease={onOpenLatestRelease}
             onDownloadUpdate={onDownloadUpdate}
             onInstallUpdate={onInstallUpdate}
             captureBusy={captureBusy}
@@ -301,7 +284,6 @@ function CaptureSettings({
   hdrStatusReminders,
   isSaving,
   shortcuts,
-  platform,
   savingShortcut,
   onShortcutChange,
   onShortcutRecordingChange,
@@ -313,7 +295,6 @@ function CaptureSettings({
   hdrStatusReminders: boolean
   isSaving: boolean
   shortcuts: SettingsSnapshot['captureShortcuts'] | null
-  platform: LumierePlatform
   savingShortcut: CaptureMode | null
   onShortcutChange: (update: ShortcutUpdate) => Promise<void>
   onShortcutRecordingChange: (recording: boolean) => Promise<void>
@@ -329,7 +310,6 @@ function CaptureSettings({
         mode="region"
         label="Region shortcut"
         shortcut={shortcuts?.region ?? { accelerator: null, status: 'unconfigured' }}
-        platform={platform}
         disabled={!regionAvailable || savingShortcut !== null}
         saving={savingShortcut === 'region'}
         onChange={onShortcutChange}
@@ -339,7 +319,6 @@ function CaptureSettings({
         mode="display"
         label="Display shortcut"
         shortcut={shortcuts?.display ?? { accelerator: null, status: 'unconfigured' }}
-        platform={platform}
         disabled={!displayAvailable || savingShortcut !== null}
         saving={savingShortcut === 'display'}
         onChange={onShortcutChange}
@@ -390,7 +369,6 @@ interface ShortcutRecorderProps {
   mode: CaptureMode
   label: string
   shortcut: ShortcutSnapshot
-  platform: LumierePlatform
   disabled: boolean
   saving: boolean
   onChange: (update: ShortcutUpdate) => Promise<void>
@@ -401,7 +379,6 @@ function ShortcutRecorder({
   mode,
   label,
   shortcut,
-  platform,
   disabled,
   saving,
   onChange,
@@ -477,7 +454,7 @@ function ShortcutRecorder({
               return
             }
             try {
-              const accelerator = shortcutFromKeyInput(event, platform)
+              const accelerator = shortcutFromKeyInput(event)
               setInputError(null)
               void commitShortcut({ mode, accelerator })
             } catch (error) {
@@ -489,7 +466,7 @@ function ShortcutRecorder({
             ? 'Saving…'
             : recording
               ? 'Press keys'
-              : formatShortcutAccelerator(shortcut.accelerator, platform)}
+              : formatShortcutAccelerator(shortcut.accelerator)}
         </Button>
       </div>
       {inputError ? (
@@ -503,19 +480,15 @@ function ShortcutRecorder({
 
 function SystemSettings({
   snapshot,
-  platform,
   updateState,
   onCheckForUpdates,
-  onOpenLatestRelease,
   onDownloadUpdate,
   onInstallUpdate,
   captureBusy,
 }: {
   snapshot: CaptureSurfaceSnapshot | null
-  platform: LumierePlatform
   updateState: UpdateViewState
   onCheckForUpdates: () => void
-  onOpenLatestRelease: () => void
   onDownloadUpdate?: () => void
   onInstallUpdate?: () => void
   captureBusy: boolean
@@ -530,24 +503,6 @@ function SystemSettings({
         ? 'Available'
         : 'Needs attention'
   const currentVersion = updateState.status === 'loading' ? '…' : updateState.currentVersion
-  const updateHint =
-    updateState.status === 'checking'
-      ? `${currentVersion} · Checking…`
-      : updateState.status === 'available'
-        ? `${currentVersion} · ${updateState.availableVersion} available`
-        : updateState.status === 'up-to-date'
-          ? `${currentVersion} · Up to date`
-          : updateState.status === 'failed'
-            ? `${currentVersion} · Couldn’t check`
-            : currentVersion
-  const updateAction =
-    updateState.status === 'available'
-      ? 'View update'
-      : updateState.status === 'failed'
-        ? 'Try again'
-        : updateState.status === 'up-to-date'
-          ? 'Check again'
-          : 'Check for updates'
 
   return (
     <div className="settings-list settings-list--system">
@@ -561,27 +516,7 @@ function SystemSettings({
         value={!snapshot ? 'Checking…' : hostAvailable ? 'Connected' : 'Unavailable'}
         tone={hostAvailable ? 'ready' : 'muted'}
       />
-      {platform === 'macos' ? (
-        <div className="settings-row">
-          <span className="settings-row-copy">
-            <span className="settings-row-label">Version</span>
-            <span className="settings-row-hint" aria-live="polite">
-              {updateHint}
-            </span>
-          </span>
-          <Button
-            variant={updateState.status === 'available' ? 'primary' : 'ghost'}
-            size="sm"
-            hoverScale={1}
-            pressScale={0.98}
-            className={`settings-inline-action update-check-button${updateState.status === 'available' ? ' update-check-button--available' : ''}`}
-            disabled={updateState.status === 'loading' || updateState.status === 'checking'}
-            onClick={updateState.status === 'available' ? onOpenLatestRelease : onCheckForUpdates}
-          >
-            {updateState.status === 'checking' ? 'Checking…' : updateAction}
-          </Button>
-        </div>
-      ) : updateState.windowsUpdate && updateState.windowsUpdate.status !== 'disabled' ? (
+      {updateState.windowsUpdate && updateState.windowsUpdate.status !== 'disabled' ? (
         <WindowsUpdateRow
           currentVersion={currentVersion}
           state={updateState.windowsUpdate}

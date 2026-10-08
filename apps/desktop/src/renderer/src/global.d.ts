@@ -1,8 +1,8 @@
-import type { WindowsRendererApi } from '../../shared/windows-renderer-api'
+import type { LumiereRendererApi } from '../../shared/capture-command'
 
 declare global {
   interface Window {
-    lumierePlatform: WindowsRendererApi
+    lumierePlatform: LumiereRendererApi
   }
 }
 

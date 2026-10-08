@@ -10,13 +10,9 @@ GitHub Issues are the control plane for non-trivial work. An executable Issue st
 - required repository, Windows, and hardware gates;
 - native Issue dependencies for blockers.
 
-Lumiere uses environment-aware execution lanes because native runtime truth is tied
-to the machine currently available:
-
-- the **shared lane** owns platform-neutral shell, protocol, state, and product-surface
-  work and may run on macOS or Windows;
-- the **macOS lane** owns Swift Host and macOS runtime or hardware work;
-- the **Windows lane** owns .NET Host and Windows runtime or hardware work.
+Lumiere separates renderer/protocol repository checks from Windows native runtime and
+hardware evidence. Rust owns the Windows Host and native capture library. One writer
+advances the current Issue; unavailable hardware observations remain explicitly open.
 
 Each lane may have one open, acceptance-ready frontier Issue, and `CURRENT.md` names
 the next concrete action for every active lane. Dependencies between lane Issues must
@@ -53,8 +49,8 @@ Long work must advance in reviewable vertical slices. A handoff contains only:
 
 Do not preserve transcripts, exploratory reasoning, or session narration as project state.
 
-Shared implementation may be written on either supported platform, but its truth is
-still scoped by the checks actually run. Cross-platform CI can establish repository
+Renderer implementation may be checked without native capture, but its truth is
+still scoped by the checks actually run. Repository CI can establish repository
 truth; menus, shortcuts, windows, permissions, native capture, delivery, HDR behavior,
 and hardware observations require the owning platform. Work in one lane never closes
 another lane's acceptance criteria.
@@ -68,13 +64,12 @@ claimed. Cached results and incomplete artifacts never count as current verifica
 Truth levels are distinct:
 
 1. **Repository done** — implementation, relevant tests, format, and static checks pass.
-2. **Platform verified** — the named Windows or macOS build/test and runtime smoke
-   pass. Windows verified and macOS verified are independent claims.
+2. **Platform verified** — the named Windows build/test and runtime smoke pass.
 3. **Hardware verified** — native capture, HDR behavior, sRGB Visual Match, and named
    receiving apps are observed on the named platform/display and recorded with the
    owning release work.
 
-MVP release requires the applicable level on both platforms. Public HDR-preserved
+MVP release requires the applicable Windows truth level. Public HDR-preserved
 claims require level 3 for every named platform. One platform's verification must never
 be projected to another, and level 1 or 2 must never be projected upward.
 
@@ -82,7 +77,7 @@ be projected to another, and level 1 or 2 must never be projected upward.
 
 - Follow existing patterns before creating abstractions.
 - Keep public interfaces narrow and platform ownership explicit.
-- Use nullable annotations and typed expected-failure results.
+- Use explicit optional values and typed expected-failure results.
 - Use structured logging and deterministic native-resource disposal.
 - Keep user-facing output success separate from fidelity/HDR claims.
 - Do not bypass relevant formatting or test gates.

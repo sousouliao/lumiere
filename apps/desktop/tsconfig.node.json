@@ -7,14 +7,7 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ES2023",
-    "types": ["electron-vite/node", "node", "vitest/globals"]
+    "types": ["node", "vitest/globals"]
   },
-  "include": [
-    "electron.vite.config.ts",
-    "vite.tauri.config.ts",
-    "vitest.*.config.ts",
-    "src/main/**/*.ts",
-    "src/preload/**/*.ts",
-    "src/shared/**/*.ts"
-  ]
+  "include": ["vite.tauri.config.ts", "vitest.shared.config.ts", "src/shared/**/*.ts"]
 }

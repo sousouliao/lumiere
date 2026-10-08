@@ -241,6 +241,9 @@ mod tests {
                         }
                         Err(error) => panic!("{error}"),
                     };
+                    // Accepted sockets inherit the nonblocking listener on Windows.
+                    // Read this fixture's local HTTP request synchronously with a timeout.
+                    stream.set_nonblocking(false).unwrap();
                     stream
                         .set_read_timeout(Some(std::time::Duration::from_secs(5)))
                         .unwrap();

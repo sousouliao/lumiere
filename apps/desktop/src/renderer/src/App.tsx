@@ -469,15 +469,6 @@ function SettingsWindow({
     }
   }
 
-  const openLatestRelease = async (): Promise<void> => {
-    setError(null)
-    try {
-      await window.lumierePlatform.openLatestRelease()
-    } catch {
-      setError('The release page could not be opened. Try again.')
-    }
-  }
-
   const setOutputDelivery = async (delivery: OutputDelivery): Promise<void> => {
     setIsSaving(true)
     setError(null)
@@ -567,7 +558,6 @@ function SettingsWindow({
       onDownloadUpdate={() => void performWindowsUpdate('download')}
       onInstallUpdate={() => void performWindowsUpdate('install')}
       captureBusy={captureBusy}
-      onOpenLatestRelease={() => void openLatestRelease()}
     />
   )
 }
@@ -602,12 +592,7 @@ function BlockingRecovery({
       </div>
       {completion &&
       (completion.result.status === 'failed' || completion.result.status === 'partial') ? (
-        <RecoveryActions
-          key={completion.id}
-          completion={completion}
-          platform={window.lumierePlatform.platform}
-          disabled={disabled}
-        />
+        <RecoveryActions key={completion.id} completion={completion} disabled={disabled} />
       ) : notice.tone === 'critical' ? (
         <Button
           variant="ghost"
@@ -657,11 +642,7 @@ function NoticeDetails({
         <p>{notice.detail}</p>
       </div>
       {completion ? (
-        <RecoveryActions
-          completion={completion}
-          platform={window.lumierePlatform.platform}
-          disabled={disabled}
-        />
+        <RecoveryActions completion={completion} disabled={disabled} />
       ) : (
         <Button
           variant="ghost"

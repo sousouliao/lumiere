@@ -268,6 +268,12 @@ fn sdr_white_level(name: &str) -> Result<f32> {
 
 /// Same full-resolution half-rounded conversion as the frozen .NET baseline.
 pub(crate) fn rgba16f_to_rgba8(source: &[u8], width: u32, scale: f32) -> Vec<u8> {
+    // The scaled channel is rounded to half before the fixed transfer curve. Its
+    // entire domain is only 65536 values: evaluate that curve once per conversion
+    // rather than repeating powf for every pixel. Sampling/scaling stay unchanged.
+    let channel_bytes: Vec<u8> = (0..=u16::MAX)
+        .map(|bits| scaled_channel_byte(f16::from_bits(bits).to_f32()))
+        .collect();
     let mut output = Vec::with_capacity(source.len() / 2);
     let width = width as usize;
     let height = source.len() / 8 / width;
@@ -291,7 +297,8 @@ pub(crate) fn rgba16f_to_rgba8(source: &[u8], width: u32, scale: f32) -> Vec<u8>
             top + (bottom - top) * 0.0
         };
         for channel in 0..3 {
-            output.push(channel_byte(sample(channel), scale));
+            let scaled = f16::from_f32(sample(channel) * scale);
+            output.push(channel_bytes[usize::from(scaled.to_bits())]);
         }
         output.push(to_byte(sample(3)));
     }
@@ -300,8 +307,7 @@ pub(crate) fn rgba16f_to_rgba8(source: &[u8], width: u32, scale: f32) -> Vec<u8>
 fn rounded(value: f32) -> f32 {
     f16::from_f32(value).to_f32()
 }
-fn channel_byte(linear: f32, scale: f32) -> u8 {
-    let f = rounded(linear * scale);
+fn scaled_channel_byte(f: f32) -> u8 {
     let tone = rounded(if f <= 0.0 {
         0.0
     } else if f <= 1.0 {

@@ -17,7 +17,6 @@ use settings::AfterCapture;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_opener::OpenerExt;
 
 fn show_window(app: &AppHandle, settings: bool) -> tauri::Result<()> {
     if app
@@ -208,16 +207,6 @@ async fn download_update(app: AppHandle) -> Result<Value, String> {
 async fn install_update(app: AppHandle) -> Result<Value, String> {
     app.state::<updater::Updates>().install(&app).await
 }
-#[tauri::command]
-fn open_latest_release(app: AppHandle) -> Result<(), String> {
-    app.opener()
-        .open_url(
-            "https://github.com/sousouliao/lumiere/releases/latest",
-            None::<&str>,
-        )
-        .map_err(|error| error.to_string())
-}
-
 fn host_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     // Launch failures belong to the recoverable capture surface, not shell startup.
     Ok(std::env::current_exe()?.with_file_name("lumiere-windows-host.exe"))
@@ -382,8 +371,7 @@ fn builder(paths: Paths) -> tauri::Builder<tauri::Wry> {
             get_update_snapshot,
             check_for_updates,
             download_update,
-            install_update,
-            open_latest_release
+            install_update
         ])
         .setup(move |app| {
             app.manage(Controller::new(

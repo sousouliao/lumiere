@@ -5,47 +5,10 @@ import sharp from 'sharp'
 const repositoryRoot = resolve(import.meta.dirname, '..')
 const sourcePath = join(repositoryRoot, 'assets/brand/lumiere-logo.png')
 const iconsRoot = join(repositoryRoot, 'apps/desktop/resources/icons')
-const macRoot = join(iconsRoot, 'mac')
-const macIconsetRoot = join(macRoot, 'app.iconset')
 const windowsRoot = join(iconsRoot, 'windows')
-
-const macIconset = [
-  ['icon_16x16.png', 16],
-  ['icon_16x16@2x.png', 32],
-  ['icon_32x32.png', 32],
-  ['icon_32x32@2x.png', 64],
-  ['icon_128x128.png', 128],
-  ['icon_128x128@2x.png', 256],
-  ['icon_256x256.png', 256],
-  ['icon_256x256@2x.png', 512],
-  ['icon_512x512.png', 512],
-  ['icon_512x512@2x.png', 1024],
-]
 
 const windowsAppSizes = [16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256]
 const windowsTraySizes = [16, 20, 24, 32, 40, 48, 64]
-
-function roundedRectMask(size, radius) {
-  return Buffer.from(
-    `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg"><rect width="${size}" height="${size}" rx="${radius}" fill="#fff"/></svg>`,
-  )
-}
-
-async function createMacMaster(appArtwork) {
-  const artworkSize = 824
-  const artwork = await sharp(appArtwork)
-    .resize(artworkSize, artworkSize, { fit: 'cover', kernel: sharp.kernel.lanczos3 })
-    .composite([{ input: roundedRectMask(artworkSize, 185), blend: 'dest-in' }])
-    .png()
-    .toBuffer()
-
-  return sharp({
-    create: { width: 1024, height: 1024, channels: 4, background: '#00000000' },
-  })
-    .composite([{ input: artwork, left: 100, top: 100 }])
-    .png()
-    .toBuffer()
-}
 
 async function createAppArtwork() {
   const { data, info } = await sharp(sourcePath)
@@ -160,20 +123,6 @@ function createIco(pngs) {
   return Buffer.concat([header, ...entries, ...pngs.map(({ buffer }) => buffer)])
 }
 
-function createIcns(pngs) {
-  const chunks = pngs.map(({ type, buffer }) => {
-    const header = Buffer.alloc(8)
-    header.write(type, 0, 4, 'ascii')
-    header.writeUInt32BE(buffer.length + 8, 4)
-    return Buffer.concat([header, buffer])
-  })
-  const totalLength = 8 + chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-  const header = Buffer.alloc(8)
-  header.write('icns', 0, 4, 'ascii')
-  header.writeUInt32BE(totalLength, 4)
-  return Buffer.concat([header, ...chunks])
-}
-
 async function createIcoFromInput(input, sizes, outputPath) {
   const pngs = await Promise.all(
     sizes.map(async (size) => ({
@@ -188,10 +137,7 @@ async function createIcoFromInput(input, sizes, outputPath) {
 }
 
 async function main() {
-  await Promise.all([
-    mkdir(macIconsetRoot, { recursive: true }),
-    mkdir(windowsRoot, { recursive: true }),
-  ])
+  await mkdir(windowsRoot, { recursive: true })
 
   const sourceMetadata = await sharp(sourcePath).metadata()
   if (sourceMetadata.width !== sourceMetadata.height || (sourceMetadata.width ?? 0) < 1024) {
@@ -199,23 +145,8 @@ async function main() {
   }
 
   const appArtwork = await createAppArtwork()
-  const [macMaster, templateMaster] = await Promise.all([
-    createMacMaster(appArtwork),
-    createTemplateMaster(),
-  ])
-  await writeFile(join(macRoot, 'app-icon.png'), macMaster)
-
-  await Promise.all(
-    macIconset.map(([filename, size]) =>
-      writeResizedPng(macMaster, size, join(macIconsetRoot, filename)),
-    ),
-  )
-
-  await Promise.all([
-    writeResizedPng(templateMaster, 16, join(macRoot, 'trayTemplate.png'), 72),
-    writeResizedPng(templateMaster, 32, join(macRoot, 'trayTemplate@2x.png'), 144),
-    writeResizedPng(appArtwork, 256, join(windowsRoot, 'app.png')),
-  ])
+  const templateMaster = await createTemplateMaster()
+  await writeResizedPng(appArtwork, 256, join(windowsRoot, 'app.png'))
 
   const windowsTrayMaster = await sharp(templateMaster).tint('#E8665A').png().toBuffer()
   await Promise.all([
@@ -223,25 +154,6 @@ async function main() {
     createIcoFromInput(appArtwork, windowsAppSizes, join(windowsRoot, 'app.ico')),
     createIcoFromInput(windowsTrayMaster, windowsTraySizes, join(windowsRoot, 'tray.ico')),
   ])
-
-  const icnsRepresentations = await Promise.all(
-    [
-      ['icp4', 16],
-      ['icp5', 32],
-      ['icp6', 64],
-      ['ic07', 128],
-      ['ic08', 256],
-      ['ic09', 512],
-      ['ic10', 1024],
-    ].map(async ([type, size]) => ({
-      type,
-      buffer: await sharp(macMaster)
-        .resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
-        .png({ compressionLevel: 9, palette: false })
-        .toBuffer(),
-    })),
-  )
-  await writeFile(join(macRoot, 'app.icns'), createIcns(icnsRepresentations))
 
   console.log(`Generated desktop icon assets from ${sourcePath}`)
 }

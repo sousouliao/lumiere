@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import type { WindowsRendererApi } from '../../shared/windows-renderer-api'
+import type { LumiereRendererApi } from '../../shared/capture-command'
 
 // Registration is asynchronous. An unmount before it resolves still releases the
 // native listener, including React StrictMode's setup/cleanup/setup sequence.
@@ -20,7 +20,7 @@ export function subscribe<T>(event: string, callback: (value: T) => void): () =>
   }
 }
 
-export const windowsApi: WindowsRendererApi = {
+export const windowsApi: LumiereRendererApi = {
   platform: 'windows',
   getCaptureSurfaceSnapshot: () => invoke('get_capture_surface_snapshot'),
   onCaptureSurfaceChanged: (callback) => subscribe('capture-surface-changed', callback),
@@ -42,7 +42,6 @@ export const windowsApi: WindowsRendererApi = {
   onShowSettingsRequested: (callback) => subscribe('show-settings-requested', callback),
   getUpdateSnapshot: () => invoke('get_update_snapshot'),
   checkForUpdates: () => invoke('check_for_updates'),
-  openLatestRelease: () => invoke('open_latest_release'),
   downloadUpdate: () => invoke('download_update'),
   installUpdate: () => invoke('install_update'),
   onUpdateChanged: (callback) => subscribe('update-changed', callback),

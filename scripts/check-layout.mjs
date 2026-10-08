@@ -2,19 +2,15 @@ import { access } from 'node:fs/promises'
 import process from 'node:process'
 
 const requiredPaths = [
-  'apps/desktop',
-  'hosts/macos/README.md',
-  'hosts/windows/Lumiere.Windows.sln',
-  'hosts/windows/src/Lumiere.Windows.Host',
-  'hosts/windows/src/Lumiere.Windows.Capture',
-  'hosts/windows/src/Lumiere.Windows.Graphics',
-  'hosts/windows/src/Lumiere.Windows.Interop',
-  'hosts/windows/tests/Lumiere.Windows.Capture.Tests',
-  'hosts/windows/tests/Lumiere.Windows.Graphics.Tests',
-  'hosts/windows/tests/Lumiere.Windows.Interop.Tests',
-  'hosts/windows/tests/Lumiere.Windows.Host.Tests',
-  'protocol/platform-host/v1.schema.json',
-  'protocol/platform-host/v2.schema.json',
+  'apps/desktop/src-tauri/Cargo.toml',
+  'apps/desktop/src/renderer',
+  'crates/capture-contract/Cargo.toml',
+  'crates/capture-windows/Cargo.toml',
+  'hosts/windows/Cargo.toml',
+  'hosts/windows/rust/main.rs',
+  'protocol/platform-host/v5.schema.json',
+  'protocol/platform-host/v6.schema.json',
+  'tools/windows-installer/Cargo.toml',
 ]
 
 const forbiddenPaths = [
@@ -24,10 +20,11 @@ const forbiddenPaths = [
   'Directory.Build.props',
   'Directory.Packages.props',
   'knowledge/evidence',
-  'hosts/windows/src/Lumiere.App',
-  'hosts/windows/src/Lumiere.App.Core',
-  'hosts/windows/src/Lumiere.Overlay',
-  'hosts/windows/src/Lumiere.Settings',
+  'hosts/windows/Lumiere.Windows.sln',
+  'hosts/macos/Package.swift',
+  'apps/desktop/electron.vite.config.ts',
+  'apps/desktop/src/main/index.ts',
+  'apps/desktop/src/preload/index.ts',
 ]
 
 const missing = []

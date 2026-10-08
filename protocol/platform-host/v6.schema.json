@@ -7,9 +7,6 @@
       "$ref": "#/$defs/getCapabilitiesRequest"
     },
     {
-      "$ref": "#/$defs/requestScreenCapturePermissionRequest"
-    },
-    {
       "$ref": "#/$defs/captureDisplayRequest"
     },
     {
@@ -61,26 +58,6 @@
       ],
       "unevaluatedProperties": false
     },
-    "requestScreenCapturePermissionRequest": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "#/$defs/requestEnvelope"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "requestScreenCapturePermission"
-            },
-            "params": {
-              "type": "object",
-              "maxProperties": 0
-            }
-          }
-        }
-      ],
-      "unevaluatedProperties": false
-    },
     "captureDisplayRequest": {
       "type": "object",
       "allOf": [
@@ -93,7 +70,7 @@
               "const": "captureDisplay"
             },
             "params": {
-              "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/displayCaptureParams"
+              "$ref": "#/$defs/displayCaptureParams"
             }
           }
         }
@@ -143,7 +120,7 @@
           "const": 6
         },
         "platform": {
-          "enum": ["macos", "windows"]
+          "const": "windows"
         },
         "hostStatus": {
           "enum": ["available", "unavailable"]
@@ -177,7 +154,7 @@
           "maxItems": 1
         },
         "unavailableReason": {
-          "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/failure"
+          "$ref": "#/$defs/failure"
         }
       },
       "additionalProperties": false,
@@ -194,23 +171,13 @@
           "then": {
             "properties": {
               "unavailableReason": {
-                "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/failure"
+                "$ref": "#/$defs/failure"
               }
             },
             "required": ["unavailableReason"]
           }
         }
       ]
-    },
-    "screenCapturePermissionResult": {
-      "type": "object",
-      "required": ["status"],
-      "properties": {
-        "status": {
-          "enum": ["granted", "restart-required", "not-granted"]
-        }
-      },
-      "additionalProperties": false
     },
     "successResponse": {
       "type": "object",
@@ -229,13 +196,10 @@
               "$ref": "#/$defs/capabilities"
             },
             {
-              "$ref": "#/$defs/screenCapturePermissionResult"
+              "$ref": "#/$defs/captureResult"
             },
             {
-              "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/captureResult"
-            },
-            {
-              "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/releasedRegion"
+              "$ref": "#/$defs/releasedRegion"
             }
           ]
         }
@@ -254,7 +218,7 @@
           "minLength": 1
         },
         "error": {
-          "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/failure"
+          "$ref": "#/$defs/failure"
         }
       },
       "additionalProperties": false
@@ -271,12 +235,187 @@
               "const": "captureRegion"
             },
             "params": {
-              "$ref": "https://lumiere.local/protocol/platform-host/v4.schema.json#/$defs/displayCaptureParams"
+              "$ref": "#/$defs/displayCaptureParams"
             }
           }
         }
       ],
       "unevaluatedProperties": false
+    },
+    "displayCaptureParams": {
+      "type": "object",
+      "required": ["delivery"],
+      "properties": {
+        "delivery": {
+          "$ref": "#/$defs/outputDelivery"
+        },
+        "saveDirectory": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/$defs/saveDirectoryRule"
+        }
+      ],
+      "additionalProperties": false
+    },
+    "outputDelivery": {
+      "enum": ["clipboard", "folder", "both"]
+    },
+    "saveDirectoryRule": {
+      "if": {
+        "type": "object",
+        "properties": {
+          "delivery": {
+            "const": "clipboard"
+          }
+        },
+        "required": ["delivery"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "saveDirectory": false
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "enum": [
+            "host-unavailable",
+            "permission-denied",
+            "capture-unavailable",
+            "delivery-unavailable",
+            "delivery-failed",
+            "invalid-request",
+            "unexpected-failure"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "captureResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "sourceDynamicRange", "outputProfile", "deliveries"],
+          "properties": {
+            "status": {
+              "const": "completed"
+            },
+            "sourceDynamicRange": {
+              "enum": ["sdr", "hdr"]
+            },
+            "outputProfile": {
+              "const": "srgb-visual-match"
+            },
+            "deliveries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/deliveryResult"
+              },
+              "minItems": 1,
+              "maxItems": 2
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "const": "cancelled"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["status", "failure"],
+          "properties": {
+            "status": {
+              "const": "failed"
+            },
+            "failure": {
+              "$ref": "#/$defs/failure"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "deliveryResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["target", "status"],
+          "properties": {
+            "target": {
+              "const": "clipboard"
+            },
+            "status": {
+              "const": "success"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["target", "status", "filePath"],
+          "properties": {
+            "target": {
+              "const": "folder"
+            },
+            "status": {
+              "const": "success"
+            },
+            "filePath": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["target", "status", "failure"],
+          "properties": {
+            "target": {
+              "enum": ["clipboard", "folder"]
+            },
+            "status": {
+              "const": "failed"
+            },
+            "failure": {
+              "$ref": "#/$defs/failure"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "releasedRegion": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "const": "released"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

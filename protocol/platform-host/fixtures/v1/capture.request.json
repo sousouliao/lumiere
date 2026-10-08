@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "id": "capture-1",
-  "method": "capture",
-  "params": {
-    "mode": "region",
-    "delivery": "both"
-  }
-}

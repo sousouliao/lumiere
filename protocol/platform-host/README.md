@@ -1,138 +1,37 @@
-# Platform Host Protocol
+# Windows Capture Host Protocol
 
-This directory owns the language-neutral seam between the Electron shell and each
-native capture host. Versioned JSON Schemas are the source of truth; TypeScript, C#,
-and Swift bindings must conform to the schema they declare.
+The Tauri shell supervises a separate Rust Host over UTF-8 JSON Lines on stdin/stdout.
+Each request carries `version`, nonempty caller-generated `id`, `method` and `params`.
+Each response echoes version/id and contains exactly one result or error. Concurrent
+requests correlate by id; writes are serialized and flushed. Diagnostics use stderr.
+Unknown versions, methods, fields or enum values fail validation.
 
-## Transport
+[`v5.schema.json`](v5.schema.json) owns capabilities and Display.
+[`v6.schema.json`](v6.schema.json) additionally owns native `captureRegion` and
+`cancelRegion`. These self-contained Windows schemas retain the implemented Windows
+wire shape. Earlier implementations and schemas belong to Git history.
 
-The protocol uses UTF-8 JSON Lines over a child process' standard input and output.
-Each line is one complete request or response. Hosts reserve standard output for
-protocol messages and write structured diagnostics to standard error.
+Capture accepts `delivery` (`clipboard`, `folder`, `both`) and optional absolute
+`saveDirectory` for folder/both. Absence uses Pictures/Lumiere; null and clipboard-only
+saveDirectory are invalid. The Host resolves the pointer target at capture time.
 
-Every request carries `version`, a caller-generated `id`, `method`, and `params`.
-Every response echoes `version` and `id`, and contains exactly one of `result` or
-`error`. The shell may have multiple requests in flight, so ordering is determined by
-`id`, not line position.
+Native Region captures one frozen frame, presents a full-resolution overlay, selects
+in effective-DPI logical units and crops outward-aligned physical pixels from that
+same frame. At most one capture is active. Selection expires after 60 seconds.
+Cancellation identifies the pending Region request with `requestId` and returns
+`released`, including for an already-ended request. The original capture result
+remains correlated with its original id. Capture is reserved before asynchronous work
+so immediate cancellation cannot overtake it. EOF cancels and joins native work.
 
-Unknown versions, methods, fields, or enum values are protocol errors. Additive
-changes require a new schema version when an older host cannot safely reject or ignore
-them. Versions 1–4 are frozen in their matching schemas. Version 5 remains the published
-contract in [`v5.schema.json`](v5.schema.json). The current working-tree macOS Region
-path sends Version 6 `captureRegion` and `cancelRegion` requests; its capabilities,
-Display capture, and permission requests still use Version 5. Windows still uses
-Version 5. This staged seam must be removed when the Windows native overlay and shared
-Version 6 migration are verified.
+A completed result means acquisition/conversion completed, not that every delivery
+succeeded. Exactly one result per requested target is required; duplicate targets are
+invalid. Folder success includes the final path; clipboard success has no path.
+Both targets use one sRGB Visual Match PNG and report failures independently. No
+preview path, raw frame or image handle crosses the seam. Artifact delivery does not
+prove visual match or HDR preservation.
 
-## Version 6 (native Region migration)
-
-`captureRegion` accepts the same delivery and optional save-directory parameters as
-`captureDisplay`. The Host resolves the pointer target when this request arrives,
-captures one on-demand frozen frame, displays a full-pixel native overlay, handles the
-logical selection, and returns the existing completed/cancelled/failed capture result.
-It never returns a preview path or native image handle. `cancelRegion` accepts the
-pending `captureRegion` request's `requestId` and returns `released`, including when
-that request has already ended. The capture response remains correlated with its
-original id. Hosts must register a capture request before dispatching its async work,
-so an immediately following cancellation cannot overtake it. They dispatch work
-concurrently and serialize response writes so cancellation can be processed while
-selection is pending. At most one capture is active, and the selection lease is 60
-seconds. Display capture, capabilities, delivery results, and macOS permission request
-semantics remain unchanged. `activeTarget` is removed because native Region resolves
-its own target at request time.
-
-## Version 5
-
-Version 5 adds the macOS-only `requestScreenCapturePermission` operation. It has empty
-parameters and returns `granted` when access was already usable, `restart-required` when
-the explicit native request granted access for the next process, or `not-granted` when
-the user must use System Settings. The Shell never sends this operation to Windows.
-
-The operation is user initiated and may call `CGRequestScreenCaptureAccess()`.
-`getCapabilities` remains a pure query and must never prompt. Version 5 otherwise retains
-the Version 4 target-token and frozen Region behavior unchanged.
-
-## Version 4
-
-Version 4 retains the frozen Region session model and adds stable target identity for
-multi-display switching. `getCapabilities` may issue an opaque, short-lived
-`activeTarget` token with its logical size. `prepareRegion` receives that token and
-consumes the matching native target snapshot exactly once. The Shell never interprets
-the token as an Electron display id or a native display handle.
-
-Electron therefore uses its own display ids and DIP bounds only for Overlay placement,
-while macOS and Windows retain authoritative display snapshots inside their Hosts. A
-stale token or changed topology returns `capture-unavailable`; it never silently falls
-back to the current pointer target.
-
-## Version 3
-
-`getCapabilities` is a pure query. It reports capture modes and delivery targets
-independently and must not issue a target token. Display capture remains a one-request
-`captureDisplay` operation: the Host resolves the display under the pointer when the
-request arrives, then uses the current main display and system primary display only as
-recovery fallbacks.
-
-Region capture is a short-lived native frozen-frame session:
-
-1. `prepareRegion` hides no Shell state itself; the Shell hides Lumiere-owned surfaces
-   first, then the Host captures one complete native frame, retains it, and returns a
-   session id plus an encoded sRGB preview path.
-2. `commitRegion` crops that same frozen frame with a `target-logical` rectangle and
-   runs the existing Visual Match and delivery path. It never captures a second frame.
-3. `cancelRegion` releases the session. Unknown session ids still return `released`.
-
-`target-logical` geometry is unchanged from v2: origin at the target's top-left,
-logical desktop units, positive width and height, and `capture-unavailable` for a
-stale session, changed topology, or out-of-bounds rectangle.
-
-The preview file is Host-private. Electron main may grant a revocable custom-protocol
-URL to the sandboxed Overlay; renderer IPC carries neither file paths nor image bytes.
-Raw pixels and native handles never cross this seam.
-
-### Delivery results
-
-A `completed` capture result means acquisition and the single sRGB Visual Match
-conversion completed. It does not mean every requested delivery succeeded. The
-`deliveries` array contains exactly one result for each requested target:
-
-- clipboard success has no artifact path;
-- folder success includes its final file path;
-- a failed target includes its own typed failure;
-- target order is not significant and duplicate targets are invalid.
-
-The Host must attempt both targets from the same conversion result when `both` is
-requested. The shell derives full success, partial success, or total delivery failure
-from these per-target results and never treats artifact delivery as proof of visual
-match or HDR preservation.
-
-Folder and Both capture parameters may include an absolute, platform-native
-`saveDirectory`. Its absence preserves the Host's Pictures/Lumiere default. A
-clipboard-only request must not include it. The shell owns directory selection and
-preference persistence; the Host owns directory creation, fixed timestamp naming, file
-writing, and the folder delivery result. Directory failure remains target-local so a
-successful clipboard delivery is preserved.
-
-### Cancellation ownership
-
-Before `prepareRegion` succeeds, the shell owns Overlay startup and local abort. After
-the Host accepts prepare, the Host owns the frozen native frame, preview file, lease,
-and deterministic release. Overlay Esc, timeout, Host teardown, and application
-shutdown all converge on `cancelRegion` or Host disposal. Native or task cancellation
-of Display or Region commit returns `cancelled`.
-
-## Version 2
-
-Version 2 remains compatibility history. It used one `capture` method, advertised an
-`activeTarget` token from `getCapabilities`, and dispatched Region capture only after
-pointer release. Delivery results, `saveDirectory`, and target-local geometry from v2
-are retained in v3. Region timing is superseded by
-[`knowledge/decisions/0013-frozen-region-capture-session.md`](../../knowledge/decisions/0013-frozen-region-capture-session.md).
-
-## Fixtures
-
-[`fixtures/v1`](fixtures/v1), [`fixtures/v2`](fixtures/v2),
-[`fixtures/v3`](fixtures/v3), [`fixtures/v4`](fixtures/v4),
-[`fixtures/v5`](fixtures/v5), and [`fixtures/v6`](fixtures/v6) are executable examples. The desktop protocol tests
-validate every fixture against its owning schema. Fixtures illustrate wire shape; they
-do not replace the cross-field checks described above.
+`fixtures/v5` and `fixtures/v6` illustrate accepted envelopes. Run
+`node scripts/verify-rust-protocol.mjs` after building the Debug Host to validate all
+fixtures and live correlated responses. Rust transport tests own malformed messages,
+request concurrency and cancellation. Real display delivery is an explicit hardware
+check through `scripts/verify-rust-display.mjs`.

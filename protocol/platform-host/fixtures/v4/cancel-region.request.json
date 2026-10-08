@@ -1,8 +1,0 @@
-{
-  "version": 4,
-  "id": "cancel-1",
-  "method": "cancelRegion",
-  "params": {
-    "sessionId": "region-session-17"
-  }
-}

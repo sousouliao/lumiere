@@ -32,12 +32,7 @@
   color: var(--text-primary);
   color-scheme: dark;
   background: var(--surface-window);
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: Inter, 'Segoe UI', sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -199,7 +194,6 @@ button {
   justify-content: center;
   min-width: 0;
   border-bottom: 1px solid var(--border-subtle);
-  -webkit-app-region: drag;
   user-select: none;
 }
 
@@ -222,7 +216,6 @@ button {
   position: absolute;
   inset: 0 0 0 auto;
   display: flex;
-  -webkit-app-region: no-drag;
 }
 
 .window-control {
@@ -532,7 +525,6 @@ button {
   color: var(--text-secondary);
   background: transparent;
   cursor: pointer;
-  -webkit-app-region: no-drag;
 }
 
 .settings-link:hover {
@@ -559,7 +551,6 @@ button {
   align-items: center;
   justify-content: center;
   background: color-mix(in srgb, var(--surface-raised) 26%, var(--surface-window));
-  -webkit-app-region: drag;
   user-select: none;
 }
 
@@ -598,7 +589,6 @@ button {
   color: var(--text-primary);
   background: transparent;
   cursor: pointer;
-  -webkit-app-region: no-drag;
 }
 
 .settings-back svg {
@@ -624,32 +614,6 @@ button {
   outline-offset: 1px;
 }
 
-.settings-done {
-  position: absolute;
-  top: 9px;
-  right: 14px;
-  height: 26px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--Lumiere-Dark-radiusChip);
-  color: var(--text-secondary);
-  background: transparent;
-  font-size: var(--Lumiere-Dark-fontSizeMeta);
-  font-weight: 580;
-  cursor: pointer;
-  transition: color 120ms ease;
-  -webkit-app-region: no-drag;
-}
-
-.settings-done:hover {
-  color: var(--text-primary);
-}
-
-.settings-done:focus-visible {
-  outline: 2px solid var(--accent-base);
-  outline-offset: 1px;
-}
-
 .settings-dock-slot {
   display: flex;
   align-items: center;
@@ -666,7 +630,6 @@ button {
   background: color-mix(in srgb, var(--surface-window) 82%, black);
   box-shadow: none;
   backdrop-filter: none;
-  -webkit-app-region: no-drag;
 }
 
 .settings-dock-item {
@@ -772,7 +735,6 @@ button {
 
 .settings-switch {
   display: inline-flex;
-  -webkit-app-region: no-drag;
 }
 
 .settings-switch > button {
@@ -833,7 +795,6 @@ button {
   background: var(--surface-raised);
   font-size: var(--Lumiere-Dark-fontSizeMeta);
   line-height: 1;
-  -webkit-app-region: no-drag;
 }
 
 .settings-inline-action:hover:not(:disabled),
@@ -859,13 +820,6 @@ button {
   min-width: 112px;
 }
 
-.update-check-button--available,
-.update-check-button--available:hover:not(:disabled) {
-  border-color: var(--accent-border);
-  color: var(--text-on-accent);
-  background: var(--accent-base);
-}
-
 .shortcut-setting-error {
   margin: -3px 0 3px;
   color: var(--status-caution);
@@ -875,7 +829,6 @@ button {
 .settings-select {
   z-index: 1;
   min-width: 160px;
-  -webkit-app-region: no-drag;
 }
 
 .settings-select:focus-within {
@@ -926,7 +879,6 @@ button {
   justify-content: space-between;
   gap: 8px;
   overflow: hidden;
-  -webkit-app-region: no-drag;
 }
 
 .settings-select-content {
@@ -978,7 +930,6 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .capture-action,
   .settings-link,
-  .settings-done,
   .settings-dock-item,
   .settings-control-trigger,
   .settings-select-item,

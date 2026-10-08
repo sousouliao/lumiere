@@ -1,6 +1,0 @@
-{
-  "version": 4,
-  "id": "capabilities-1",
-  "method": "getCapabilities",
-  "params": {}
-}

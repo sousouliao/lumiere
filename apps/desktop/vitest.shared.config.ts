@@ -11,7 +11,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    exclude: ['src/**/*.macos.test.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
   },
 })

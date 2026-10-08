@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 
@@ -7,12 +7,22 @@ const root = resolve(import.meta.dirname, '..')
 const require = createRequire(resolve(root, 'apps/desktop/package.json'))
 const Ajv2020 = require('ajv/dist/2020').default
 const validator = new Ajv2020({ strict: false, allErrors: true })
-for (let version = 1; version <= 6; version++) {
+for (const version of [5, 6]) {
   validator.addSchema(
     JSON.parse(
       await readFile(resolve(root, `protocol/platform-host/v${version}.schema.json`), 'utf8'),
     ),
   )
+}
+for (const version of [5, 6]) {
+  const directory = resolve(root, `protocol/platform-host/fixtures/v${version}`)
+  const validate = validator.getSchema(
+    `https://lumiere.local/protocol/platform-host/v${version}.schema.json`,
+  )
+  for (const filename of await readdir(directory)) {
+    const fixture = JSON.parse(await readFile(resolve(directory, filename), 'utf8'))
+    if (!validate(fixture)) throw new Error(`${filename}: ${JSON.stringify(validate.errors)}`)
+  }
 }
 const host = resolve(root, 'target/debug/lumiere-windows-host.exe')
 const child = spawn(host, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })

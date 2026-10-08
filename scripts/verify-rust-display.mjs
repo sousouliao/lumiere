@@ -8,7 +8,7 @@ const root = resolve(import.meta.dirname, '..')
 const require = createRequire(resolve(root, 'apps/desktop/package.json'))
 const Ajv2020 = require('ajv/dist/2020').default
 const validator = new Ajv2020({ strict: false, allErrors: true })
-for (let version = 1; version <= 5; version++) {
+for (const version of [5, 6]) {
   validator.addSchema(
     JSON.parse(
       await readFile(resolve(root, `protocol/platform-host/v${version}.schema.json`), 'utf8'),
