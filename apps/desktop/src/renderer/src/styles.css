@@ -172,6 +172,83 @@ html[data-surface='region-overlay'] #root {
   animation: capture-pulse 900ms ease-in-out infinite alternate;
 }
 
+html[data-surface='tray-menu'],
+html[data-surface='tray-menu'] body,
+html[data-surface='tray-menu'] #root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.tray-menu-backdrop {
+  padding: 8px;
+  width: 100%;
+  height: 100%;
+}
+
+.tray-menu {
+  width: 262px;
+  padding: 6px;
+  border: 1px solid var(--Lumiere-Dark-borderStrong);
+  border-radius: var(--Lumiere-Dark-radiusControl);
+  background: var(--surface-menu);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 28%);
+}
+
+.tray-menu-group + .tray-menu-group {
+  margin-top: 2px;
+}
+
+.tray-menu-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  height: 28px;
+  min-height: 0;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: var(--Lumiere-Dark-fontSizeBody);
+  font-weight: 400;
+  line-height: 16px;
+  white-space: nowrap;
+  box-shadow: none;
+  outline: none;
+}
+
+.tray-menu-item:hover:not(:disabled),
+.tray-menu-item:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-hover) 80%, var(--Lumiere-Dark-borderStrong));
+}
+
+.tray-menu-item:disabled {
+  color: var(--text-disabled);
+  opacity: 1;
+}
+
+.tray-menu-shortcut {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+  font-size: var(--Lumiere-Dark-fontSizeMeta);
+}
+
+.tray-menu-item:disabled .tray-menu-shortcut {
+  color: inherit;
+}
+
+.tray-menu-separator {
+  height: 1px;
+  margin-bottom: 2px;
+  background: var(--border-default);
+}
+
 button {
   font: inherit;
 }

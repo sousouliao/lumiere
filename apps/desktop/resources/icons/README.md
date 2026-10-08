@@ -21,3 +21,7 @@ pnpm icons:check
 representations). `windows/tray.ico` and `windows/tray.png` supply the native tray
 silhouette. Tauri embeds the runtime icons; the packager does not ship unused platform
 resources. Generation and validation operate only on these Windows assets.
+At runtime the tray silhouette retains its alpha mask and uses white for the Windows
+system dark theme or dark ink for the system light theme. The resident tray window
+listens for Windows settings-change notifications and refreshes the icon only when
+the system theme changes; there is no theme polling timer.

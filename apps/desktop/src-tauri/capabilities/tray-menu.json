@@ -1,0 +1,13 @@
+{
+  "identifier": "tray-menu",
+  "description": "On-demand local tray menu",
+  "windows": ["tray-menu"],
+  "permissions": [
+    "allow-tray-menu-ready",
+    "allow-get-tray-menu-snapshot",
+    "allow-tray-menu-action",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-close"
+  ]
+}

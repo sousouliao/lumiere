@@ -20,8 +20,9 @@ implementation, compatibility stub, or source archive is kept in the working tre
 | `protocol/platform-host` | Windows wire schemas and executable examples |
 | `tools/windows-installer` | Transactional install ownership, explicit legacy inventory cleanup and rollback |
 
-The native shell and Host remain resident. The WebView is created on demand and
-destroyed on close. The shell supervises one adjacent Host executable over UTF-8
+The native shell and Host remain resident. The main WebView is created on demand and
+destroyed on close; the tray menu WebView is preloaded and hidden/reused for prompt
+popup response. The shell supervises one adjacent Host executable over UTF-8
 JSON Lines. Raw frames, textures, native handles and capture ownership never cross
 that process seam. WGC/DXGI/D3D11 and COM/WinRT lifetime details stay in capture-windows.
 Settings remain at `%APPDATA%/Lumiere/settings.json`; upgrades preserve that data.

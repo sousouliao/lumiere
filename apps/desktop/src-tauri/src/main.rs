@@ -7,6 +7,8 @@ mod notification;
 mod settings;
 #[cfg(test)]
 mod tests;
+mod tray_icon;
+mod tray_popup;
 mod updater;
 
 use controller::Controller;
@@ -221,35 +223,25 @@ fn quit(app: &AppHandle) {
 }
 
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
-    use tauri::{
-        menu::{Menu, MenuItem, PredefinedMenuItem},
-        tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    };
-    let region = MenuItem::with_id(app, "region", "Capture region", false, None::<&str>)?;
-    let display = MenuItem::with_id(app, "display", "Capture display", false, None::<&str>)?;
-    let open = MenuItem::with_id(app, "open", "Open Lumiere", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
-    let exit = MenuItem::with_id(app, "quit", "Quit Lumiere", true, None::<&str>)?;
-    let menu = Menu::with_items(
-        app,
-        &[
-            &region,
-            &display,
-            &PredefinedMenuItem::separator(app)?,
-            &open,
-            &settings,
-            &PredefinedMenuItem::separator(app)?,
-            &exit,
-        ],
-    )?;
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let dark = tray_icon::system_is_dark().unwrap_or(true);
     TrayIconBuilder::with_id("lumiere")
-        .icon(tauri::image::Image::from_bytes(include_bytes!(
-            "../../resources/icons/windows/tray.png"
-        ))?)
+        .icon(tray_icon::image(dark)?)
         .tooltip("Lumiere")
-        .menu(&menu)
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click { button: MouseButton::Right, button_state: MouseButtonState::Up, position, rect, .. } = event {
+                let app = tray.app_handle().clone();
+                // Schedule creation after the tray event callback returns.
+                tauri::async_runtime::spawn(async move {
+                    let dispatch = app.clone();
+                    let _ = app.run_on_main_thread(move || {
+                        if let Err(error) = tray_popup::show(&dispatch, position, rect) {
+                            eprintln!("{}", serde_json::json!({"event":"tray-menu-error", "error":error.to_string()}));
+                        }
+                    });
+                });
+            }
             if matches!(
                 event,
                 TrayIconEvent::Click {
@@ -261,63 +253,59 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 let _ = show_window(tray.app_handle(), false);
             }
         })
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "open" => {
-                let _ = show_window(app, false);
-            }
-            "settings" => {
-                let _ = show_window(app, true);
-            }
-            "quit" => quit(app),
-            "region" | "display" => {
-                let mode = if event.id.as_ref() == "region" {
-                    CaptureMode::Region
-                } else {
-                    CaptureMode::Display
-                };
-                let app = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    app.state::<Controller>().capture(&app, mode).await;
-                });
-            }
-            _ => {}
-        })
         .build(app)?;
-    app.manage(TrayItems { region, display });
+    app.manage(tray_icon::ThemeState(std::sync::atomic::AtomicBool::new(
+        dark,
+    )));
+    app.manage(tray_popup::PopupState::default());
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let dispatch = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if let Err(error) = tray_popup::prepare(&dispatch) {
+                eprintln!("{}", serde_json::json!({"event":"tray-menu-preload-error", "error":error.to_string()}));
+            }
+        });
+    });
     Ok(())
 }
 
-struct TrayItems {
-    region: tauri::menu::MenuItem<tauri::Wry>,
-    display: tauri::menu::MenuItem<tauri::Wry>,
-}
-fn update_tray(app: &AppHandle, surface: &Value, settings: &Value, busy: bool) {
-    let Some(items) = app.try_state::<TrayItems>() else {
-        return;
-    };
-    for (mode, item) in [("region", &items.region), ("display", &items.display)] {
-        let available = surface["hostAvailable"] == true
-            && surface["captureModes"]
-                .as_array()
-                .is_some_and(|modes| modes.iter().any(|value| value == mode));
-        let _ = item.set_enabled(available && !busy);
-        let shortcut = &settings["captureShortcuts"][mode];
-        let accelerator = if shortcut["status"] == "registered" {
-            shortcut["accelerator"].as_str()
-        } else {
-            None
-        };
-        let label = format!(
-            "Capture {mode}{}",
-            accelerator
-                .map(|value| format!(
-                    "\t{}",
-                    value.replace("Control", "Ctrl").replace("Command", "Super")
-                ))
-                .unwrap_or_default()
-        );
-        let _ = item.set_text(label);
+fn handle_tray_action(app: &AppHandle, action: &str) {
+    match action {
+        "open" => {
+            if let Err(error) = show_window(app, false) {
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"event":"tray-action-error", "action":action, "error":error.to_string()})
+                );
+            }
+        }
+        "settings" => {
+            if let Err(error) = show_window(app, true) {
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"event":"tray-action-error", "action":action, "error":error.to_string()})
+                );
+            }
+        }
+        "quit" => quit(app),
+        "region" | "display" => {
+            let mode = if action == "region" {
+                CaptureMode::Region
+            } else {
+                CaptureMode::Display
+            };
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                app.state::<Controller>().capture(&app, mode).await;
+            });
+        }
+        _ => {}
     }
+}
+
+fn update_tray(app: &AppHandle, surface: &Value, settings: &Value, busy: bool) {
+    tray_popup::update(app, surface, settings, busy);
 }
 
 fn cursor_target() -> Option<usize> {
@@ -355,6 +343,9 @@ fn builder(paths: Paths) -> tauri::Builder<tauri::Wry> {
         )
         .invoke_handler(tauri::generate_handler![
             renderer_ready,
+            tray_popup::get_tray_menu_snapshot,
+            tray_popup::tray_menu_action,
+            tray_popup::tray_menu_ready,
             get_capture_surface_snapshot,
             refresh_capture_surface,
             get_capture_activity,
@@ -414,6 +405,21 @@ fn builder(paths: Paths) -> tauri::Builder<tauri::Wry> {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() == "tray-menu" {
+                if matches!(event, tauri::WindowEvent::Focused(false))
+                    && window.is_visible().unwrap_or(false)
+                    && let Some(webview) = window.app_handle().get_webview_window("tray-menu")
+                {
+                    let _ = tray_popup::dismiss(&webview);
+                }
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    if let Some(webview) = window.app_handle().get_webview_window("tray-menu") {
+                        let _ = tray_popup::dismiss(&webview);
+                    }
+                }
+                return;
+            }
             if matches!(
                 event,
                 tauri::WindowEvent::Focused(true) | tauri::WindowEvent::ScaleFactorChanged { .. }

@@ -4,6 +4,7 @@ import { App } from './App'
 import './styles.css'
 import { windowsApi } from './tauri-bridge'
 import { invoke } from '@tauri-apps/api/core'
+import { TrayMenu } from './TrayMenu'
 
 window.lumierePlatform = windowsApi
 
@@ -13,10 +14,9 @@ if (rootElement === null) {
   throw new Error('Renderer root element was not found.')
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+const isTrayMenu = new URLSearchParams(window.location.search).get('view') === 'tray-menu'
+if (isTrayMenu) document.documentElement.dataset.surface = 'tray-menu'
 
-void invoke('renderer_ready')
+createRoot(rootElement).render(<StrictMode>{isTrayMenu ? <TrayMenu /> : <App />}</StrictMode>)
+
+if (!isTrayMenu) void invoke('renderer_ready')

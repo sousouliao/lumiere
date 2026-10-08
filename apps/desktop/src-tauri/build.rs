@@ -2,6 +2,9 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "renderer_ready",
+            "get_tray_menu_snapshot",
+            "tray_menu_action",
+            "tray_menu_ready",
             "get_capture_surface_snapshot",
             "refresh_capture_surface",
             "get_capture_activity",
