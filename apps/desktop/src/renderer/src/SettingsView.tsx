@@ -29,6 +29,7 @@ import {
 } from '@/components/motion/select'
 import { Switch } from '@/components/motion/switch'
 import type { UpdateCheckResult, WindowsUpdateState } from '../../shared/update-command'
+import type { AutostartSnapshot } from '../../shared/autostart-command'
 
 const outputDeliveryLabels: Record<OutputDelivery, string> = {
   clipboard: 'Clipboard',
@@ -69,6 +70,12 @@ interface SettingsViewProps {
   onDownloadUpdate?: () => void
   onInstallUpdate?: () => void
   captureBusy?: boolean
+  autostart: AutostartSnapshot | null
+  autostartSaving: boolean
+  autostartError: string | null
+  onAutostartChange: (enabled: boolean) => void
+  onAutostartRefresh: () => void
+  onOpenStartupSettings: () => void
 }
 
 export function SettingsView({
@@ -91,6 +98,12 @@ export function SettingsView({
   onDownloadUpdate,
   onInstallUpdate,
   captureBusy = false,
+  autostart,
+  autostartSaving,
+  autostartError,
+  onAutostartChange,
+  onAutostartRefresh,
+  onOpenStartupSettings,
 }: SettingsViewProps): React.JSX.Element {
   const [section, setSection] = useState<SettingsSection>(initialSection)
   const available = snapshot?.availableOutputDeliveries ?? []
@@ -151,6 +164,7 @@ export function SettingsView({
             aria-label="System and about"
             onClick={() => {
               setSection('system')
+              onAutostartRefresh()
             }}
           >
             <AboutIcon />
@@ -186,6 +200,12 @@ export function SettingsView({
         ) : null}
         {section === 'system' ? (
           <SystemSettings
+            autostart={autostart}
+            autostartSaving={autostartSaving}
+            autostartError={autostartError}
+            onAutostartChange={onAutostartChange}
+            onAutostartRefresh={onAutostartRefresh}
+            onOpenStartupSettings={onOpenStartupSettings}
             snapshot={surfaceSnapshot}
             updateState={updateState}
             onCheckForUpdates={onCheckForUpdates}
@@ -479,6 +499,12 @@ function ShortcutRecorder({
 }
 
 function SystemSettings({
+  autostart,
+  autostartSaving,
+  autostartError,
+  onAutostartChange,
+  onAutostartRefresh,
+  onOpenStartupSettings,
   snapshot,
   updateState,
   onCheckForUpdates,
@@ -486,6 +512,12 @@ function SystemSettings({
   onInstallUpdate,
   captureBusy,
 }: {
+  autostart: AutostartSnapshot | null
+  autostartSaving: boolean
+  autostartError: string | null
+  onAutostartChange: (enabled: boolean) => void
+  onAutostartRefresh: () => void
+  onOpenStartupSettings: () => void
   snapshot: CaptureSurfaceSnapshot | null
   updateState: UpdateViewState
   onCheckForUpdates: () => void
@@ -506,6 +538,58 @@ function SystemSettings({
 
   return (
     <div className="settings-list settings-list--system">
+      <div className="settings-row">
+        <span className="settings-row-copy">
+          <span className="settings-row-label">Launch at login</span>
+          <span
+            className="settings-row-hint"
+            aria-live="polite"
+            title={autostart?.status === 'unavailable' ? autostart.message : undefined}
+          >
+            {autostartSaving
+              ? 'Saving…'
+              : !autostart
+                ? 'Checking…'
+                : autostart.status === 'blocked'
+                  ? 'Disabled in Windows'
+                  : autostart.status === 'unavailable'
+                    ? autostart.message
+                    : 'Start in the system tray'}
+          </span>
+        </span>
+        <span className="autostart-actions">
+          {autostart?.status === 'blocked' || autostart?.status === 'unavailable' ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              hoverScale={1}
+              pressScale={0.98}
+              className="settings-inline-action"
+              disabled={autostartSaving}
+              onClick={autostart.status === 'blocked' ? onOpenStartupSettings : onAutostartRefresh}
+            >
+              {autostart.status === 'blocked' ? 'Windows settings' : 'Try again'}
+            </Button>
+          ) : null}
+          <Switch
+            checked={autostart?.status === 'enabled'}
+            disabled={
+              !autostart ||
+              autostartSaving ||
+              autostart.status === 'blocked' ||
+              autostart.status === 'unavailable'
+            }
+            ariaLabel="Launch at login"
+            className="settings-switch"
+            onCheckedChange={onAutostartChange}
+          />
+        </span>
+      </div>
+      {autostartError ? (
+        <p className="settings-error" role="alert">
+          {autostartError}
+        </p>
+      ) : null}
       <SettingsRow
         label="Screen recording permission"
         value={permissionStatus}

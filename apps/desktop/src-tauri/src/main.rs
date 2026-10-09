@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod controller;
 mod host;
 mod host_result;
@@ -330,8 +331,8 @@ struct Paths {
 
 fn builder(paths: Paths) -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            let _ = show_window(app, false);
+        .plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
+            activate_second_instance(app, &arguments);
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -352,6 +353,9 @@ fn builder(paths: Paths) -> tauri::Builder<tauri::Wry> {
             capture_display,
             capture_region,
             get_settings_snapshot,
+            autostart::get_autostart_snapshot,
+            autostart::set_autostart_enabled,
+            autostart::open_startup_settings,
             choose_save_directory,
             set_output_delivery,
             set_after_capture_behavior,
@@ -439,6 +443,12 @@ fn builder(paths: Paths) -> tauri::Builder<tauri::Wry> {
                 });
             }
         })
+}
+
+fn activate_second_instance(app: &AppHandle, arguments: &[String]) {
+    if !autostart::is_autostart(arguments) {
+        let _ = show_window(app, false);
+    }
 }
 
 fn main() {

@@ -392,6 +392,211 @@ fn acceptance(app: &AppHandle, output: &std::path::Path) {
     acceptance_phase(output, "closed");
 }
 
+fn autostart_acceptance(app: &AppHandle, output: &std::path::Path) {
+    use windows::{
+        Win32::System::Registry::*,
+        core::{PCWSTR, w},
+    };
+    if cfg!(debug_assertions) {
+        panic!("autostart acceptance requires Release");
+    }
+    let name = w!("Lumiere-test-autostart");
+    let run = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+    let approved =
+        w!("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run");
+    for key in [run, approved] {
+        let mut size = 0;
+        // SAFETY: read-only existence check of two reserved fixture values under HKCU.
+        let status = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                key,
+                name,
+                RRF_RT_ANY,
+                None,
+                None,
+                Some(&mut size),
+            )
+        };
+        assert_eq!(
+            status,
+            windows::Win32::Foundation::ERROR_FILE_NOT_FOUND,
+            "reserved fixture value already exists; do not overwrite it"
+        );
+    }
+    struct Cleanup;
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            // SAFETY: delete only the two reserved fixture values verified absent above.
+            unsafe {
+                let _ = RegDeleteKeyValueW(
+                    HKEY_CURRENT_USER,
+                    w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
+                    w!("Lumiere-test-autostart"),
+                );
+                let _ = RegDeleteKeyValueW(
+                    HKEY_CURRENT_USER,
+                    w!(
+                        "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"
+                    ),
+                    w!("Lumiere-test-autostart"),
+                );
+            }
+        }
+    }
+    let _cleanup = Cleanup;
+    activate_second_instance(app, &["Lumiere.exe".into(), autostart::ARGUMENT.into()]);
+    assert!(
+        app.get_webview_window("main").is_none(),
+        "automatic second launch opened the main window"
+    );
+    activate_second_instance(app, &["Lumiere.exe".into()]);
+    wait_for(|| {
+        app.get_webview_window("main")
+            .is_some_and(|window| window.is_visible().unwrap_or(false))
+    });
+    // renderer_ready may show the window before React has attached its navigation
+    // listener. Recreate settings with its URL instead of racing that first mount.
+    app.get_webview_window("main").unwrap().close().unwrap();
+    wait_for(|| app.get_webview_window("main").is_none());
+    show_window(app, true).unwrap();
+    let window = app.get_webview_window("main").unwrap();
+    let capture_preview = |filename: &str| {
+        std::thread::sleep(Duration::from_millis(300));
+        preview(&window, output.join(filename));
+    };
+    wait_for(|| {
+        script(
+            &window,
+            "Boolean(document.querySelector('[aria-label=\"System and about\"]'))",
+        ) == true
+    });
+    script(
+        &window,
+        "document.querySelector('[aria-label=\"System and about\"]').click(); true",
+    );
+    let control = "document.querySelector('[aria-label=\"Launch at login\"]')";
+    wait_for(|| {
+        script(
+            &window,
+            &format!("Boolean({control} && !{control}.disabled)"),
+        ) == true
+    });
+    assert_eq!(
+        script(&window, &format!("{control}.getAttribute('aria-checked')")),
+        "false"
+    );
+    capture_preview("autostart-disabled.png");
+    script(&window, &format!("{control}.click(); true"));
+    wait_for(|| {
+        script(
+            &window,
+            &format!("!{control}.disabled && {control}.getAttribute('aria-checked') === 'true'"),
+        ) == true
+    });
+    assert_eq!(
+        autostart::get_autostart_snapshot(),
+        autostart::Snapshot::Enabled
+    );
+    capture_preview("autostart-enabled.png");
+
+    let mut handle = HKEY::default();
+    // SAFETY: create/open only the fixture's HKCU approval key, then write its
+    // reserved value; the original Lumiere entry is never referenced.
+    unsafe {
+        RegCreateKeyExW(
+            HKEY_CURRENT_USER,
+            approved,
+            None,
+            PCWSTR::null(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_SET_VALUE,
+            None,
+            &mut handle,
+            None,
+        )
+        .ok()
+        .unwrap();
+        let mut bytes = [0_u8; 12];
+        bytes[0] = 3;
+        let result = RegSetValueExW(handle, name, None, REG_BINARY, Some(&bytes)).ok();
+        RegCloseKey(handle).ok().unwrap();
+        result.unwrap();
+    }
+    script(&window, "window.dispatchEvent(new Event('focus')); true");
+    wait_for(|| {
+        script(
+            &window,
+            "document.body.textContent.includes('Disabled in Windows')",
+        ) == true
+    });
+    assert_eq!(
+        autostart::get_autostart_snapshot(),
+        autostart::Snapshot::Blocked
+    );
+    assert_eq!(
+        script(
+            &window,
+            &format!("{control}.disabled && {control}.getAttribute('aria-checked') === 'false'")
+        ),
+        true
+    );
+    capture_preview("autostart-blocked.png");
+    // SAFETY: remove only the fixture approval override; production never changes approval.
+    unsafe {
+        RegDeleteKeyValueW(HKEY_CURRENT_USER, approved, name)
+            .ok()
+            .unwrap();
+    }
+    script(&window, "window.dispatchEvent(new Event('focus')); true");
+    wait_for(|| {
+        script(
+            &window,
+            &format!("!{control}.disabled && {control}.getAttribute('aria-checked') === 'true'"),
+        ) == true
+    });
+    script(&window, &format!("{control}.click(); true"));
+    wait_for(|| {
+        script(
+            &window,
+            &format!("!{control}.disabled && {control}.getAttribute('aria-checked') === 'false'"),
+        ) == true
+    });
+    assert_eq!(
+        autostart::get_autostart_snapshot(),
+        autostart::Snapshot::Disabled
+    );
+
+    // Simulate an IPC write failure, then verify the actual native readback is used.
+    script(
+        &window,
+        &format!(
+            "window.lumierePlatform.setAutostartEnabled=async()=>{{throw new Error('fixture');}}; {control}.click(); true"
+        ),
+    );
+    wait_for(|| {
+        script(
+            &window,
+            "document.body.textContent.includes('Launch at login could not be changed.')",
+        ) == true
+    });
+    wait_for(|| {
+        script(
+            &window,
+            &format!("!{control}.disabled && {control}.getAttribute('aria-checked') === 'false'"),
+        ) == true
+    });
+    capture_preview("autostart-failed.png");
+    assert_eq!(
+        script(
+            &window,
+            "(() => { const area=document.querySelector('.settings-content').getBoundingClientRect(); return [...document.querySelectorAll('.settings-row, .settings-error')].every(row=>row.getBoundingClientRect().bottom<=area.bottom); })()"
+        ),
+        true
+    );
+    std::fs::write(output.join("autostart-result.json"), serde_json::to_vec_pretty(&json!({"enabled":true,"disabled":true,"blockedSyntheticRecord":true,"focusRefresh":true,"writeFailureReadback":true,"autoSecondLaunchQuiet":true,"manualSecondLaunchVisible":true})).unwrap()).unwrap();
+}
+
 #[test]
 #[ignore = "requires interactive Windows/WebView2; build renderer and native Host first"]
 fn native_shell_webview_lifecycle() {
@@ -432,7 +637,9 @@ fn native_shell_webview_lifecycle() {
             let output = output.clone();
             std::thread::spawn(move || {
                 let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    if std::env::var_os("LUMIERE_GUI_ACCEPTANCE_DIR").is_some() {
+                    if std::env::var_os("LUMIERE_GUI_AUTOSTART_ACCEPTANCE").is_some() {
+                        autostart_acceptance(&app, &output);
+                    } else if std::env::var_os("LUMIERE_GUI_ACCEPTANCE_DIR").is_some() {
                         acceptance(&app, &output);
                     } else {
                         exercise(&app, &output);

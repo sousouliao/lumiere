@@ -11,6 +11,7 @@ import type { OutputDelivery } from '../../shared/platform-contract'
 import type { CaptureMode, ShortcutUpdate } from '../../shared/shortcut-command'
 import type { SettingsSnapshot } from '../../shared/settings-command'
 import type { AfterCaptureBehavior } from '../../shared/settings-command'
+import type { AutostartSnapshot } from '../../shared/autostart-command'
 import { SettingsView, type SettingsSection, type UpdateViewState } from './SettingsView'
 import { RecoveryActions } from './RecoveryActions'
 import { CAPTURE_LOAD_FAILURE, resolveCaptureNotices } from './capture-notices'
@@ -388,6 +389,85 @@ function SettingsWindow({
   const [error, setError] = useState<string | null>(null)
   const [updateState, setUpdateState] = useState<UpdateViewState>({ status: 'loading' })
   const [captureBusy, setCaptureBusy] = useState(false)
+  const [autostart, setAutostart] = useState<AutostartSnapshot | null>(null)
+  const [autostartSaving, setAutostartSaving] = useState(false)
+  const [autostartError, setAutostartError] = useState<string | null>(null)
+  const autostartRequest = useRef(0)
+  const autostartWriting = useRef(false)
+
+  const refreshAutostart = useCallback(async (): Promise<void> => {
+    if (autostartWriting.current) return
+    const request = ++autostartRequest.current
+    try {
+      const next = await window.lumierePlatform.getAutostartSnapshot()
+      if (request === autostartRequest.current) {
+        setAutostart(next)
+        setAutostartError(null)
+      }
+    } catch {
+      if (request === autostartRequest.current) {
+        setAutostart({
+          status: 'unavailable',
+          message: 'Launch at login could not be read. Try again.',
+        })
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const requests = autostartRequest
+    const refresh = (): void => {
+      void refreshAutostart()
+    }
+    refresh()
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      ++requests.current
+    }
+  }, [refreshAutostart])
+
+  const setAutostartEnabled = async (enabled: boolean): Promise<void> => {
+    if (autostartWriting.current) return
+    autostartWriting.current = true
+    const request = ++autostartRequest.current
+    setAutostartSaving(true)
+    setAutostartError(null)
+    try {
+      const next = await window.lumierePlatform.setAutostartEnabled(enabled)
+      if (request === autostartRequest.current) setAutostart(next)
+    } catch {
+      if (request === autostartRequest.current) {
+        setAutostartError(
+          'Launch at login could not be changed. Try again or check Windows Startup Apps.',
+        )
+      }
+      // A write may succeed before its readback fails. Re-query rather than showing
+      // a stale toggle or claiming the operation was rolled back.
+      try {
+        const next = await window.lumierePlatform.getAutostartSnapshot()
+        if (request === autostartRequest.current) setAutostart(next)
+      } catch {
+        if (request === autostartRequest.current)
+          setAutostart({
+            status: 'unavailable',
+            message: 'Launch at login could not be read. Try again.',
+          })
+      }
+    } finally {
+      autostartWriting.current = false
+      if (request === autostartRequest.current) setAutostartSaving(false)
+    }
+  }
+
+  const openStartupSettings = async (): Promise<void> => {
+    setAutostartError(null)
+    try {
+      await window.lumierePlatform.openStartupSettings()
+    } catch {
+      setAutostartError('Open Windows Settings → Apps → Startup to enable Lumiere.')
+    }
+  }
 
   useEffect(() => {
     let isCurrent = true
@@ -541,6 +621,12 @@ function SettingsWindow({
   return (
     <SettingsView
       initialSection={initialSection}
+      autostart={autostart}
+      autostartSaving={autostartSaving}
+      autostartError={autostartError}
+      onAutostartChange={(enabled) => void setAutostartEnabled(enabled)}
+      onAutostartRefresh={() => void refreshAutostart()}
+      onOpenStartupSettings={() => void openStartupSettings()}
       snapshot={snapshot}
       surfaceSnapshot={surfaceSnapshot}
       platform={window.lumierePlatform.platform}

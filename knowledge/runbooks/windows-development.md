@@ -49,6 +49,13 @@ update button through the real renderer IPC and records the returned snapshot an
 post-check preview. It asserts that the check response retains `windowsUpdate` and
 the action remains visible after completion. Debug disables updater operations.
 
+For login-registration acceptance, set `LUMIERE_GUI_AUTOSTART_ACCEPTANCE=1` and a
+fresh `LUMIERE_GUI_ACCEPTANCE_DIR`, then run the Release `native_shell_webview_lifecycle`
+fixture. This mode needs no phase acknowledgments. It uses the reserved
+`Lumiere-test-autostart` value, verifies it is absent before starting, and removes it
+on exit. It exercises real IPC, synthetic Windows approval records, failure readback,
+and System layout; it does not establish a real sign-out/sign-in observation.
+
 ## Local Packaging
 
 `pnpm package:windows` builds locked native payloads, transaction manifests, the NSIS

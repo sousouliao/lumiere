@@ -1,6 +1,7 @@
 import type { CaptureMode, LumierePlatform, OutputDelivery } from './platform-contract'
 import type { LumiereSettingsApi } from './settings-command'
 import type { LumiereUpdateApi } from './update-command'
+import type { LumiereAutostartApi } from './autostart-command'
 
 export type ProductHdrStatus = 'ready' | 'unavailable' | 'unvalidated'
 
@@ -82,7 +83,8 @@ export type CaptureCommandResult =
       notice: CaptureNotice
     }
 
-export interface LumiereRendererApi extends LumiereSettingsApi, LumiereUpdateApi {
+export interface LumiereRendererApi
+  extends LumiereSettingsApi, LumiereUpdateApi, LumiereAutostartApi {
   readonly platform: LumierePlatform
   getCaptureSurfaceSnapshot(): Promise<CaptureSurfaceSnapshot>
   onCaptureSurfaceChanged(listener: (snapshot: CaptureSurfaceSnapshot) => void): () => void

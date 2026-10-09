@@ -1,10 +1,30 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { SettingsView, type UpdateViewState } from './SettingsView'
+import type { AutostartSnapshot } from '../../shared/autostart-command'
 
-function renderSystemSettings(platform: 'windows', updateState: UpdateViewState): string {
+const autostartProps = {
+  autostart: null,
+  autostartSaving: false,
+  autostartError: null,
+  onAutostartChange: () => undefined,
+  onAutostartRefresh: () => undefined,
+  onOpenStartupSettings: () => undefined,
+}
+
+function renderSystemSettings(
+  platform: 'windows',
+  updateState: UpdateViewState,
+  autostart: AutostartSnapshot | null = null,
+  saving = false,
+  error: string | null = null,
+): string {
   return renderToStaticMarkup(
     <SettingsView
+      {...autostartProps}
+      autostart={autostart}
+      autostartSaving={saving}
+      autostartError={error}
       initialSection="system"
       snapshot={null}
       surfaceSnapshot={null}
@@ -26,9 +46,54 @@ function renderSystemSettings(platform: 'windows', updateState: UpdateViewState)
 }
 
 describe('SettingsView', () => {
+  it.each([
+    [null, false, false, 'Checking…'],
+    [{ status: 'disabled' }, false, true, 'Start in the system tray'],
+    [{ status: 'enabled' }, true, true, 'Start in the system tray'],
+    [{ status: 'blocked' }, false, false, 'Disabled in Windows'],
+    [
+      { status: 'unavailable', message: 'Could not read startup status' },
+      false,
+      false,
+      'Could not read startup status',
+    ],
+  ] as const)(
+    'renders the actual login registration state %s',
+    (snapshot, checked, enabled, hint) => {
+      const markup = renderSystemSettings(
+        'windows',
+        { status: 'idle', currentVersion: '0.7.1' },
+        snapshot,
+      )
+      const control = /<button[^>]*aria-label="Launch at login"[^>]*>/.exec(markup)?.[0]
+      expect(control).toBeDefined()
+      expect(control).toContain(`aria-checked="${String(checked)}"`)
+      expect(control?.includes('disabled=""')).toBe(!enabled)
+      expect(markup).toContain(hint)
+      if (snapshot?.status === 'blocked') expect(markup).toContain('Windows settings')
+      if (snapshot?.status === 'unavailable') expect(markup).toContain('Try again')
+    },
+  )
+
+  it('disables login registration while saving and reports a failure separately', () => {
+    const markup = renderSystemSettings(
+      'windows',
+      { status: 'idle', currentVersion: '0.7.1' },
+      { status: 'disabled' },
+      true,
+      'Launch at login could not be changed.',
+    )
+    expect(/<button[^>]*aria-label="Launch at login"[^>]*>/.exec(markup)?.[0]).toContain(
+      'disabled=""',
+    )
+    expect(markup).toContain('Saving…')
+    expect(markup).toContain('role="alert">Launch at login could not be changed.')
+  })
+
   it('renders accessible Windows settings controls', () => {
     const markup = renderToStaticMarkup(
       <SettingsView
+        {...autostartProps}
         snapshot={{
           outputDelivery: 'clipboard',
           availableOutputDeliveries: ['clipboard'],

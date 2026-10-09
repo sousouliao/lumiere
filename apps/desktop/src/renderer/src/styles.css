@@ -762,6 +762,12 @@ button {
   min-height: 44px;
 }
 
+.autostart-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--Lumiere-Dark-space4);
+}
+
 .settings-row {
   display: grid;
   min-height: 43px;
