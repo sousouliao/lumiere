@@ -1,11 +1,11 @@
 # Current Project State
 
 - Updated: 2026-10-09
-- Frontier: Windows v0.8.0 is being prepared with current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33). The maintainer authorized publication before real login/Startup Apps acceptance and will test the installed release. Published v0.7.1 and P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remain unchanged.
+- Frontier: Windows v0.8.0 is published with current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33); maintainer installation/login/Startup Apps acceptance remains pending by explicit authorization. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
-- Public release: [v0.7.1](https://github.com/sousouliao/lumiere/releases/tag/v0.7.1), stable Windows x64; tag/source commit `8f6184d3fc034d7d6177a1f6c2d703a38ee0e140`.
-- Installer: 3524429 bytes; SHA256 `699b308656bb72fcdc654f77d7d069e0ec939d10953f673158da06f7d20ab4b3`.
-- The maintainer authorized publication and reported the installed latest release working without issues on 2026-10-09.
+- Public release: [v0.8.0](https://github.com/sousouliao/lumiere/releases/tag/v0.8.0), stable Windows x64; tag/source commit `6805dd6fb415ef00e1c5523a482b4ea72f1dfd1a`.
+- Installer: 3545566 bytes; SHA256 `682ac6fe732e7b989686806d589ca8f3834d0ef08e26bbf0f97db5a0568a2dd1`.
+- The maintainer authorized v0.8.0 publication on 2026-10-09 and will install it to test; the latest completed installed-release observation remains v0.7.1.
 
 ## Product
 
@@ -16,6 +16,10 @@ tray menu WebView is preloaded and reused; its icon follows Windows system theme
 notifications without polling. Native tray,
 shortcuts, quiet capture and v1–v5 settings migration are retained. No Electron,
 .NET or macOS implementation/resource/stub remains; Git owns history.
+
+System settings offers Launch at login, off by default, using only current-user
+Windows registration. Login startup stays tray-only. Windows-disabled startup is
+reported without overriding it; unknown approval records remain unavailable.
 
 Windows v5 Display and v6 same-frame Region/cancellation retain floating-point
 acquisition and fixed sRGB Visual Match, with the same PNG for clipboard and folder.
@@ -33,7 +37,7 @@ Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
 
-Unreleased #33: five scoped Rust tests, 16 SettingsView tests, desktop TypeScript,
+#33: five scoped Rust tests, 16 SettingsView tests, desktop TypeScript,
 scoped ESLint/Clippy, formatting, renderer/native Release builds, and the explicit
 Release autostart WebView fixture pass locally. Actual IPC toggles, synthetic Windows
 approval records, focus refresh, failure readback and four visual states were checked.
@@ -42,14 +46,14 @@ owned startup values and retains unknown files. Original registration/settings w
 restored. Exact commands and remaining real login/Windows Startup Apps observations
 are owned by #33. The maintainer authorized v0.8.0 publication before those manual
 observations and will test the installed public build; this is an explicit deferral,
-not completed platform evidence. No public release includes this feature yet.
+not completed platform evidence. The public v0.8.0 notes disclose that pending check.
 
-The v0.7.1 patch evidence is:
+The v0.8.0 publication evidence is:
 
-- [Release 37827856922](https://github.com/sousouliao/lumiere/actions/runs/37827856922) succeeded for the tagged commit, including shared checks, Windows Rust checks/build and updater signature verification.
-- Downloaded all five public assets; their SHA256 digests match GitHub metadata. The installer matches `SHA256SUMS`, both updater feeds identify v0.7.1, legacy SHA512 matches the downloaded installer, and the public tag targets the release commit. Release is non-draft/non-prerelease.
-- Local `cargo test --locked -p lumiere-desktop tray_` passed 3 tests; `cargo test --locked -p lumiere-capture-windows` passed 7 with 2 hardware tests ignored; `pnpm --filter @lumiere/desktop test:shared` passed 41 tests. TypeScript, scoped ESLint, build, Clippy and formatting passed. Local full lint/format excluded ignored `.cache` tooling; remote shared checks passed unchanged.
-- Before publication the maintainer confirmed Region, reviewed tray actions and theme changes; after publication they installed the latest release and reported no issues. This is maintainer evidence, not an agent hardware observation or a wider platform claim.
+- [Release 37946086840](https://github.com/sousouliao/lumiere/actions/runs/37946086840) succeeded for the tagged commit, including shared checks, Windows Rust checks/build and updater signature verification. Local shared tests pass 47 tests.
+- Downloaded all five public assets; their SHA256 digests and sizes match GitHub metadata. The installer matches `SHA256SUMS`; both updater feeds identify v0.8.0, legacy SHA512 matches the installer, and Tauri metadata matches the detached signature and versioned installer URL.
+- The public tag targets the release commit; release is non-draft/non-prerelease, and the latest-download Tauri endpoint returns v0.8.0 with the same signature. Authenticode remains NotSigned.
+- Maintainer installation and real login/Startup Apps observations remain open in #33; synthetic approval records and source checks do not close them.
 
 The following v0.7.0 migration evidence remains owned by
 [#32](https://github.com/sousouliao/lumiere/issues/32); P0–P5 evidence remains in #26–#31:
@@ -68,7 +72,7 @@ backups are restored and no isolated installer/legacy-download processes remain.
 
 ## Next action
 
-Publish Windows v0.8.0, then complete maintainer sign-out/sign-in and Windows Startup
+Install published v0.8.0 and complete maintainer sign-out/sign-in and Windows Startup
 Apps disable/restore acceptance under #33. Future versions follow
 the [release contract](../contracts/releases.md) and [runbook](../runbooks/releasing.md);
 published bytes/tags are immutable. Do not recreate a migration backlog or reinterpret
