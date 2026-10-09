@@ -4,6 +4,22 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.8.0`
+
+Release platforms: Windows
+
+### Added
+
+- Add an optional Launch at login switch in System settings. It is off by default and starts Lumiere in the tray for the current Windows user without administrator privileges.
+- Show when Windows has disabled startup and provide a shortcut to Windows Startup Apps. Updates preserve startup state, and uninstall removes Lumiere's startup registration.
+
+### Known limitations
+
+- Automatic startup after Windows sign-in and changes made in Windows Startup Apps await maintainer verification on the installed release.
+- The Windows installer is not Authenticode signed; Windows may show an unknown-publisher or SmartScreen warning, or block execution. Updater integrity signatures do not establish publisher identity.
+- Windows Graphics Capture retains its system capture border. Output remains sRGB Visual Match PNG, not HDR-preserved export.
+- Windows x64 is the only supported platform.
+
 ## [0.7.1] - 2026-10-09
 
 Release platforms: Windows

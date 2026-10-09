@@ -1,7 +1,7 @@
 # Current Project State
 
 - Updated: 2026-10-09
-- Frontier: Windows v0.7.1 remains published and maintainer-verified; unreleased current-user launch-at-login is implemented and locally checked under [#33](https://github.com/sousouliao/lumiere/issues/33), awaiting maintainer login/Startup Apps acceptance. P0–P6 migration remains accepted under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32).
+- Frontier: Windows v0.8.0 is being prepared with current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33). The maintainer authorized publication before real login/Startup Apps acceptance and will test the installed release. Published v0.7.1 and P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remain unchanged.
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
 - Public release: [v0.7.1](https://github.com/sousouliao/lumiere/releases/tag/v0.7.1), stable Windows x64; tag/source commit `8f6184d3fc034d7d6177a1f6c2d703a38ee0e140`.
 - Installer: 3524429 bytes; SHA256 `699b308656bb72fcdc654f77d7d069e0ec939d10953f673158da06f7d20ab4b3`.

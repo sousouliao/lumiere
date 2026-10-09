@@ -50,6 +50,11 @@ From v0.7.0, the app verifies updater signatures and signed versions independent
 Windows publisher identity. Upgrading from v0.6.0 preserves settings and the existing
 installation location; user-owned files are retained while old application files are removed.
 
+System settings includes an optional **Launch at login** switch, off by default.
+It starts Lumiere in the tray for the current Windows user without administrator
+privileges. If Windows disables startup, use the accompanying **Windows settings**
+button to review Startup Apps.
+
 ## Repository Layout
 
 ```text
