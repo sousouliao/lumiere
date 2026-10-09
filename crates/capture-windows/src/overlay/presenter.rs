@@ -22,7 +22,6 @@ pub(super) struct Presenter {
     text_factory: IDWriteFactory,
     text: IDWriteTextFormat,
     status_text: IDWriteTextFormat,
-    dim: ID2D1SolidColorBrush,
     line: ID2D1SolidColorBrush,
     crosshair: ID2D1SolidColorBrush,
     caution: ID2D1SolidColorBrush,
@@ -100,7 +99,6 @@ impl Presenter {
             let text_factory: IDWriteFactory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
             let text = text_format(&text_factory, 11.0 * scale, DWRITE_FONT_WEIGHT_NORMAL)?;
             let status_text = text_format(&text_factory, 12.0 * scale, DWRITE_FONT_WEIGHT_MEDIUM)?;
-            let dim = context.CreateSolidColorBrush(&color(0.0, 0.0, 0.0, 0.55), None)?;
             let line = context.CreateSolidColorBrush(&token_color("accentBase")?, None)?;
             let crosshair = context.CreateSolidColorBrush(&color(1.0, 1.0, 1.0, 0.16), None)?;
             let caution = context.CreateSolidColorBrush(&token_color("statusCaution")?, None)?;
@@ -117,7 +115,6 @@ impl Presenter {
                 text_factory,
                 text,
                 status_text,
-                dim,
                 line,
                 crosshair,
                 caution,
@@ -206,21 +203,6 @@ impl Presenter {
                 None,
                 None,
             );
-            let fill = |r: D2D_RECT_F| {
-                if r.right > r.left && r.bottom > r.top {
-                    c.FillRectangle(&r, &self.dim);
-                }
-            };
-            if let Some(r) = selection {
-                let (left, top, right, bottom) =
-                    (r.left as f32, r.top as f32, r.right as f32, r.bottom as f32);
-                fill(rect(0.0, 0.0, self.width, top));
-                fill(rect(0.0, top, left, bottom));
-                fill(rect(right, top, self.width, bottom));
-                fill(rect(0.0, bottom, self.width, self.height));
-            } else {
-                fill(rect(0.0, 0.0, self.width, self.height));
-            }
             if selection.is_none() || (!valid && !capturing) {
                 c.DrawLine(
                     Vector2 {
