@@ -4,6 +4,35 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.9.0`
+
+Release platforms: Windows
+
+### Added
+
+- Add a Capture setting to hide the main window while taking a screenshot, then restore it after capture. Existing settings are preserved.
+
+### Changed
+
+- Keep the frozen desktop undimmed when region selection starts, and dim only the area outside a drawn selection.
+- Preserve the frozen preview's HDR-aware brightness and colors while keeping the existing sRGB Visual Match PNG output.
+- Use clearer coral selection guides and remove the crosshair when the selection is confirmed.
+- Refine interface text and capture notices for clearer feedback.
+
+### Fixed
+
+- Prevent stale initial snapshots from replacing newer capture, settings and update states.
+- Reuse capture targets and support checks to avoid repeated native handle growth and reduce region startup work.
+- Retry brief clipboard contention when copying screenshots, including consecutive large images.
+- Avoid flashing the waiting-for-selection state after releasing a region selection.
+
+### Known limitations
+
+- The Windows installer is not Authenticode signed; Windows may show an unknown-publisher or SmartScreen warning, or block execution. Updater integrity signatures do not establish publisher identity.
+- Windows Graphics Capture retains its system capture border. Output remains sRGB Visual Match PNG, not HDR-preserved export.
+- Windows x64 is the only supported platform. Capture color and latency measurements are scoped to the observed displays and fixtures, not a universal hardware guarantee.
+- Automatic startup after Windows sign-in and changes made in Windows Startup Apps retain the installed-release verification limitation from v0.8.0.
+
 ## [0.8.0] - 2026-10-09
 
 Release platforms: Windows
