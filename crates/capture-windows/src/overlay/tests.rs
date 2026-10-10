@@ -14,11 +14,13 @@ fn retained_gpu_frame_crop_is_exact_after_the_overlay_was_visible() {
     let _dpi = DpiScope::physical_coordinates().unwrap();
     let device = Device::create().unwrap();
     let cancel = Cancellation::default();
-    let frame = crate::capture::freeze(&device, &cancel).unwrap().unwrap();
+    let mut targets = crate::capture::Targets::default();
+    let frame = crate::capture::freeze(&device, &mut targets, &cancel)
+        .unwrap()
+        .unwrap();
     let original = device
         .readback(&frame.texture, frame.width, frame.height, None)
         .unwrap();
-    let shader = VisualMatch::new(&device).unwrap();
     let controller = std::thread::spawn(move || {
         let _dpi = DpiScope::physical_coordinates().unwrap();
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -49,7 +51,6 @@ fn retained_gpu_frame_crop_is_exact_after_the_overlay_was_visible() {
     let selected = select(
         &mut overlay,
         &device,
-        &shader,
         &frame,
         &Cancellation::default(),
         Instant::now() + Duration::from_secs(15),

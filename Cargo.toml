@@ -24,3 +24,29 @@ undocumented_unsafe_blocks = "deny"
 lto = "thin"
 codegen-units = 1
 strip = "debuginfo"
+
+# Keep the shell debuggable without making full-resolution capture/PNG work run
+# unoptimized. These overrides do not change the release profile or image semantics.
+[profile.dev.package.lumiere-capture-windows]
+opt-level = 3
+
+[profile.dev.package.half]
+opt-level = 3
+
+[profile.dev.package.png]
+opt-level = 3
+
+[profile.dev.package.fdeflate]
+opt-level = 3
+
+[profile.dev.package.flate2]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
+[profile.dev.package.crc32fast]
+opt-level = 3
+
+[profile.dev.package.simd-adler32]
+opt-level = 3

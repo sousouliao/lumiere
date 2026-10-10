@@ -1,8 +1,6 @@
 use crate::interop::{Monitor, utf16};
 use half::f16;
-mod visual_match;
 use lumiere_capture_contract::DynamicRange;
-pub(crate) use visual_match::VisualMatch;
 use windows::{
     Win32::{
         Devices::Display::*,
@@ -352,6 +350,12 @@ mod tests {
             for (index, (actual, expected)) in actual.iter().zip(&case.rgba8).enumerate() {
                 assert_eq!(actual, expected, "scale {}, byte {}", case.scale, index);
             }
+            let width = (source.len() / 8) as u32;
+            assert_eq!(
+                crate::delivery::encode_png(width, 1, &actual).unwrap(),
+                crate::delivery::encode_png(width, 1, &case.rgba8).unwrap(),
+                "PNG bytes must match the frozen baseline pixel fixture"
+            );
         }
     }
 }

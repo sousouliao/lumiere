@@ -4,7 +4,7 @@ use lumiere_capture_contract::{
     OutputProfile, Platform,
 };
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
     mpsc,
 };
@@ -52,6 +52,7 @@ pub struct WindowsEngine {
     send: Option<mpsc::Sender<CaptureJob>>,
     worker: Option<std::thread::JoinHandle<()>>,
     startup_failure: Option<Failure>,
+    support: Arc<Mutex<Option<bool>>>,
 }
 struct CaptureJob {
     mode: CaptureMode,
@@ -63,6 +64,8 @@ impl Default for WindowsEngine {
     fn default() -> Self {
         let (send, receive) = mpsc::channel::<CaptureJob>();
         let (ready, started) = mpsc::sync_channel(1);
+        let support = Arc::new(Mutex::new(None));
+        let worker_support = support.clone();
         let worker = std::thread::Builder::new()
             .name("Lumiere capture".into())
             .spawn(move || {
@@ -81,27 +84,32 @@ impl Default for WindowsEngine {
                     }
                 };
                 let mut device = None;
-                let mut shader = None;
                 let mut overlay = None;
+                let mut targets = capture::Targets::default();
                 while let Ok(job) = receive.recv() {
                     let outcome = match Self::capture_native(
                         &mut device,
-                        &mut shader,
                         &mut overlay,
+                        &mut targets,
                         job.mode,
                         job.params,
                         job.cancel,
                     ) {
                         Ok(result) => result,
-                        Err(error) => CaptureOutcome::Failed {
-                            failure: Failure::capture(error.to_string()),
-                        },
+                        Err(error) => {
+                            if let Ok(mut support) = worker_support.lock() {
+                                *support = None;
+                            }
+                            CaptureOutcome::Failed {
+                                failure: Failure::capture(error.to_string()),
+                            }
+                        }
                     };
                     let _ = job.reply.send(outcome);
                 }
                 // Device is released on its owning thread, before the MTA apartment.
                 drop(overlay);
-                drop(shader);
+                drop(targets);
                 drop(device);
             })
             .expect("create native capture worker");
@@ -112,6 +120,7 @@ impl Default for WindowsEngine {
             send: Some(send),
             worker: Some(worker),
             startup_failure,
+            support,
         }
     }
 }
@@ -134,7 +143,23 @@ impl CaptureEngine for WindowsEngine {
                 windows::Win32::System::WinRT::RO_INIT_MULTITHREADED,
             )
             .map_err(|error| native_failure("capabilities-initialize", error))?;
-            if !windows::Graphics::Capture::GraphicsCaptureSession::IsSupported()? {
+            let supported = {
+                let mut support = self.support.lock().map_err(|_| {
+                    windows::core::Error::new(
+                        windows::Win32::Foundation::E_FAIL,
+                        "Capture support cache is unavailable",
+                    )
+                })?;
+                if let Some(supported) = *support {
+                    supported
+                } else {
+                    let supported =
+                        windows::Graphics::Capture::GraphicsCaptureSession::IsSupported()?;
+                    *support = Some(supported);
+                    supported
+                }
+            };
+            if !supported {
                 return Err(windows::core::Error::new(
                     windows::Win32::Foundation::E_FAIL,
                     "Windows Graphics Capture is not supported",
@@ -207,8 +232,8 @@ impl CaptureEngine for WindowsEngine {
 impl WindowsEngine {
     fn capture_native(
         cache: &mut Option<graphics::Device>,
-        shader: &mut Option<graphics::VisualMatch>,
         overlay: &mut Option<overlay::Overlay>,
+        targets: &mut capture::Targets,
         mode: CaptureMode,
         params: CaptureParams,
         cancel: Cancellation,
@@ -231,7 +256,7 @@ impl WindowsEngine {
                 {
                     return Ok(CaptureOutcome::Cancelled);
                 }
-                let Some(frame) = capture::freeze(device, &cancel)
+                let Some(frame) = capture::freeze(device, targets, &cancel)
                     .map_err(|error| native_failure("frame-acquire", error))?
                 else {
                     return Ok(CaptureOutcome::Cancelled);
@@ -239,21 +264,8 @@ impl WindowsEngine {
                 if mode == CaptureMode::Display {
                     break (frame, None);
                 }
-                if shader.is_none() {
-                    *shader = Some(
-                        graphics::VisualMatch::new(device)
-                            .map_err(|error| native_failure("overlay-shader", error))?,
-                    );
-                }
-                match overlay::select(
-                    overlay,
-                    device,
-                    shader.as_ref().expect("shader initialized"),
-                    &frame,
-                    &cancel,
-                    deadline,
-                )
-                .map_err(|error| native_failure("region-select", error))?
+                match overlay::select(overlay, device, &frame, &cancel, deadline)
+                    .map_err(|error| native_failure("region-select", error))?
                 {
                     overlay::Selection::Selected(crop) => break (frame, Some(crop)),
                     overlay::Selection::Cancelled => return Ok(CaptureOutcome::Cancelled),
@@ -297,8 +309,8 @@ impl WindowsEngine {
         }
         // Retry with fresh native resources after device removal or any acquisition/readback failure.
         if result.is_err() {
+            targets.clear();
             *overlay = None;
-            *shader = None;
             *cache = None;
         }
         result
@@ -375,10 +387,11 @@ mod native_tests {
             &Cancellation::default(),
         );
         std::fs::remove_file(blocked).unwrap();
-        assert!(matches!(
-            results[0].outcome,
-            DeliveryOutcome::Success { .. }
-        ));
+        assert!(
+            matches!(results[0].outcome, DeliveryOutcome::Success { .. }),
+            "Unexpected clipboard delivery: {:?}",
+            results[0]
+        );
         assert!(matches!(results[1].outcome, DeliveryOutcome::Failed { .. }));
         assert_eq!(
             file,

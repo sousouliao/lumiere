@@ -1,7 +1,8 @@
 # Current Project State
 
-- Updated: 2026-10-10
-- Source frontier: configurable main-window hiding during capture under [#35](https://github.com/sousouliao/lumiere/issues/35) is implemented with scoped repository checks; Windows native build/runtime acceptance remains pending.
+- Updated: 2026-10-11
+- Source frontier: native FP16/scRGB Region preview under [#36](https://github.com/sousouliao/lumiere/issues/36) preserves unmasked background values and existing PNG conversion. WGC support/target reuse and bounded resource observations pass without relaxed budgets; development capture/codecs compile with optimization. Clipboard acquisition now retries transient contention within one second without an unconditional delay; controlled contention/timeout and repeated 4K delivery pass. Default/shared tests, scoped native checks and repository gates pass. Physical SDR/HDR appearance and shell latency acceptance remain pending; exact measurements and prior failures are owned by the Issue.
+- Prior source slice: configurable main-window hiding during capture under [#35](https://github.com/sousouliao/lumiere/issues/35) is implemented with scoped repository checks; Windows native build/runtime acceptance remains pending.
 - Prior source slice: snapshot synchronization, typed Host-result and native diagnostic cleanup under [#34](https://github.com/sousouliao/lumiere/issues/34) is repository-checked as scoped below. The maintainer owns Windows native shell build/tests and real runtime acceptance; this source is not a new published release.
 - Frontier: Windows v0.8.0 is published with current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33); maintainer installation/login/Startup Apps acceptance remains pending by explicit authorization. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).

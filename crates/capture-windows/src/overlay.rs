@@ -3,11 +3,7 @@ pub(crate) mod geometry;
 mod presenter;
 #[cfg(test)]
 mod tests;
-use crate::{
-    Cancellation,
-    capture::FrozenFrame,
-    graphics::{Device, VisualMatch},
-};
+use crate::{Cancellation, capture::FrozenFrame, graphics::Device};
 use geometry::{Crop, Rect};
 use std::time::{Duration, Instant};
 use windows::{
@@ -219,12 +215,7 @@ impl Overlay {
             _class: class,
         })
     }
-    fn prepare(
-        &mut self,
-        device: &Device,
-        shader: &VisualMatch,
-        frame: &FrozenFrame,
-    ) -> Result<()> {
+    fn prepare(&mut self, device: &Device, frame: &FrozenFrame) -> Result<()> {
         let bounds = frame.monitor.bounds;
         // SAFETY: Worker owns the hidden window and has per-monitor physical coordinate awareness.
         let (dpi, point) = unsafe {
@@ -260,26 +251,23 @@ impl Overlay {
             dirty: true,
             capture: None,
         };
-        let surface = shader.render(
-            device,
-            &frame.texture,
-            frame.width,
-            frame.height,
-            frame.color.scale,
-        )?;
+        // Captured scRGB already contains the target's SDR white scaling. Apply it
+        // only to UI colors, never to the immutable captured background.
+        let white_scale = frame.color.scale.recip();
         if self.size != (frame.width, frame.height) {
             self.presenter = None;
         }
         if let Some(presenter) = &mut self.presenter {
-            presenter.attach(&surface, self.state.scale as f32)?;
+            presenter.attach(&frame.texture, self.state.scale as f32, white_scale)?;
         } else {
             self.presenter = Some(presenter::Presenter::new(
                 device,
                 self.window.0,
-                &surface,
+                &frame.texture,
                 frame.width,
                 frame.height,
                 self.state.scale as f32,
+                white_scale,
             )?);
             self.size = (frame.width, frame.height);
         }
@@ -386,6 +374,11 @@ impl Overlay {
                     }
                 }
             }
+            // Mouse-up clears the drag origin. Do not present an empty selection
+            // between the committed rectangle and its capturing feedback.
+            if self.state.selected.is_some() {
+                continue;
+            }
             if self.state.dirty {
                 self.state.dirty = false;
                 self.presenter.as_ref().expect("prepared presenter").draw(
@@ -401,7 +394,6 @@ impl Overlay {
 pub(crate) fn select(
     cache: &mut Option<Overlay>,
     device: &Device,
-    shader: &VisualMatch,
     frame: &FrozenFrame,
     cancel: &Cancellation,
     deadline: Instant,
@@ -423,7 +415,7 @@ pub(crate) fn select(
     }
     let overlay = cache.as_mut().expect("overlay initialized");
     let result = overlay
-        .prepare(device, shader, frame)
+        .prepare(device, frame)
         .and_then(|_| overlay.run(frame, cancel, deadline));
     // Keep the frozen selection/status visible through conversion and delivery.
     // The capture owner finishes it on every completion/error/cancellation path.

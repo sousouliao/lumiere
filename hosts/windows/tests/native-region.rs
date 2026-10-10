@@ -100,6 +100,32 @@ fn counters(process: &Process) -> Value {
     }
 }
 
+fn within_resource_budget(baseline: &Value, sample: &Value) -> bool {
+    [
+        ("handles", 8),
+        ("userObjects", 2),
+        ("gdiObjects", 2),
+        ("privateCommit", 64 * 1024 * 1024),
+    ]
+    .into_iter()
+    .all(|(key, allowance)| {
+        sample[key].as_u64().unwrap() <= baseline[key].as_u64().unwrap() + allowance
+    })
+}
+
+#[test]
+fn resource_budget_keeps_existing_limits() {
+    let baseline = json!({"handles":100,"userObjects":10,"gdiObjects":10,"privateCommit":1024});
+    let limit =
+        json!({"handles":108,"userObjects":12,"gdiObjects":12,"privateCommit":1024+64*1024*1024});
+    assert!(within_resource_budget(&baseline, &limit));
+    for key in ["handles", "userObjects", "gdiObjects", "privateCommit"] {
+        let mut over = limit.clone();
+        over[key] = json!(over[key].as_u64().unwrap() + 1);
+        assert!(!within_resource_budget(&baseline, &over), "{key}");
+    }
+}
+
 #[tokio::test]
 #[ignore = "Real WGC/GPU overlay, synthetic selection and cancellation; run explicitly"]
 async fn real_child_repeats_selection_and_cancellation_without_resource_growth() {
@@ -157,6 +183,7 @@ async fn real_child_repeats_selection_and_cancellation_without_resource_growth()
             window(pid).is_some(),
             "Controls must not release an active Region"
         );
+        let selection_started = Instant::now();
         match cycle % 4 {
             0 => {
                 post(hwnd, WM_LBUTTONDOWN, 1, 100, 100);
@@ -200,13 +227,25 @@ async fn real_child_repeats_selection_and_cancellation_without_resource_growth()
         } else {
             assert_eq!(response["result"]["status"], "cancelled");
         }
-        measurements.push(json!({"cycle":cycle,"previewMs":preview_ms,"totalMs":started.elapsed().as_millis(),"resources":counters(&process)}));
+        measurements.push(json!({"cycle":cycle,"previewMs":preview_ms,"selectionToReplyMs":selection_started.elapsed().as_secs_f64()*1000.0,"completed":cycle%4==0,"totalMs":started.elapsed().as_millis(),"resources":counters(&process)}));
     }
-    // Observe asynchronous compositor/driver retirement independently of HWND teardown.
+    // GPU/driver retirement may outlive HWND hiding. Keep the original budgets,
+    // but allow up to ten seconds and require two consecutive in-budget samples.
+    let first = &measurements[4]["resources"];
     let mut settled = Vec::new();
-    for _ in 0..6 {
+    let mut consecutive = 0;
+    for _ in 0..20 {
         tokio::time::sleep(Duration::from_millis(500)).await;
-        settled.push(counters(&process));
+        let sample = counters(&process);
+        consecutive = if within_resource_budget(first, &sample) {
+            consecutive + 1
+        } else {
+            0
+        };
+        settled.push(sample);
+        if consecutive >= 2 {
+            break;
+        }
     }
     // EOF while the real selection window is active must also wait for native cleanup.
     input.write_all(b"{\"version\":6,\"id\":\"eof\",\"method\":\"captureRegion\",\"params\":{\"delivery\":\"clipboard\"}}\n").await.unwrap();
@@ -230,18 +269,14 @@ async fn real_child_repeats_selection_and_cancellation_without_resource_growth()
         serde_json::to_vec_pretty(&json!({"cycles":measurements,"settled":settled})).unwrap(),
     )
     .unwrap();
-    let first = &measurements[4]["resources"];
     let last = settled.last().unwrap();
     println!(
         "native resources: warm={first}, immediate={}, settled={last}",
         measurements[29]["resources"]
     );
-    assert!(last["handles"].as_u64().unwrap() <= first["handles"].as_u64().unwrap() + 8);
-    assert!(last["userObjects"].as_u64().unwrap() <= first["userObjects"].as_u64().unwrap() + 2);
-    assert!(last["gdiObjects"].as_u64().unwrap() <= first["gdiObjects"].as_u64().unwrap() + 2);
     assert!(
-        last["privateCommit"].as_u64().unwrap()
-            <= first["privateCommit"].as_u64().unwrap() + 64 * 1024 * 1024
+        consecutive >= 2,
+        "Resources did not settle within ten seconds: baseline={first}, last={last}"
     );
     println!(
         "30 native cycles + active EOF passed; first={first}, last={last}; evidence={}",

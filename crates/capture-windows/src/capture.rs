@@ -1,10 +1,17 @@
 use crate::{
     Cancellation,
     graphics::{Device, DisplayColor, display_color},
-    interop::cursor_monitor,
+    interop::{Monitor, cursor_monitor},
 };
-use std::time::{Duration, Instant};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, Instant},
+};
 use windows::{
+    Foundation::TypedEventHandler,
     Graphics::{
         Capture::*,
         DirectX::{Direct3D11::IDirect3DDevice, DirectXPixelFormat},
@@ -26,6 +33,65 @@ pub(crate) struct FrozenFrame {
     pub height: u32,
     pub color: DisplayColor,
     pub monitor: crate::interop::Monitor,
+}
+
+// Retain target descriptors only. Sessions, pools and frames remain capture-scoped.
+#[derive(Default)]
+pub(crate) struct Targets(Vec<Target>);
+struct Target {
+    monitor: Monitor,
+    item: GraphicsCaptureItem,
+    closed: Arc<AtomicBool>,
+    closed_token: i64,
+}
+impl Target {
+    fn matches(&self, monitor: &Monitor) -> bool {
+        self.monitor.handle == monitor.handle
+            && self.monitor.name == monitor.name
+            && self.monitor.bounds == monitor.bounds
+    }
+}
+impl Drop for Target {
+    fn drop(&mut self) {
+        let _ = self.item.RemoveClosed(self.closed_token);
+    }
+}
+impl Targets {
+    fn item(&mut self, monitor: &Monitor) -> Result<&GraphicsCaptureItem> {
+        self.0.retain(|target| {
+            !target.closed.load(Ordering::Acquire)
+                && (target.monitor.handle != monitor.handle || target.matches(monitor))
+        });
+        let index = if let Some(index) = self.0.iter().position(|target| target.matches(monitor)) {
+            index
+        } else {
+            let interop: IGraphicsCaptureItemInterop =
+                factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()?;
+            // SAFETY: The current monitor is OS-owned and resolved on this capture worker.
+            let item: GraphicsCaptureItem = unsafe { interop.CreateForMonitor(monitor.handle)? };
+            let closed = Arc::new(AtomicBool::new(false));
+            let signal = closed.clone();
+            let closed_token = item.Closed(&TypedEventHandler::new(move |_, _| {
+                signal.store(true, Ordering::Release);
+                Ok(())
+            }))?;
+            self.0.push(Target {
+                monitor: Monitor {
+                    handle: monitor.handle,
+                    name: monitor.name.clone(),
+                    bounds: monitor.bounds,
+                },
+                item,
+                closed,
+                closed_token,
+            });
+            self.0.len() - 1
+        };
+        Ok(&self.0[index].item)
+    }
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
 }
 struct Session {
     session: Option<GraphicsCaptureSession>,
@@ -58,13 +124,14 @@ impl Drop for Frame {
     }
 }
 
-pub(crate) fn freeze(device: &Device, cancel: &Cancellation) -> Result<Option<FrozenFrame>> {
+pub(crate) fn freeze(
+    device: &Device,
+    targets: &mut Targets,
+    cancel: &Cancellation,
+) -> Result<Option<FrozenFrame>> {
     let monitor = cursor_monitor()?;
     let color = display_color(&monitor)?;
-    let interop: IGraphicsCaptureItemInterop =
-        factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()?;
-    // SAFETY: OS-owned monitor handle is valid for this capture; interface projection owns the result.
-    let item: GraphicsCaptureItem = unsafe { interop.CreateForMonitor(monitor.handle)? };
+    let item = targets.item(&monitor)?;
     let size = item.Size()?;
     if size.Width <= 0 || size.Height <= 0 {
         return Err(Error::new(E_FAIL, "Empty capture target"));
@@ -83,7 +150,7 @@ pub(crate) fn freeze(device: &Device, cancel: &Cancellation) -> Result<Option<Fr
         session: None,
         pool,
     };
-    let session = resources.pool.CreateCaptureSession(&item)?;
+    let session = resources.pool.CreateCaptureSession(item)?;
     // Best effort, same unpackaged-app border policy as the baseline.
     let _ = session.SetIsBorderRequired(false);
     resources.session = Some(session);
@@ -154,5 +221,40 @@ pub(crate) fn freeze(device: &Device, cancel: &Cancellation) -> Result<Option<Fr
             color,
             monitor,
         }));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interop::{Apartment, DpiScope};
+    use windows::Win32::System::WinRT::RO_INIT_MULTITHREADED;
+
+    #[test]
+    #[ignore = "Creates real monitor capture descriptors; run explicitly"]
+    fn target_cache_reuses_and_invalidates_descriptors() {
+        let _apartment = Apartment::initialize(RO_INIT_MULTITHREADED).unwrap();
+        let _dpi = DpiScope::physical_coordinates().unwrap();
+        let mut monitor = cursor_monitor().unwrap();
+        let mut targets = Targets::default();
+        let first = targets.item(&monitor).unwrap().clone();
+        assert_eq!(&first, targets.item(&monitor).unwrap());
+        assert_eq!(targets.0.len(), 1);
+
+        // Exercise the invalidation signal used by the Closed callback.
+        targets.0[0].closed.store(true, Ordering::Release);
+        let reopened = targets.item(&monitor).unwrap().clone();
+        assert_ne!(first, reopened);
+        assert_eq!(targets.0.len(), 1);
+
+        monitor.bounds.right += 1;
+        assert_ne!(&reopened, targets.item(&monitor).unwrap());
+        assert_eq!(
+            targets.0.len(),
+            1,
+            "Changed geometry replaces the old descriptor"
+        );
+        targets.clear();
+        assert!(targets.0.is_empty());
     }
 }

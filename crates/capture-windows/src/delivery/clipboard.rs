@@ -1,7 +1,7 @@
 //! Immediate PNG + sRGB DIBV5 clipboard ownership, with no delayed-render callbacks.
 use windows::{
     Win32::{
-        Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND},
+        Foundation::{E_ACCESSDENIED, GlobalFree, HANDLE, HGLOBAL, HWND},
         Graphics::Gdi::{BI_BITFIELDS, BITMAPV5HEADER, LCS_GM_IMAGES},
         System::{DataExchange::*, Memory::*},
         UI::WindowsAndMessaging::*,
@@ -13,6 +13,28 @@ const DIBV5: u32 = 17;
 const SRGB: u32 = 0x73524742;
 
 struct Window(HWND);
+impl Window {
+    fn clipboard() -> Result<Self> {
+        // SAFETY: Built-in STATIC class; this thread owns the invisible message-only window.
+        unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                w!("STATIC"),
+                w!("Lumiere clipboard"),
+                WINDOW_STYLE::default(),
+                0,
+                0,
+                0,
+                0,
+                Some(HWND_MESSAGE),
+                None,
+                None,
+                None,
+            )
+            .map(Self)
+        }
+    }
+}
 impl Drop for Window {
     fn drop(&mut self) {
         // SAFETY: Window was created and remains owned by this native thread.
@@ -76,15 +98,35 @@ fn png_format() -> Result<u32> {
     }
 }
 fn open(owner: Option<HWND>) -> Result<Open> {
-    for attempt in 0..10 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+    loop {
         // SAFETY: Optional owner belongs to this thread; each successful call is balanced by Open::drop.
         match unsafe { OpenClipboard(owner) } {
             Ok(()) => return Ok(Open),
-            Err(error) if attempt == 9 => return Err(error),
-            Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            Err(error)
+                if error.code() == E_ACCESSDENIED && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(
+                    std::time::Duration::from_millis(10)
+                        .min(deadline.saturating_duration_since(std::time::Instant::now())),
+                );
+            }
+            Err(error) => {
+                let mut pid = 0;
+                // SAFETY: Read-only clipboard holder lookup for diagnostics.
+                let holder = unsafe { GetOpenClipboardWindow() }.unwrap_or_default();
+                // SAFETY: Borrowed HWND and valid PID output storage.
+                unsafe {
+                    GetWindowThreadProcessId(holder, Some(&mut pid));
+                }
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"level":"warn", "event":"clipboard-open-failed", "stage":"open-clipboard", "hresult":format!("0x{:08X}",error.code().0 as u32), "holderProcessId":pid})
+                );
+                return Err(error);
+            }
         }
     }
-    unreachable!()
 }
 pub(super) fn write(png: &[u8]) -> std::result::Result<(), String> {
     let dib = dib_from_png(png)?;
@@ -92,23 +134,7 @@ pub(super) fn write(png: &[u8]) -> std::result::Result<(), String> {
         let png_memory = Memory::copy(png)?;
         let dib_memory = Memory::copy(&dib)?;
         let format = png_format()?;
-        // SAFETY: Built-in STATIC class, invisible message-only window; no external callback pointer.
-        let window = Window(unsafe {
-            CreateWindowExW(
-                WINDOW_EX_STYLE::default(),
-                w!("STATIC"),
-                w!("Lumiere clipboard"),
-                WINDOW_STYLE::default(),
-                0,
-                0,
-                0,
-                0,
-                Some(HWND_MESSAGE),
-                None,
-                None,
-                None,
-            )?
-        });
+        let window = Window::clipboard()?;
         let _open = open(Some(window.0))?;
         // SAFETY: Non-null owner and clipboard lock are held; subsequent data is immediately rendered.
         unsafe {
@@ -181,6 +207,64 @@ pub(crate) fn read_png(length: usize) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "Locks and writes the real Windows clipboard; run serially"]
+    fn clipboard_contention_retries_and_times_out_without_changing_png() {
+        const HOLD_ENV: &str = "LUMIERE_TEST_CLIPBOARD_HOLD_MS";
+        if let Ok(hold_ms) = std::env::var(HOLD_ENV) {
+            let owner = Window::clipboard().unwrap();
+            let _open = open(Some(owner.0)).unwrap();
+            println!("clipboard-lock-ready");
+            std::thread::sleep(std::time::Duration::from_millis(hold_ms.parse().unwrap()));
+            return;
+        }
+        use std::io::BufRead;
+        let png = crate::delivery::encode_png(1, 1, &[20, 40, 60, 255]).unwrap();
+        for (hold_ms, succeeds) in [(250, true), (1300, false)] {
+            // Use a real non-null owner, matching production clipboard acquisition.
+            let owner = Window::clipboard().unwrap();
+            // A separate process reproduces the external clipboard reader's lock.
+            let mut holder = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--ignored", "--exact", "delivery::clipboard::tests::clipboard_contention_retries_and_times_out_without_changing_png", "--nocapture"])
+                .env(HOLD_ENV, hold_ms.to_string())
+                .stdout(std::process::Stdio::piped())
+                .spawn().unwrap();
+            let mut output = std::io::BufReader::new(holder.stdout.take().unwrap());
+            loop {
+                let mut line = String::new();
+                assert!(
+                    output.read_line(&mut line).unwrap() > 0,
+                    "Clipboard holder exited before acquiring its lock"
+                );
+                if line.trim() == "clipboard-lock-ready" {
+                    break;
+                }
+            }
+            let started = std::time::Instant::now();
+            let result = if succeeds {
+                write(&png)
+            } else {
+                open(Some(owner.0))
+                    .map(drop)
+                    .map_err(|error| error.to_string())
+            };
+            let elapsed = started.elapsed();
+            assert!(holder.wait().unwrap().success());
+            assert_eq!(result.is_ok(), succeeds, "{result:?}");
+            if succeeds {
+                assert!(elapsed >= std::time::Duration::from_millis(100));
+            } else {
+                assert!(elapsed >= std::time::Duration::from_secs(1));
+                assert!(elapsed < std::time::Duration::from_millis(1250));
+            }
+            assert_eq!(
+                read_png(png.len()),
+                png,
+                "Successful retries and failed acquisition preserve the same PNG"
+            );
+        }
+    }
     #[test]
     fn dib_is_top_down_srgb_and_preserves_rgba_channels() {
         let png = crate::delivery::encode_png(2, 1, &[10, 20, 30, 255, 200, 100, 50, 128]).unwrap();

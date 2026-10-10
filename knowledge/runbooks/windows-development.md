@@ -27,6 +27,10 @@ node scripts/verify-rust-protocol.mjs
 with `tauri.dev.conf.json`. That development override disables copying the packaged
 Release Host into `target/debug`, so the shell uses the freshly built Debug Host.
 Restart `pnpm dev` after changing Host/capture code to rebuild and reload that process.
+The development profile optimizes capture and its image codecs while retaining
+debug information and an unoptimized shell. Compare capture timing with this
+profile or Release; unoptimized full-resolution image loops are not a production
+latency baseline. Color conversion and PNG settings are identical in both profiles.
 Release native
 build: `pnpm --filter @lumiere/desktop build:native`. The shell supervises the adjacent
 Host; a missing or disconnected Host is a recoverable product state.
@@ -40,6 +44,16 @@ explicitly running them. Native Region fixtures live in `hosts/windows/tests/nat
 on-demand WebView/settings/shortcut fixtures live in the shell's `src/tests.rs`.
 `node scripts/verify-rust-display.mjs` performs real capture and delivery. Fixtures do
 not certify physical input, compositor fidelity or other display/DPI combinations.
+
+The Region resource fixture preserves its handle/GDI/USER/private-commit budgets.
+After its capture cycles it samples every 500 ms for at most ten seconds, requiring
+two consecutive in-budget observations before continuing. This accounts for
+asynchronous graphics retirement without adding waits to the product capture path.
+
+Clipboard acquisition first attempts immediately and retries access-denied
+contention for at most one second. The native clipboard fixture uses a separate
+process to hold a non-null clipboard window, verifying successful retry and bounded
+timeout without changing PNG bytes; run clipboard fixtures serially.
 
 For equivalent-state Release sampling, build the Host and GUI test with `--release`.
 `LUMIERE_GUI_ACCEPTANCE_DIR` selects an isolated output/settings directory and pauses
