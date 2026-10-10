@@ -1,5 +1,6 @@
 import { deliveryTargetsFor, type DeliveryTarget, type OutputDelivery } from './platform-contract'
 import type { CaptureShortcutSnapshot, ShortcutUpdate } from './shortcut-command'
+import type { SnapshotSubscription } from './snapshot-command'
 
 export const outputDeliveryOptions: readonly OutputDelivery[] = ['clipboard', 'folder', 'both']
 export const afterCaptureBehaviorOptions = ['do-nothing', 'show-in-folder'] as const
@@ -25,7 +26,7 @@ export interface LumiereSettingsApi {
   setHdrStatusReminders(enabled: boolean): Promise<SettingsSnapshot>
   setCaptureShortcut(update: ShortcutUpdate): Promise<ShortcutUpdateResult>
   setShortcutRecording(recording: boolean): Promise<void>
-  onSettingsChanged(listener: (snapshot: SettingsSnapshot) => void): () => void
+  onSettingsChanged(listener: (snapshot: SettingsSnapshot) => void): SnapshotSubscription
   onShowSettingsRequested(listener: () => void): () => void
 }
 

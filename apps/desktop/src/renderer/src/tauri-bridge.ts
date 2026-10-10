@@ -1,23 +1,29 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type { LumiereRendererApi } from '../../shared/capture-command'
+import type { SnapshotSubscription } from '../../shared/snapshot-command'
 
 // Registration is asynchronous. An unmount before it resolves still releases the
 // native listener, including React StrictMode's setup/cleanup/setup sequence.
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T also constrains listen's native payload.
-export function subscribe<T>(event: string, callback: (value: T) => void): () => void {
+export function subscribe<T>(event: string, callback: (value: T) => void): SnapshotSubscription {
   let stopped = false
   let unlisten: (() => void) | undefined
-  void listen<T>(event, ({ payload }) => {
+  const ready = listen<T>(event, ({ payload }) => {
     if (!stopped) callback(payload)
   }).then((stop) => {
     if (stopped) stop()
     else unlisten = stop
   })
-  return () => {
+  // Non-snapshot event callers also need registration failures handled.
+  void ready.catch((error: unknown) => {
+    console.error(`Unable to subscribe to ${event}`, error)
+  })
+  const stop = () => {
     stopped = true
     unlisten?.()
   }
+  return Object.assign(stop, { ready })
 }
 
 export const windowsApi: LumiereRendererApi = {

@@ -16,6 +16,7 @@ import { SettingsView, type SettingsSection, type UpdateViewState } from './Sett
 import { RecoveryActions } from './RecoveryActions'
 import { CAPTURE_LOAD_FAILURE, resolveCaptureNotices } from './capture-notices'
 import { WindowControls } from './WindowControls'
+import { observeSnapshot } from './observe-snapshot'
 
 export function App(): React.JSX.Element {
   return <ApplicationSurface />
@@ -35,8 +36,6 @@ function ApplicationSurface(): React.JSX.Element {
   const [surfaceLoadFailed, setSurfaceLoadFailed] = useState(false)
 
   useEffect(() => {
-    let isCurrent = true
-    let receivedLiveSnapshot = false
     const stopSettingsListening = window.lumierePlatform.onShowSettingsRequested(() => {
       setSettingsSection('output')
       setView('settings')
@@ -44,45 +43,33 @@ function ApplicationSurface(): React.JSX.Element {
     const stopCaptureViewListening = window.lumierePlatform.onShowCaptureRequested(() => {
       setView('capture')
     })
-    let receivedActivity = false
-    const stopCaptureListening = window.lumierePlatform.onCaptureActivityChanged((next) => {
-      receivedActivity = true
-      setActivity(next)
-      setCaptureResult(null)
-      if (
-        next.lastCompletion?.result.status === 'failed' ||
-        next.lastCompletion?.result.status === 'partial'
-      )
-        setView('capture')
+    const stopCaptureListening = observeSnapshot({
+      read: () => window.lumierePlatform.getCaptureActivity(),
+      subscribe: (listener) => window.lumierePlatform.onCaptureActivityChanged(listener),
+      onSnapshot: (next, source) => {
+        setActivity(next)
+        if (source === 'initial') return
+        setCaptureResult(null)
+        if (
+          next.lastCompletion?.result.status === 'failed' ||
+          next.lastCompletion?.result.status === 'partial'
+        )
+          setView('capture')
+      },
     })
-    void window.lumierePlatform
-      .getCaptureActivity()
-      .then((next) => {
-        if (isCurrent && !receivedActivity) setActivity(next)
-      })
-      .catch(() => undefined)
-    const stopSurfaceListening = window.lumierePlatform.onCaptureSurfaceChanged((snapshot) => {
-      if (!isCurrent) return
-      receivedLiveSnapshot = true
-      setSurfaceSnapshot(snapshot)
-      setSurfaceLoadFailed(false)
-      setCaptureResult(null)
+    const stopSurfaceListening = observeSnapshot({
+      read: () => window.lumierePlatform.getCaptureSurfaceSnapshot(),
+      subscribe: (listener) => window.lumierePlatform.onCaptureSurfaceChanged(listener),
+      onSnapshot: (snapshot, source) => {
+        setSurfaceSnapshot(snapshot)
+        setSurfaceLoadFailed(false)
+        if (source === 'event') setCaptureResult(null)
+      },
+      onError: () => {
+        setSurfaceLoadFailed(true)
+      },
     })
-    void window.lumierePlatform
-      .getCaptureSurfaceSnapshot()
-      .then((snapshot) => {
-        if (isCurrent && !receivedLiveSnapshot) {
-          setSurfaceSnapshot(snapshot)
-          setSurfaceLoadFailed(false)
-        }
-      })
-      .catch(() => {
-        if (isCurrent && !receivedLiveSnapshot) {
-          setSurfaceLoadFailed(true)
-        }
-      })
     return () => {
-      isCurrent = false
       stopSettingsListening()
       stopCaptureListening()
       stopCaptureViewListening()
@@ -469,61 +456,46 @@ function SettingsWindow({
     }
   }
 
-  useEffect(() => {
-    let isCurrent = true
-    void window.lumierePlatform
-      .getSettingsSnapshot()
-      .then((nextSnapshot) => {
-        if (isCurrent) {
-          setSnapshot(nextSnapshot)
-        }
-      })
-      .catch(() => {
-        if (isCurrent) {
+  useEffect(
+    () =>
+      observeSnapshot({
+        read: () => window.lumierePlatform.getSettingsSnapshot(),
+        subscribe: (listener) => window.lumierePlatform.onSettingsChanged(listener),
+        onSnapshot: setSnapshot,
+        onError: () => {
           setError('Settings could not be loaded. Restart Lumiere and try again.')
-        }
-      })
-    const stopListening = window.lumierePlatform.onSettingsChanged((nextSnapshot) => {
-      if (isCurrent) {
-        setSnapshot(nextSnapshot)
-      }
-    })
-    return () => {
-      stopListening()
-      isCurrent = false
-    }
-  }, [])
+        },
+      }),
+    [],
+  )
 
-  useEffect(() => {
-    let isCurrent = true
-    void window.lumierePlatform
-      .getUpdateSnapshot()
-      .then((nextSnapshot) => {
-        if (isCurrent) setUpdateState({ status: 'idle', ...nextSnapshot })
-      })
-      .catch(() => {
-        // Keep the update control disabled when local version metadata is unavailable.
-      })
-    const stopUpdates = window.lumierePlatform.onUpdateChanged((nextSnapshot) => {
-      if (isCurrent) setUpdateState({ status: 'idle', ...nextSnapshot })
-    })
-    const stopCapture = window.lumierePlatform.onCaptureActivityChanged((activity) => {
-      if (isCurrent) setCaptureBusy(activity.activeMode !== null)
-    })
-    void window.lumierePlatform
-      .getCaptureActivity()
-      .then((activity) => {
-        if (isCurrent) setCaptureBusy(activity.activeMode !== null)
-      })
-      .catch(() => {
-        if (isCurrent) setCaptureBusy(true)
-      })
-    return () => {
-      stopUpdates()
-      stopCapture()
-      isCurrent = false
-    }
-  }, [])
+  useEffect(
+    () =>
+      observeSnapshot({
+        read: () => window.lumierePlatform.getUpdateSnapshot(),
+        subscribe: (listener) => window.lumierePlatform.onUpdateChanged(listener),
+        onSnapshot: (next) => {
+          setUpdateState({ status: 'idle', ...next })
+        },
+        // Keep the control disabled when local version metadata is unavailable.
+      }),
+    [],
+  )
+
+  useEffect(
+    () =>
+      observeSnapshot({
+        read: () => window.lumierePlatform.getCaptureActivity(),
+        subscribe: (listener) => window.lumierePlatform.onCaptureActivityChanged(listener),
+        onSnapshot: (activity) => {
+          setCaptureBusy(activity.activeMode !== null)
+        },
+        onError: () => {
+          setCaptureBusy(true)
+        },
+      }),
+    [],
+  )
 
   const performWindowsUpdate = async (action: 'download' | 'install'): Promise<void> => {
     try {

@@ -1,3 +1,5 @@
+import type { SnapshotSubscription } from './snapshot-command'
+
 export interface UpdateSnapshot {
   currentVersion: string
   windowsUpdate?: WindowsUpdateState
@@ -22,5 +24,5 @@ export interface LumiereUpdateApi {
   checkForUpdates(): Promise<UpdateCheckResult>
   downloadUpdate(): Promise<UpdateSnapshot>
   installUpdate(): Promise<UpdateSnapshot>
-  onUpdateChanged(listener: (snapshot: UpdateSnapshot) => void): () => void
+  onUpdateChanged(listener: (snapshot: UpdateSnapshot) => void): SnapshotSubscription
 }
