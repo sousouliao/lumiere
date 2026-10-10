@@ -23,7 +23,11 @@ cargo build --locked -p lumiere-windows-host
 node scripts/verify-rust-protocol.mjs
 ```
 
-`pnpm dev` builds the Debug Host, starts Vite and the Tauri shell. Release native
+`pnpm dev` explicitly builds the Debug Host, then starts Vite and the Tauri shell
+with `tauri.dev.conf.json`. That development override disables copying the packaged
+Release Host into `target/debug`, so the shell uses the freshly built Debug Host.
+Restart `pnpm dev` after changing Host/capture code to rebuild and reload that process.
+Release native
 build: `pnpm --filter @lumiere/desktop build:native`. The shell supervises the adjacent
 Host; a missing or disconnected Host is a recoverable product state.
 On a fresh checkout, prepare native Release files before the workspace checks: Tauri's
