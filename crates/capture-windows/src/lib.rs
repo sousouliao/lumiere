@@ -1,5 +1,8 @@
 //! Native engine boundary. This crate never depends on Tauri or JSONL transports.
-use lumiere_capture_contract::{Capabilities, CaptureMode, CaptureOutcome, CaptureParams, Failure};
+use lumiere_capture_contract::{
+    Capabilities, CaptureMode, CaptureOutcome, CaptureParams, Failure, HdrCapture, HostStatus,
+    OutputProfile, Platform,
+};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -11,6 +14,15 @@ mod delivery;
 mod graphics;
 mod interop;
 mod overlay;
+
+fn native_failure(stage: &str, error: windows::core::Error) -> windows::core::Error {
+    eprintln!(
+        "{}",
+        serde_json::json!({"level":"warn", "event":"native-capture-failed", "stage":stage,
+            "hresult":format!("0x{:08X}", error.code().0 as u32), "error":error.to_string()})
+    );
+    error
+}
 
 #[derive(Clone, Default)]
 pub struct Cancellation(Arc<AtomicBool>);
@@ -56,7 +68,8 @@ impl Default for WindowsEngine {
             .spawn(move || {
                 let apartment = interop::Apartment::initialize(
                     windows::Win32::System::WinRT::RO_INIT_MULTITHREADED,
-                );
+                )
+                .map_err(|error| native_failure("worker-initialize", error));
                 let _apartment = match apartment {
                     Ok(guard) => {
                         let _ = ready.send(None);
@@ -116,10 +129,11 @@ impl CaptureEngine for WindowsEngine {
         if let Some(reason) = &self.startup_failure {
             return Capabilities::unavailable(version, reason.clone());
         }
-        let probe = || -> windows::core::Result<&'static str> {
+        let probe = || -> windows::core::Result<HdrCapture> {
             let _apartment = interop::Apartment::initialize(
                 windows::Win32::System::WinRT::RO_INIT_MULTITHREADED,
-            )?;
+            )
+            .map_err(|error| native_failure("capabilities-initialize", error))?;
             if !windows::Graphics::Capture::GraphicsCaptureSession::IsSupported()? {
                 return Err(windows::core::Error::new(
                     windows::Win32::Foundation::E_FAIL,
@@ -127,30 +141,35 @@ impl CaptureEngine for WindowsEngine {
                 ));
             }
             let _device = graphics::Device::create()?;
-            let hdr = interop::cursor_monitor().and_then(|m| graphics::display_color(&m));
+            let hdr = interop::cursor_monitor()
+                .and_then(|m| graphics::display_color(&m))
+                .map_err(|error| native_failure("display-color", error));
             Ok(match hdr {
                 Ok(color) => match color.range {
-                    lumiere_capture_contract::DynamicRange::Hdr => "supported",
-                    lumiere_capture_contract::DynamicRange::Sdr => "unavailable",
+                    lumiere_capture_contract::DynamicRange::Hdr => HdrCapture::Supported,
+                    lumiere_capture_contract::DynamicRange::Sdr => HdrCapture::Unavailable,
                 },
-                Err(_) => "unvalidated",
+                Err(_) => HdrCapture::Unvalidated,
             })
         };
         match probe() {
             Ok(hdr_capture) => Capabilities {
                 contract_version: version,
-                platform: "windows",
-                host_status: "available",
+                platform: Platform::Windows,
+                host_status: HostStatus::Available,
                 capture_modes: vec![CaptureMode::Region, CaptureMode::Display],
                 delivery_targets: vec![
                     lumiere_capture_contract::DeliveryTarget::Clipboard,
                     lumiere_capture_contract::DeliveryTarget::Folder,
                 ],
                 hdr_capture,
-                output_profiles: vec!["srgb-visual-match"],
+                output_profiles: vec![OutputProfile::SrgbVisualMatch],
                 unavailable_reason: None,
             },
-            Err(error) => Capabilities::unavailable(version, Failure::capture(error.to_string())),
+            Err(error) => {
+                let error = native_failure("capabilities", error);
+                Capabilities::unavailable(version, Failure::capture(error.to_string()))
+            }
         }
     }
     fn capture(
@@ -194,11 +213,15 @@ impl WindowsEngine {
         params: CaptureParams,
         cancel: Cancellation,
     ) -> windows::core::Result<CaptureOutcome> {
-        let _dpi = interop::DpiScope::physical_coordinates()?;
+        let _dpi = interop::DpiScope::physical_coordinates()
+            .map_err(|error| native_failure("dpi-scope", error))?;
         let deadline = std::time::Instant::now()
             + std::time::Duration::from_secs(lumiere_capture_contract::REGION_LEASE_SECONDS);
         if cache.is_none() {
-            *cache = Some(graphics::Device::create()?);
+            *cache = Some(
+                graphics::Device::create()
+                    .map_err(|error| native_failure("device-create", error))?,
+            );
         }
         let device = cache.as_ref().expect("device initialized");
         let result = (|| {
@@ -208,14 +231,19 @@ impl WindowsEngine {
                 {
                     return Ok(CaptureOutcome::Cancelled);
                 }
-                let Some(frame) = capture::freeze(device, &cancel)? else {
+                let Some(frame) = capture::freeze(device, &cancel)
+                    .map_err(|error| native_failure("frame-acquire", error))?
+                else {
                     return Ok(CaptureOutcome::Cancelled);
                 };
                 if mode == CaptureMode::Display {
                     break (frame, None);
                 }
                 if shader.is_none() {
-                    *shader = Some(graphics::VisualMatch::new(device)?);
+                    *shader = Some(
+                        graphics::VisualMatch::new(device)
+                            .map_err(|error| native_failure("overlay-shader", error))?,
+                    );
                 }
                 match overlay::select(
                     overlay,
@@ -224,7 +252,9 @@ impl WindowsEngine {
                     &frame,
                     &cancel,
                     deadline,
-                )? {
+                )
+                .map_err(|error| native_failure("region-select", error))?
+                {
                     overlay::Selection::Selected(crop) => break (frame, Some(crop)),
                     overlay::Selection::Cancelled => return Ok(CaptureOutcome::Cancelled),
                     overlay::Selection::SwitchTarget => continue,
@@ -233,7 +263,9 @@ impl WindowsEngine {
             if cancel.is_cancelled() {
                 return Ok(CaptureOutcome::Cancelled);
             }
-            let source = device.readback(&frame.texture, frame.width, frame.height, crop)?;
+            let source = device
+                .readback(&frame.texture, frame.width, frame.height, crop)
+                .map_err(|error| native_failure("frame-readback", error))?;
             let (width, height) = crop
                 .map(|c| (c.width, c.height))
                 .unwrap_or((frame.width, frame.height));
@@ -242,7 +274,10 @@ impl WindowsEngine {
                 return Ok(CaptureOutcome::Cancelled);
             }
             let png = delivery::encode_png(width, height, &pixels).map_err(|e| {
-                windows::core::Error::new(windows::Win32::Foundation::E_FAIL, e.to_string())
+                native_failure(
+                    "png-encode",
+                    windows::core::Error::new(windows::Win32::Foundation::E_FAIL, e.to_string()),
+                )
             })?;
             if cancel.is_cancelled() {
                 return Ok(CaptureOutcome::Cancelled);
@@ -253,7 +288,7 @@ impl WindowsEngine {
             }
             Ok(CaptureOutcome::Completed {
                 source_dynamic_range: frame.color.range,
-                output_profile: "srgb-visual-match",
+                output_profile: OutputProfile::SrgbVisualMatch,
                 deliveries,
             })
         })();

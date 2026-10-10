@@ -1,6 +1,7 @@
 # Current Project State
 
-- Updated: 2026-10-09
+- Updated: 2026-10-10
+- Source frontier: snapshot synchronization, typed Host-result and native diagnostic cleanup under [#34](https://github.com/sousouliao/lumiere/issues/34) is repository-checked as scoped below. The maintainer owns Windows native shell build/tests and real runtime acceptance; this source is not a new published release.
 - Frontier: Windows v0.8.0 is published with current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33); maintainer installation/login/Startup Apps acceptance remains pending by explicit authorization. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
 - Public release: [v0.8.0](https://github.com/sousouliao/lumiere/releases/tag/v0.8.0), stable Windows x64; tag/source commit `6805dd6fb415ef00e1c5523a482b4ea72f1dfd1a`.
@@ -37,6 +38,20 @@ Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
 
+[#34](https://github.com/sousouliao/lumiere/issues/34) source cleanup: one renderer observer owns asynchronous listener readiness,
+initial snapshot/event ordering and cleanup; capture-contract owns decoded result types
+and validation, which remain typed through shell projection. Native failure stages/HRESULT
+and Host request/delivery diagnostics use stderr without changing JSONL output.
+On macOS, `pnpm test:shared` passes 57 tests; desktop TypeScript, renderer build,
+scoped ESLint/Prettier/Rustfmt and `git diff --check` pass. Contract tests pass 8 tests with
+`RUSTUP_TOOLCHAIN=stable cargo test --locked --offline -p lumiere-capture-contract -- --skip current_windows_requests_conform`;
+the skipped existing test hardcodes Windows paths and remains for Windows. Windows-target
+`cargo check` and Clippy for capture-windows/Host (including tests) pass without executing
+Windows code. A temporary source-based shell transport/projection fixture passes 5 tests;
+one real-child test remains ignored. Independent read-only review found no blocking
+regression; its missing busy-capture diagnostic was fixed. Full Tauri native build/tests
+and GUI/capture observations remain unverified by the agent and assigned to the maintainer.
+
 #33: five scoped Rust tests, 16 SettingsView tests, desktop TypeScript,
 scoped ESLint/Clippy, formatting, renderer/native Release builds, and the explicit
 Release autostart WebView fixture pass locally. Actual IPC toggles, synthetic Windows
@@ -71,6 +86,10 @@ hardware scope, not universal performance or public-binary peak memory. The user
 backups are restored and no isolated installer/legacy-download processes remain.
 
 ## Next action
+
+Under [#34](https://github.com/sousouliao/lumiere/issues/34), build the current source on Windows, run the native checks in the Windows runbook,
+and verify settings/update state while opening/closing the WebView, Display/Region
+capture and cancellation, partial delivery, and structured failure diagnostics.
 
 Install published v0.8.0 and complete maintainer sign-out/sign-in and Windows Startup
 Apps disable/restore acceptance under #33. Future versions follow

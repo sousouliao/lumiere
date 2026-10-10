@@ -2,7 +2,10 @@ use crate::{
     host::Host,
     settings::{AfterCapture, Settings, Shortcuts, normalize_shortcut},
 };
-use lumiere_capture_contract::{CaptureMode, Delivery};
+use lumiere_capture_contract::{
+    CaptureMode, CaptureOutcome, Delivery, DeliveryOutcome, DeliveryTarget, FailureCode,
+    HdrCapture, HostResult, HostStatus,
+};
 use serde_json::{Value, json};
 use std::{
     path::PathBuf,
@@ -112,7 +115,12 @@ impl Controller {
     pub async fn host_process_id(&self) -> Option<u32> {
         self.host().await.ok()?.process_id().await
     }
-    async fn request(&self, version: u8, method: &str, params: Value) -> Result<Value, String> {
+    async fn request(
+        &self,
+        version: u8,
+        method: &str,
+        params: Value,
+    ) -> Result<HostResult, String> {
         let host = self.host().await?;
         let result = host
             .request(host.request_id(), version, method, params)
@@ -285,13 +293,13 @@ impl Controller {
             .settings
             .clone();
         let (available, modes, hdr) = match capabilities {
-            Ok(value) if value["platform"] == "windows" && value["contractVersion"] == 5 => (
-                value["hostStatus"] == "available",
-                value["captureModes"].clone(),
-                match value["hdrCapture"].as_str() {
-                    Some("supported") => "ready",
-                    Some("unvalidated") => "unvalidated",
-                    _ => "unavailable",
+            Ok(HostResult::Capabilities(caps)) => (
+                caps.host_status == HostStatus::Available,
+                json!(caps.capture_modes),
+                match caps.hdr_capture {
+                    HdrCapture::Supported => "ready",
+                    HdrCapture::Unvalidated => "unvalidated",
+                    HdrCapture::Unavailable => "unavailable",
                 },
             ),
             _ => (false, json!([]), "unavailable"),
@@ -382,7 +390,7 @@ impl Controller {
         let response = match self.host().await {
             Ok(host) => {
                 host.request(
-                    id,
+                    id.clone(),
                     if mode == CaptureMode::Region { 6 } else { 5 },
                     if mode == CaptureMode::Region {
                         "captureRegion"
@@ -396,13 +404,23 @@ impl Controller {
             Err(error) => Err(error),
         };
         let result = match response {
-            Ok(value) => project_result(value),
-            Err(_) => failed(notice(
-                "critical",
-                "Capture failed",
-                "Try again. Restart Lumiere if the issue continues.",
-                None,
-            )),
+            Ok(HostResult::Capture(outcome)) => project_result(outcome),
+            other => {
+                let error = match other {
+                    Err(error) => error,
+                    Ok(_) => "Unexpected Host result for capture".into(),
+                };
+                eprintln!(
+                    "{}",
+                    json!({"level":"warn", "event":"capture-request-failed", "requestId":id, "mode":mode, "error":error})
+                );
+                failed(notice(
+                    "critical",
+                    "Capture failed",
+                    "Try again. Restart Lumiere if the issue continues.",
+                    None,
+                ))
+            }
         };
         {
             let mut data = self.data.lock().expect("Controller state poisoned");
@@ -506,57 +524,51 @@ fn notice(tone: &str, title: &str, detail: &str, recovery: Option<&str>) -> Valu
 fn failed(notice: Value) -> Value {
     json!({"status":"failed","feedback":notice["title"],"notice":notice})
 }
-fn project_result(value: Value) -> Value {
-    match value["status"].as_str() {
-        Some("cancelled") => json!({"status":"cancelled","feedback":"Capture cancelled"}),
-        Some("failed") => {
-            let failure = &value["failure"]["code"];
-            failed(match failure.as_str() {
-                Some("capture-unavailable") => notice(
-                    "caution",
-                    "Capture failed",
-                    "Display configuration changed. Try capturing again.",
-                    None,
-                ),
-                Some("host-unavailable") => notice(
-                    "critical",
-                    "Capture service is unavailable",
-                    "Try again, or restart Lumiere if the issue persists.",
-                    None,
-                ),
-                Some("delivery-unavailable" | "delivery-failed") => notice(
-                    "caution",
-                    "Unable to output screenshot",
-                    "Check destination settings, then try again.",
-                    Some("output"),
-                ),
-                _ => notice(
-                    "critical",
-                    "Capture failed",
-                    "Try again. Restart Lumiere if the issue persists.",
-                    None,
-                ),
-            })
-        }
-        Some("completed") => {
-            let Some(deliveries) = value["deliveries"].as_array() else {
-                return failed(notice(
-                    "critical",
-                    "Capture failed",
-                    "Try again. Restart Lumiere if the issue persists.",
-                    None,
-                ));
-            };
-            let clipboard = deliveries
-                .iter()
-                .any(|item| item["target"] == "clipboard" && item["status"] == "success");
-            let path = deliveries
-                .iter()
-                .find(|item| item["target"] == "folder" && item["status"] == "success")
-                .and_then(|item| item["filePath"].as_str());
+fn project_result(outcome: CaptureOutcome) -> Value {
+    match outcome {
+        CaptureOutcome::Cancelled => json!({"status":"cancelled","feedback":"Capture cancelled"}),
+        CaptureOutcome::Failed { failure } => failed(match failure.code {
+            FailureCode::CaptureUnavailable => notice(
+                "caution",
+                "Capture failed",
+                "Display configuration changed. Try capturing again.",
+                None,
+            ),
+            FailureCode::HostUnavailable => notice(
+                "critical",
+                "Capture service is unavailable",
+                "Try again, or restart Lumiere if the issue persists.",
+                None,
+            ),
+            FailureCode::DeliveryUnavailable | FailureCode::DeliveryFailed => notice(
+                "caution",
+                "Unable to output screenshot",
+                "Check destination settings, then try again.",
+                Some("output"),
+            ),
+            _ => notice(
+                "critical",
+                "Capture failed",
+                "Try again. Restart Lumiere if the issue persists.",
+                None,
+            ),
+        }),
+        CaptureOutcome::Completed { deliveries, .. } => {
+            let clipboard = deliveries.iter().any(|item| {
+                item.target == DeliveryTarget::Clipboard
+                    && matches!(item.outcome, DeliveryOutcome::Success { .. })
+            });
+            let path = deliveries.iter().find_map(|item| match &item.outcome {
+                DeliveryOutcome::Success { file_path } if item.target == DeliveryTarget::Folder => {
+                    file_path.as_deref()
+                }
+                _ => None,
+            });
             let folder = path.is_some();
             let mut result = if !deliveries.is_empty()
-                && deliveries.iter().all(|item| item["status"] == "success")
+                && deliveries
+                    .iter()
+                    .all(|item| matches!(item.outcome, DeliveryOutcome::Success { .. }))
             {
                 let name = path
                     .and_then(|path| {
@@ -587,11 +599,98 @@ fn project_result(value: Value) -> Value {
             }
             result
         }
-        _ => failed(notice(
-            "critical",
-            "Capture failed",
-            "Try again. Restart Lumiere if the issue persists.",
-            None,
-        )),
+    }
+}
+
+#[cfg(test)]
+mod result_tests {
+    use super::*;
+    use lumiere_capture_contract::{DeliveryResult, DynamicRange, Failure, OutputProfile};
+
+    fn completed(deliveries: Vec<DeliveryResult>) -> CaptureOutcome {
+        CaptureOutcome::Completed {
+            source_dynamic_range: DynamicRange::Hdr,
+            output_profile: OutputProfile::SrgbVisualMatch,
+            deliveries,
+        }
+    }
+
+    #[test]
+    fn projects_successful_clipboard_without_claiming_hdr_preservation() {
+        let result = project_result(completed(vec![DeliveryResult {
+            target: DeliveryTarget::Clipboard,
+            outcome: DeliveryOutcome::Success { file_path: None },
+        }]));
+        assert_eq!(
+            result,
+            json!({"status":"success","feedback":"Copied to clipboard"})
+        );
+    }
+
+    #[test]
+    fn projects_partial_delivery_with_folder_recovery() {
+        let result = project_result(completed(vec![
+            DeliveryResult {
+                target: DeliveryTarget::Clipboard,
+                outcome: DeliveryOutcome::Success { file_path: None },
+            },
+            DeliveryResult {
+                target: DeliveryTarget::Folder,
+                outcome: DeliveryOutcome::Failed {
+                    failure: Failure {
+                        code: FailureCode::DeliveryFailed,
+                        message: "raw native error".into(),
+                        retryable: true,
+                    },
+                },
+            },
+        ]));
+        assert_eq!(result["status"], "partial");
+        assert_eq!(result["notice"]["recovery"], "folder");
+        assert!(result.get("filePath").is_none());
+    }
+
+    #[test]
+    fn projects_partial_clipboard_failure_with_the_saved_path() {
+        let path = r"C:\Pictures\Lumiere\capture.png";
+        let result = project_result(completed(vec![
+            DeliveryResult {
+                target: DeliveryTarget::Clipboard,
+                outcome: DeliveryOutcome::Failed {
+                    failure: Failure {
+                        code: FailureCode::DeliveryFailed,
+                        message: "raw clipboard error".into(),
+                        retryable: true,
+                    },
+                },
+            },
+            DeliveryResult {
+                target: DeliveryTarget::Folder,
+                outcome: DeliveryOutcome::Success {
+                    file_path: Some(path.into()),
+                },
+            },
+        ]));
+        assert_eq!(result["status"], "partial");
+        assert_eq!(result["filePath"], path);
+        assert!(result["notice"].get("recovery").is_none());
+    }
+
+    #[test]
+    fn projects_failure_and_cancellation_without_exposing_diagnostics() {
+        let result = project_result(CaptureOutcome::Failed {
+            failure: Failure {
+                code: FailureCode::HostUnavailable,
+                message: "raw native error".into(),
+                retryable: true,
+            },
+        });
+        assert_eq!(result["status"], "failed");
+        assert_eq!(result["notice"]["tone"], "critical");
+        assert!(!result.to_string().contains("raw native error"));
+        assert_eq!(
+            project_result(CaptureOutcome::Cancelled)["status"],
+            "cancelled"
+        );
     }
 }

@@ -1,6 +1,7 @@
 //! Thin cancellable JSON Lines adapter. Platform resources remain in the engine.
 use lumiere_capture_contract::{
-    CaptureMode, CaptureOutcome, Failure, Operation, Request, Response,
+    CaptureMode, CaptureOutcome, DeliveryOutcome, Failure, Operation, Request, Response,
+    ResponsePayload,
 };
 use lumiere_capture_windows::{Cancellation, CaptureEngine};
 use std::{io, sync::Arc};
@@ -14,6 +15,20 @@ struct Active {
     mode: CaptureMode,
     cancel: Cancellation,
     done: watch::Receiver<bool>,
+}
+
+fn failure_diagnostic(
+    id: &str,
+    version: u8,
+    mode: Option<CaptureMode>,
+    stage: &str,
+    failure: &Failure,
+) {
+    eprintln!(
+        "{}",
+        serde_json::json!({"level":"warn", "event":"host-operation-failed",
+        "requestId":id, "version":version, "mode":mode, "stage":stage, "failure":failure})
+    );
 }
 
 pub async fn serve<R, W, E>(input: R, mut output: W, engine: Arc<E>) -> io::Result<()>
@@ -50,6 +65,15 @@ where
             let request = match Request::parse(&line) {
                 Ok(request) => request,
                 Err(response) => {
+                    if let ResponsePayload::Error(failure) = &response.payload {
+                        failure_diagnostic(
+                            &response.id,
+                            response.version,
+                            None,
+                            "request-parse",
+                            failure,
+                        );
+                    }
                     if send.send(response).await.is_err() {
                         break Ok(());
                     }
@@ -63,8 +87,12 @@ where
             } = request;
             match operation {
                 Operation::Capabilities => {
+                    let capabilities = engine.capabilities(version);
+                    if let Some(reason) = &capabilities.unavailable_reason {
+                        failure_diagnostic(&id, version, None, "capabilities", reason);
+                    }
                     if send
-                        .send(Response::result(version, id, engine.capabilities(version)))
+                        .send(Response::result(version, id, capabilities))
                         .await
                         .is_err()
                     {
@@ -99,9 +127,15 @@ where
                         let mut guard = active.lock().await;
                         if guard.is_some() {
                             drop(guard);
-                            let result = CaptureOutcome::Failed {
-                                failure: Failure::capture("A capture is already in progress."),
-                            };
+                            let failure = Failure::capture("A capture is already in progress.");
+                            failure_diagnostic(
+                                &id,
+                                version,
+                                Some(mode),
+                                "capture-reserve",
+                                &failure,
+                            );
+                            let result = CaptureOutcome::Failed { failure };
                             if send
                                 .send(Response::result(version, id, result))
                                 .await
@@ -135,7 +169,23 @@ where
                                 }
                             }
                         } else { capture.await };
-                        let result = result.unwrap_or_else(|_| CaptureOutcome::Failed {failure: Failure::unexpected("Native capture task failed.")});
+                        let result = result.unwrap_or_else(|error| {
+                            eprintln!("{}", serde_json::json!({"level":"error", "event":"host-capture-task-failed", "requestId":id, "version":version, "mode":mode, "stage":"dispatch", "error":error.to_string()}));
+                            CaptureOutcome::Failed {failure: Failure::unexpected("Native capture task failed.")}
+                        });
+                        match &result {
+                            CaptureOutcome::Failed { failure } => {
+                                failure_diagnostic(&id, version, Some(mode), "capture", failure);
+                            }
+                            CaptureOutcome::Completed { deliveries, .. } => {
+                                for delivery in deliveries {
+                                    if let DeliveryOutcome::Failed { failure } = &delivery.outcome {
+                                        eprintln!("{}", serde_json::json!({"level":"warn", "event":"host-delivery-failed", "requestId":id, "version":version, "mode":mode, "stage":"delivery", "target":delivery.target, "failure":failure}));
+                                    }
+                                }
+                            }
+                            CaptureOutcome::Cancelled => {}
+                        }
                         *active.lock().await = None;
                         let _ = finished.send(true);
                         let _ = send.send(Response::result(version, id, result)).await;
@@ -155,6 +205,17 @@ where
     };
     // A broken output pipe must not drop the reader's native cleanup path.
     let (read_result, write_result) = tokio::join!(reader, writer);
+    for (stage, result) in [
+        ("transport-read", &read_result),
+        ("transport-write", &write_result),
+    ] {
+        if let Err(error) = result {
+            eprintln!(
+                "{}",
+                serde_json::json!({"level":"error", "event":"host-transport-failed", "stage":stage, "error":error.to_string()})
+            );
+        }
+    }
     read_result?;
     write_result?;
     Ok(())

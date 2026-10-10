@@ -1,4 +1,5 @@
 //! The shell supervises a separate native process; it never owns capture resources.
+use lumiere_capture_contract::HostResult;
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
@@ -84,7 +85,13 @@ impl Host {
         self.child.lock().await.as_ref().and_then(Child::id)
     }
 
-    pub async fn request(&self, id: String, version: u8, method: &str, params: Value) -> Reply {
+    pub async fn request(
+        &self,
+        id: String,
+        version: u8,
+        method: &str,
+        params: Value,
+    ) -> Result<HostResult, String> {
         if !self.is_alive() {
             return Err("Native capture host is stopped".into());
         }
@@ -120,11 +127,11 @@ impl Host {
         let limit = if method == "captureRegion" { 70 } else { 15 };
         match tokio::time::timeout(Duration::from_secs(limit), receiver).await {
             Ok(Ok(reply)) => match reply {
-                Ok(value) => match crate::host_result::validate(method, version, &params, &value) {
-                    Ok(()) => Ok(value),
+                Ok(value) => match HostResult::decode(method, version, &params, value) {
+                    Ok(result) => Ok(result),
                     Err(error) => {
                         self.shutdown().await;
-                        Err(error)
+                        Err(error.into())
                     }
                 },
                 Err(error) => Err(error),
@@ -230,12 +237,12 @@ mod tests {
         let executable = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../../target/debug/lumiere-windows-host.exe");
         let host = Host::launch(&executable).unwrap();
-        assert_eq!(
+        assert!(matches!(
             host.request(host.request_id(), 5, "getCapabilities", json!({}))
                 .await
-                .unwrap()["platform"],
-            "windows"
-        );
+                .unwrap(),
+            HostResult::Capabilities(_)
+        ));
         host.child
             .lock()
             .await
@@ -254,13 +261,13 @@ mod tests {
         host.shutdown().await;
         assert!(host.process_id().await.is_none());
         let replacement = Host::launch(&executable).unwrap();
-        assert_eq!(
+        assert!(matches!(
             replacement
                 .request(replacement.request_id(), 5, "getCapabilities", json!({}))
                 .await
-                .unwrap()["platform"],
-            "windows"
-        );
+                .unwrap(),
+            HostResult::Capabilities(_)
+        ));
         replacement.shutdown().await;
         assert!(replacement.process_id().await.is_none());
     }

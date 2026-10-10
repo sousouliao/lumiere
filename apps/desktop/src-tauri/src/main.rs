@@ -3,7 +3,6 @@
 mod autostart;
 mod controller;
 mod host;
-mod host_result;
 mod notification;
 mod settings;
 #[cfg(test)]

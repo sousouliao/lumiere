@@ -90,7 +90,7 @@ fn unsupported_platform_and_legacy_methods_are_rejected() {
 fn partial_delivery_preserves_the_successful_target() {
     let result = CaptureOutcome::Completed {
         source_dynamic_range: DynamicRange::Hdr,
-        output_profile: "srgb-visual-match",
+        output_profile: OutputProfile::SrgbVisualMatch,
         deliveries: vec![
             DeliveryResult {
                 target: DeliveryTarget::Clipboard,

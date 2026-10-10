@@ -4,6 +4,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod results;
+pub use results::{
+    Capabilities, CaptureOutcome, DeliveryOutcome, DeliveryResult, DynamicRange, HdrCapture,
+    HostResult, HostStatus, OutputProfile, Platform,
+};
+
 pub const DISPLAY_VERSION: u8 = 5;
 pub const REGION_VERSION: u8 = 6;
 pub const REGION_LEASE_SECONDS: u64 = 60;
@@ -219,77 +225,6 @@ impl Failure {
             retryable: true,
         }
     }
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Capabilities {
-    pub contract_version: u8,
-    pub platform: &'static str,
-    pub host_status: &'static str,
-    pub capture_modes: Vec<CaptureMode>,
-    pub delivery_targets: Vec<DeliveryTarget>,
-    pub hdr_capture: &'static str,
-    pub output_profiles: Vec<&'static str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unavailable_reason: Option<Failure>,
-}
-
-impl Capabilities {
-    pub fn unavailable(version: u8, reason: Failure) -> Self {
-        Self {
-            contract_version: version,
-            platform: "windows",
-            host_status: "unavailable",
-            capture_modes: vec![],
-            delivery_targets: vec![],
-            hdr_capture: "unavailable",
-            output_profiles: vec!["srgb-visual-match"],
-            unavailable_reason: Some(reason),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum DynamicRange {
-    Sdr,
-    Hdr,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "status", rename_all = "lowercase")]
-pub enum CaptureOutcome {
-    #[serde(rename_all = "camelCase")]
-    Completed {
-        source_dynamic_range: DynamicRange,
-        output_profile: &'static str,
-        deliveries: Vec<DeliveryResult>,
-    },
-    Cancelled,
-    Failed {
-        failure: Failure,
-    },
-}
-
-#[derive(Debug, Serialize)]
-pub struct DeliveryResult {
-    pub target: DeliveryTarget,
-    #[serde(flatten)]
-    pub outcome: DeliveryOutcome,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "status", rename_all = "lowercase")]
-pub enum DeliveryOutcome {
-    #[serde(rename_all = "camelCase")]
-    Success {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        file_path: Option<String>,
-    },
-    Failed {
-        failure: Failure,
-    },
 }
 
 #[derive(Debug, Serialize)]
