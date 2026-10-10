@@ -95,7 +95,7 @@ impl FailureNotification {
         detail: &str,
     ) -> windows::core::Result<Self> {
         let xml = XmlDocument::new()?;
-        xml.LoadXml(&HSTRING::from(format!("<toast><visual><binding template=\"ToastGeneric\"><text>{}</text><text>{} Click to open Lumiere.</text></binding></visual><audio silent=\"true\"/></toast>",escape(title),escape(detail))))?;
+        xml.LoadXml(&HSTRING::from(format!("<toast><visual><binding template=\"ToastGeneric\"><text>{}</text><text>{} Select to view details in Lumiere.</text></binding></visual><audio silent=\"true\"/></toast>",escape(title),escape(detail))))?;
         let toast = ToastNotification::CreateToastNotification(&xml)?;
         let handle = app.clone();
         let activated = toast.Activated(

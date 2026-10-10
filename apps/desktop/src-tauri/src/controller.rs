@@ -314,8 +314,8 @@ impl Controller {
         if !available {
             result["blockingNotice"] = notice(
                 "critical",
-                "Native capture host is unavailable",
-                "Retry, or restart Lumiere if it does not come back.",
+                "Capture service is unavailable",
+                "Try again, or restart Lumiere if the issue persists.",
                 None,
             );
         } else if settings.hdr_status_reminders && hdr != "ready" {
@@ -515,25 +515,25 @@ fn project_result(value: Value) -> Value {
                 Some("capture-unavailable") => notice(
                     "caution",
                     "Capture failed",
-                    "The display may have changed. Try again.",
+                    "Display configuration changed. Try capturing again.",
                     None,
                 ),
                 Some("host-unavailable") => notice(
                     "critical",
-                    "Native capture host is unavailable",
-                    "Retry, or restart Lumiere if it does not come back.",
+                    "Capture service is unavailable",
+                    "Try again, or restart Lumiere if the issue persists.",
                     None,
                 ),
                 Some("delivery-unavailable" | "delivery-failed") => notice(
                     "caution",
-                    "Couldn’t deliver capture",
-                    "Check the output destination, then try again.",
+                    "Unable to output screenshot",
+                    "Check destination settings, then try again.",
                     Some("output"),
                 ),
                 _ => notice(
                     "critical",
                     "Capture failed",
-                    "Try again. Restart Lumiere if the issue continues.",
+                    "Try again. Restart Lumiere if the issue persists.",
                     None,
                 ),
             })
@@ -543,7 +543,7 @@ fn project_result(value: Value) -> Value {
                 return failed(notice(
                     "critical",
                     "Capture failed",
-                    "Try again. Restart Lumiere if the issue continues.",
+                    "Try again. Restart Lumiere if the issue persists.",
                     None,
                 ));
             };
@@ -569,16 +569,16 @@ fn project_result(value: Value) -> Value {
                 json!({"status":"success","feedback":if clipboard&&folder {format!("Copied and saved to “{name}”")}else if clipboard {"Copied to clipboard".into()}else{format!("Saved to “{name}”")}})
             } else if clipboard || folder {
                 let feedback = if clipboard {
-                    "Copied to clipboard, but couldn’t save the file"
+                    "Copied to clipboard, but unable to save file"
                 } else {
-                    "Saved the file, but couldn’t copy it"
+                    "Saved to file, but unable to copy to clipboard"
                 };
-                json!({"status":"partial","feedback":feedback,"notice":notice("caution",feedback,if clipboard {"Choose a writable folder, then take a new capture."}else{"Take a new capture to try copying again. Your saved file is unchanged."},if clipboard {Some("folder")}else{None})})
+                json!({"status":"partial","feedback":feedback,"notice":notice("caution",feedback,if clipboard {"Choose a writable folder to save captures."}else{"Your saved file is safe. Capture again to copy."},if clipboard {Some("folder")}else{None})})
             } else {
                 failed(notice(
                     "caution",
-                    "Couldn’t deliver capture",
-                    "Check the output destination, then try again.",
+                    "Unable to output screenshot",
+                    "Check destination settings, then try again.",
                     Some("output"),
                 ))
             };
@@ -590,7 +590,7 @@ fn project_result(value: Value) -> Value {
         _ => failed(notice(
             "critical",
             "Capture failed",
-            "Try again. Restart Lumiere if the issue continues.",
+            "Try again. Restart Lumiere if the issue persists.",
             None,
         )),
     }

@@ -32,12 +32,12 @@ export function captureRecoveryActions(
   switch (result.notice.recovery) {
     case 'folder':
       return [
-        { action: 'choose-folder', label: 'Choose save folder' },
+        { action: 'choose-folder', label: 'Choose save folder…' },
         { action: 'capture-again', label: 'Capture again' },
       ]
     case 'output':
       return [
-        { action: 'open-settings', label: 'Output settings' },
+        { action: 'open-settings', label: 'Output settings…' },
         { action: 'capture-again', label: 'Capture again' },
       ]
     default:

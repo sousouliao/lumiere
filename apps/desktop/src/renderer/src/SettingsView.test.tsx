@@ -177,12 +177,12 @@ describe('SettingsView', () => {
     [{ status: 'idle' }, 'Check for updates'],
     [{ status: 'checking' }, 'Checking…'],
     [{ status: 'up-to-date' }, 'Check again'],
-    [{ status: 'failed', retry: 'check', message: 'Couldn’t check for updates' }, 'Try again'],
+    [{ status: 'failed', retry: 'check', message: 'Unable to check for updates' }, 'Try again'],
     [{ status: 'available', availableVersion: '0.6.1' }, 'Download update'],
     [{ status: 'downloading', availableVersion: '0.6.1', percent: 42 }, 'Downloading 42%'],
     [{ status: 'ready', availableVersion: '0.6.1' }, 'Restart to update'],
     [
-      { status: 'failed', retry: 'download', message: 'Couldn’t download the update. Try again.' },
+      { status: 'failed', retry: 'download', message: 'Unable to download or verify the update' },
       'Try again',
     ],
   ] as const)(

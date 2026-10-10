@@ -16,8 +16,8 @@ interface Snapshot {
 }
 const initial: Snapshot = {
   revision: 0,
-  region: { label: 'Capture region', shortcut: '', enabled: false },
-  display: { label: 'Capture display', shortcut: '', enabled: false },
+  region: { label: 'Capture Region', shortcut: '', enabled: false },
+  display: { label: 'Capture Display', shortcut: '', enabled: false },
 }
 
 export function TrayMenu(): React.JSX.Element {
@@ -121,9 +121,9 @@ export function TrayMenu(): React.JSX.Element {
   const items = [
     { action: 'region', ...snapshot.region },
     { action: 'display', ...snapshot.display },
-    { action: 'open', label: 'Open', shortcut: '', enabled: true },
-    { action: 'settings', label: 'Settings', shortcut: '', enabled: true },
-    { action: 'quit', label: 'Exit', shortcut: '', enabled: true },
+    { action: 'open', label: 'Open Lumiere', shortcut: '', enabled: true },
+    { action: 'settings', label: 'Settings…', shortcut: '', enabled: true },
+    { action: 'quit', label: 'Quit Lumiere', shortcut: '', enabled: true },
   ]
   return (
     <div

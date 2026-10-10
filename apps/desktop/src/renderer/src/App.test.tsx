@@ -38,8 +38,8 @@ describe('capture notice placement', () => {
   it('replaces capture actions for a blocking surface failure', () => {
     const blockingNotice = {
       tone: 'critical' as const,
-      title: 'Native capture host is unavailable',
-      detail: 'Retry, or restart Lumiere if it does not come back.',
+      title: 'Capture service is unavailable',
+      detail: 'Try again, or restart Lumiere if the issue persists.',
     }
 
     expect(

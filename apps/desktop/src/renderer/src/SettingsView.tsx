@@ -370,13 +370,13 @@ function CaptureSettings({
       </div>
       <div className="settings-row">
         <span className="settings-row-copy">
-          <span className="settings-row-label">HDR status reminders</span>
-          <span className="settings-row-hint">Non-blocking display status alerts</span>
+          <span className="settings-row-label">HDR display alerts</span>
+          <span className="settings-row-hint">Notify when a display does not support HDR</span>
         </span>
         <Switch
           checked={hdrStatusReminders}
           disabled={isSaving}
-          ariaLabel="HDR status reminders"
+          ariaLabel="HDR display alerts"
           className="settings-switch"
           onCheckedChange={onHdrStatusRemindersChange}
         />
@@ -411,7 +411,7 @@ function ShortcutRecorder({
     if (!recording) return
     setRecording(false)
     void onRecordingChange(false).catch(() => {
-      setInputError('Global shortcuts could not be resumed. Restart Lumiere.')
+      setInputError('Unable to resume global shortcuts. Restart Lumiere.')
     })
   }
 
@@ -421,7 +421,7 @@ function ShortcutRecorder({
       await onRecordingChange(false)
       await onChange(update)
     } catch {
-      setInputError('The shortcut could not be saved. Try again.')
+      setInputError('Unable to save shortcut. Please try again.')
     }
   }
 
@@ -432,7 +432,7 @@ function ShortcutRecorder({
       await onRecordingChange(true)
       setRecording(true)
     } catch {
-      setInputError('Shortcut recording could not start. Try again.')
+      setInputError('Unable to record shortcut. Please try again.')
     }
   }
 
@@ -442,9 +442,9 @@ function ShortcutRecorder({
         <span className="settings-row-copy">
           <span className="settings-row-label">{label}</span>
           {recording ? (
-            <span className="settings-row-hint">Press a shortcut · Backspace to clear</span>
+            <span className="settings-row-hint">Type shortcut · Delete to clear</span>
           ) : shortcut.status === 'unavailable' ? (
-            <span className="settings-row-hint">Could not register this shortcut</span>
+            <span className="settings-row-hint">Shortcut already in use</span>
           ) : null}
         </span>
         <Button
@@ -478,14 +478,16 @@ function ShortcutRecorder({
               setInputError(null)
               void commitShortcut({ mode, accelerator })
             } catch (error) {
-              setInputError(error instanceof Error ? error.message : 'Use another shortcut.')
+              setInputError(
+                error instanceof Error ? error.message : 'Try another shortcut combination.',
+              )
             }
           }}
         >
           {saving
             ? 'Saving…'
             : recording
-              ? 'Press keys'
+              ? 'Record shortcut'
               : formatShortcutAccelerator(shortcut.accelerator)}
         </Button>
       </div>
@@ -568,7 +570,7 @@ function SystemSettings({
               disabled={autostartSaving}
               onClick={autostart.status === 'blocked' ? onOpenStartupSettings : onAutostartRefresh}
             >
-              {autostart.status === 'blocked' ? 'Windows settings' : 'Try again'}
+              {autostart.status === 'blocked' ? 'Windows settings…' : 'Try again'}
             </Button>
           ) : null}
           <Switch
@@ -596,7 +598,7 @@ function SystemSettings({
         tone={displayAvailable ? 'ready' : 'muted'}
       />
       <SettingsRow
-        label="Native capture host"
+        label="Capture engine"
         value={!snapshot ? 'Checking…' : hostAvailable ? 'Connected' : 'Unavailable'}
         tone={hostAvailable ? 'ready' : 'muted'}
       />
@@ -656,7 +658,9 @@ function WindowsUpdateRow({
       disabled = true
       break
     case 'ready':
-      hint += captureBusy ? ' · Finish capture to restart' : ` · ${state.availableVersion} ready`
+      hint += captureBusy
+        ? ' · Complete ongoing capture to restart'
+        : ` · ${state.availableVersion} ready`
       label = 'Restart to update'
       action = onInstall ?? onCheck
       disabled = captureBusy

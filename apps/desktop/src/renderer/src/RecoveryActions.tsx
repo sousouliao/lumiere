@@ -25,8 +25,8 @@ export function RecoveryActions({
     } catch {
       setError(
         action === 'refresh'
-          ? 'Could not check capture availability. Try again.'
-          : 'Could not open the recovery action. Try again.',
+          ? 'Unable to check capture availability. Please try again.'
+          : 'Unable to open the recovery action. Please try again.',
       )
     } finally {
       setPending(false)

@@ -15,8 +15,13 @@ pub struct PopupState {
 fn snapshot(surface: &Value, settings: &Value, busy: bool) -> Value {
     let item = |mode: &str| {
         let shortcut = &settings["captureShortcuts"][mode];
+        let label = match mode {
+            "region" => "Capture Region",
+            "display" => "Capture Display",
+            _ => "Capture",
+        };
         json!({
-            "label":format!("Capture {mode}"),
+            "label": label,
             "shortcut":if shortcut["status"] == "registered" {
                 shortcut["accelerator"].as_str().unwrap_or_default()
                     .replace("Control", "Ctrl").replace("Command", "Super")
@@ -212,8 +217,8 @@ pub fn get_tray_menu_snapshot(app: AppHandle) -> Result<Value, String> {
     Ok(if snapshot.is_null() {
         json!({
             "revision":0,
-            "region":{"label":"Capture region", "shortcut":"", "enabled":false},
-            "display":{"label":"Capture display", "shortcut":"", "enabled":false}
+            "region":{"label":"Capture Region", "shortcut":"", "enabled":false},
+            "display":{"label":"Capture Display", "shortcut":"", "enabled":false}
         })
     } else {
         snapshot

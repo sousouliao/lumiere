@@ -6,8 +6,8 @@ import type {
 
 export const CAPTURE_LOAD_FAILURE: CaptureNotice = {
   tone: 'critical',
-  title: 'Capture controls are unavailable',
-  detail: 'Check again. Restart Lumiere if the issue continues.',
+  title: 'Capture is unavailable',
+  detail: 'Try again, or restart Lumiere if the issue persists.',
 }
 
 interface ResolveCaptureNoticesInput {

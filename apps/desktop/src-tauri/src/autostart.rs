@@ -95,7 +95,7 @@ fn approval(bytes: &[u8]) -> Result<bool, String> {
             _ => {}
         }
     }
-    Err("Windows startup status could not be read. Check Startup Apps in Windows Settings.".into())
+    Err("Unable to read Windows startup status. Check Startup Apps in Windows Settings.".into())
 }
 
 fn registered_snapshot(name: PCWSTR, expected: &[u16]) -> Result<Snapshot, String> {
@@ -169,7 +169,7 @@ fn unavailable(error: String) -> Snapshot {
         serde_json::json!({"event":"autostart-read-error", "error":error})
     );
     Snapshot::Unavailable {
-        message: "Launch at login could not be read. Try again or check Windows Startup Apps."
+        message: "Unable to read launch at login. Try again or check Windows Startup Apps."
             .into(),
     }
 }
@@ -204,7 +204,7 @@ pub fn set_autostart_enabled(enabled: bool) -> Result<Snapshot, String> {
             "{}",
             serde_json::json!({"event":"autostart-write-error", "enabled":enabled, "error":error})
         );
-        "Launch at login could not be changed. Try again or check Windows Startup Apps.".into()
+        "Unable to change launch at login. Try again or check Windows Startup Apps.".into()
     })
 }
 

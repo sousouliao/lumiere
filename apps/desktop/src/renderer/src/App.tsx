@@ -263,7 +263,7 @@ function MainWindow({
                   }}
                 >
                   <RegionIcon />
-                  <span>{capturingMode === 'region' ? 'Capturing region' : 'Capture region'}</span>
+                  <span>{capturingMode === 'region' ? 'Capturing region…' : 'Capture region'}</span>
                   {capturingMode === 'region' ? (
                     <span className="capture-pulse" aria-hidden="true" />
                   ) : null}
@@ -278,13 +278,13 @@ function MainWindow({
                   disabled={captureBlocked || !supportsDisplayCapture || capturingMode !== null}
                   onClick={() => void captureDisplay()}
                   onFocus={() => {
-                    setInteractionHint('Capture the display under the pointer')
+                    setInteractionHint('Capture the active display')
                   }}
                   onBlur={() => {
                     setInteractionHint(null)
                   }}
                   onPointerEnter={() => {
-                    setInteractionHint('Capture the display under the pointer')
+                    setInteractionHint('Capture the active display')
                   }}
                   onPointerLeave={() => {
                     setInteractionHint(null)
@@ -292,7 +292,7 @@ function MainWindow({
                 >
                   <DisplayIcon />
                   <span>
-                    {capturingMode === 'display' ? 'Capturing display' : 'Capture display'}
+                    {capturingMode === 'display' ? 'Capturing display…' : 'Capture display'}
                   </span>
                   {capturingMode === 'display' ? (
                     <span className="capture-pulse" aria-hidden="true" />
@@ -408,7 +408,7 @@ function SettingsWindow({
       if (request === autostartRequest.current) {
         setAutostart({
           status: 'unavailable',
-          message: 'Launch at login could not be read. Try again.',
+          message: 'Unable to read launch at login. Try again.',
         })
       }
     }
@@ -439,7 +439,7 @@ function SettingsWindow({
     } catch {
       if (request === autostartRequest.current) {
         setAutostartError(
-          'Launch at login could not be changed. Try again or check Windows Startup Apps.',
+          'Unable to update launch at login. Try again or check Windows Startup Apps.',
         )
       }
       // A write may succeed before its readback fails. Re-query rather than showing
@@ -451,7 +451,7 @@ function SettingsWindow({
         if (request === autostartRequest.current)
           setAutostart({
             status: 'unavailable',
-            message: 'Launch at login could not be read. Try again.',
+            message: 'Unable to read launch at login. Try again.',
           })
       }
     } finally {
@@ -533,7 +533,7 @@ function SettingsWindow({
           : await window.lumierePlatform.installUpdate()
       setUpdateState({ status: 'idle', ...next })
     } catch {
-      setError('The update could not be completed. Try again.')
+      setError('Unable to complete update. Please try again.')
     }
   }
 
@@ -548,7 +548,7 @@ function SettingsWindow({
       setUpdateState({
         status: 'failed',
         currentVersion,
-        windowsUpdate: { status: 'failed', message: 'Couldn’t check for updates', retry: 'check' },
+        windowsUpdate: { status: 'failed', message: 'Unable to check for updates', retry: 'check' },
       })
     }
   }
@@ -559,7 +559,7 @@ function SettingsWindow({
     try {
       setSnapshot(await window.lumierePlatform.setOutputDelivery(delivery))
     } catch {
-      setError('The output destination could not be saved. Try again.')
+      setError('Unable to save output destination. Please try again.')
     } finally {
       setIsSaving(false)
     }
@@ -571,7 +571,7 @@ function SettingsWindow({
     try {
       setSnapshot(await window.lumierePlatform.chooseSaveDirectory())
     } catch {
-      setError('The save folder could not be changed. Try again.')
+      setError('Unable to change save folder. Please try again.')
     } finally {
       setIsSaving(false)
     }
@@ -583,7 +583,7 @@ function SettingsWindow({
     try {
       setSnapshot(await window.lumierePlatform.setAfterCaptureBehavior(behavior))
     } catch {
-      setError('The after-capture behavior could not be saved. Try again.')
+      setError('Unable to save after-capture behavior. Please try again.')
     } finally {
       setIsSaving(false)
     }
@@ -595,7 +595,7 @@ function SettingsWindow({
     try {
       setSnapshot(await window.lumierePlatform.setHdrStatusReminders(enabled))
     } catch {
-      setError('HDR status reminders could not be saved. Try again.')
+      setError('Unable to save HDR display alerts. Please try again.')
     } finally {
       setIsSaving(false)
     }
@@ -612,7 +612,7 @@ function SettingsWindow({
         setSnapshot(result.snapshot)
       }
     } catch {
-      setError('The shortcut could not be saved. Try again.')
+      setError('Unable to save shortcut. Please try again.')
     } finally {
       setSavingShortcut(null)
     }
@@ -669,7 +669,7 @@ function BlockingRecovery({
     try {
       await window.lumierePlatform.refreshCaptureSurface()
     } catch {
-      setRefreshError('Could not check capture availability. Try again.')
+      setRefreshError('Unable to check capture availability. Please try again.')
     } finally {
       setRefreshing(false)
     }
@@ -725,7 +725,7 @@ function NoticeDetails({
         onClick={onBack}
       >
         <ChevronLeftIcon />
-        Back to capture
+        Back
       </Button>
       <div className="notice-copy">
         <h1>{notice.title}</h1>
@@ -742,7 +742,7 @@ function NoticeDetails({
           className="notice-details-action"
           onClick={onOpenSettings}
         >
-          Reminder settings
+          Alert settings
         </Button>
       )}
     </div>
@@ -767,13 +767,13 @@ function statusMessage({
   snapshot,
 }: StatusMessageInput): string {
   if (capturingMode) {
-    return capturingMode === 'region' ? 'Capturing region' : 'Capturing display'
+    return capturingMode === 'region' ? 'Capturing region…' : 'Capturing display…'
   }
   if (result && result.status !== 'cancelled') {
     return result.feedback
   }
   if (captureBlocked) {
-    return 'Capture disabled'
+    return 'Capture unavailable'
   }
   if (activeNotice) {
     return activeNotice.title
@@ -787,7 +787,7 @@ function statusMessage({
   if (snapshot.hdrStatus === 'ready') {
     return 'HDR-aware capture ready'
   }
-  return 'Display capture ready'
+  return 'Capture ready'
 }
 
 function statusTone(

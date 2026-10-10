@@ -1,11 +1,11 @@
 # Lumiere
 
-Lumiere is a Windows HDR-aware screenshot tool. Windows v0.7.0 uses
-Tauri 2, the retained React UI and an independent Rust WGC/D3D11/DXGI capture library
-behind a resident JSONL Host. Region and Display deliver fixed sRGB Visual Match PNGs.
-The native shell/Host stay resident; the WebView opens on demand and closes completely.
+Lumiere is a precise, HDR-aware screenshot tool for Windows. Region and display capture
+deliver fixed sRGB Visual Match PNGs tuned for everyday clipboard and folder use.
+Native shell and capture services stay resident; the interface opens on demand and
+closes cleanly.
 
-Lumiere does not currently claim HDR-preserved export support.
+HDR-preserved export is not yet a supported public path.
 
 ## Start Here
 
@@ -37,8 +37,8 @@ digest before running it:
 Get-FileHash .\Lumiere-Setup-<version>-x64.exe -Algorithm SHA256
 ```
 
-Windows may show a SmartScreen or unknown-publisher warning because the installer is not code signed. Continue
-only when the digest matches `SHA256SUMS` from the official release. The assisted installer runs
+Because early releases are not yet code-signed, Windows SmartScreen may display an unknown-publisher warning. Continue
+only when the calculated digest matches `SHA256SUMS` from the official release. The assisted installer runs
 per user, allows a custom destination, and can create desktop and Start menu shortcuts. Uninstall
 Lumiere through Windows Settings or its Start menu shortcut. Windows releases intentionally exclude
 the production borderless-capture identity, so Windows Graphics Capture keeps its system capture border.
@@ -51,8 +51,8 @@ Windows publisher identity. Upgrading from v0.6.0 preserves settings and the exi
 installation location; user-owned files are retained while old application files are removed.
 
 System settings includes an optional **Launch at login** switch, off by default.
-It starts Lumiere in the tray for the current Windows user without administrator
-privileges. If Windows disables startup, use the accompanying **Windows settings**
+It starts Lumiere quietly in the system tray for the current Windows user without administrator
+privileges. If Windows disables startup, use the **Open Windows Settings…**
 button to review Startup Apps.
 
 ## Repository Layout
