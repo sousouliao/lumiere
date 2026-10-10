@@ -141,10 +141,6 @@ async fn inactive_cancel_is_idempotent_and_real_child_speaks_only_json_lines() {
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
-    assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0]["requestId"], "bad");
-    assert_eq!(diagnostics[0]["stage"], "request-parse");
-    assert_eq!(diagnostics[0]["failure"]["code"], "invalid-request");
     let responses: Vec<Value> = String::from_utf8(output.stdout)
         .unwrap()
         .lines()
@@ -163,6 +159,37 @@ async fn inactive_cancel_is_idempotent_and_real_child_speaks_only_json_lines() {
         responses.iter().find(|r| r["id"] == "bad").unwrap()["error"]["code"],
         "invalid-request"
     );
+    let caps = responses.iter().find(|r| r["id"] == "caps").unwrap();
+    let unavailable = caps["result"]["hostStatus"] == "unavailable";
+    let bad: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d["requestId"] == "bad")
+        .collect();
+    assert_eq!(bad.len(), 1);
+    let bad = bad[0];
+    assert_eq!(bad["stage"], "request-parse");
+    assert_eq!(bad["failure"]["code"], "invalid-request");
+    let caps_diagnostics: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d["requestId"] == "caps")
+        .collect();
+    assert_eq!(caps_diagnostics.len(), usize::from(unavailable));
+    if unavailable {
+        let diagnostic = caps_diagnostics[0];
+        assert_eq!(diagnostic["stage"], "capabilities");
+        assert_eq!(diagnostic["failure"], caps["result"]["unavailableReason"]);
+    }
+    for diagnostic in &diagnostics {
+        if diagnostic["requestId"].is_null() {
+            assert!(unavailable || caps["result"]["hdrCapture"] == "unvalidated");
+            assert_eq!(diagnostic["event"], "native-capture-failed");
+            assert_eq!(diagnostic["level"], "warn");
+            assert!(diagnostic["stage"].is_string());
+            assert!(diagnostic["hresult"].as_str().unwrap().starts_with("0x"));
+        } else {
+            assert!(diagnostic["requestId"] == "bad" || diagnostic["requestId"] == "caps");
+        }
+    }
 }
 
 #[tokio::test(start_paused = true)]
