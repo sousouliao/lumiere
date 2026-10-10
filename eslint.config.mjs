@@ -8,6 +8,7 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig(
   globalIgnores([
+    '**/.cache/**',
     '**/.dotnet/**',
     '**/artifacts/**',
     '**/bin/**',

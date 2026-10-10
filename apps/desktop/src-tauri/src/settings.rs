@@ -263,8 +263,10 @@ mod tests {
     fn hide_window_choice_round_trips_and_requires_a_boolean() {
         assert!(Settings::default().hide_main_window_during_capture);
         for enabled in [false, true] {
-            let mut settings = Settings::default();
-            settings.hide_main_window_during_capture = enabled;
+            let settings = Settings {
+                hide_main_window_during_capture: enabled,
+                ..Settings::default()
+            };
             let path = std::env::temp_dir().join(format!(
                 "lumiere-hide-settings-{}-{enabled}.json",
                 std::process::id()

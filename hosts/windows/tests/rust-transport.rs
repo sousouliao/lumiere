@@ -136,7 +136,15 @@ async fn inactive_cancel_is_idempotent_and_real_child_speaks_only_json_lines() {
         .unwrap()
         .unwrap();
     assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    let diagnostics: Vec<Value> = String::from_utf8(output.stderr)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["requestId"], "bad");
+    assert_eq!(diagnostics[0]["stage"], "request-parse");
+    assert_eq!(diagnostics[0]["failure"]["code"], "invalid-request");
     let responses: Vec<Value> = String::from_utf8(output.stdout)
         .unwrap()
         .lines()

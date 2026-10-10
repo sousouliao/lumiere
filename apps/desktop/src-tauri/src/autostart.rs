@@ -169,8 +169,7 @@ fn unavailable(error: String) -> Snapshot {
         serde_json::json!({"event":"autostart-read-error", "error":error})
     );
     Snapshot::Unavailable {
-        message: "Unable to read launch at login. Try again or check Windows Startup Apps."
-            .into(),
+        message: "Unable to read launch at login. Try again or check Windows Startup Apps.".into(),
     }
 }
 
