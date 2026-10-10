@@ -18,6 +18,7 @@ fn main() {
             "set_output_delivery",
             "set_after_capture_behavior",
             "set_hdr_status_reminders",
+            "set_hide_main_window_during_capture",
             "set_capture_shortcut",
             "set_shortcut_recording",
             "recover_capture",

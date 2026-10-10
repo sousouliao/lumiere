@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod autostart;
+mod capture_window;
 mod controller;
 mod host;
 mod notification;
@@ -139,6 +140,12 @@ async fn set_output_delivery(app: AppHandle, delivery: Delivery) -> Result<Value
 fn set_after_capture_behavior(app: AppHandle, behavior: AfterCapture) -> Result<Value, String> {
     app.state::<Controller>()
         .update_settings(&app, |settings| settings.after_capture_behavior = behavior)
+}
+#[tauri::command(async)]
+fn set_hide_main_window_during_capture(app: AppHandle, enabled: bool) -> Result<Value, String> {
+    app.state::<Controller>().update_settings(&app, |settings| {
+        settings.hide_main_window_during_capture = enabled
+    })
 }
 #[tauri::command]
 async fn set_hdr_status_reminders(app: AppHandle, enabled: bool) -> Result<Value, String> {
@@ -359,6 +366,7 @@ fn builder(paths: Paths) -> tauri::Builder<tauri::Wry> {
             set_output_delivery,
             set_after_capture_behavior,
             set_hdr_status_reminders,
+            set_hide_main_window_during_capture,
             set_capture_shortcut,
             set_shortcut_recording,
             recover_capture,

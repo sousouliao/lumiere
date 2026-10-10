@@ -63,6 +63,7 @@ interface SettingsViewProps {
   onOutputDeliveryChange: (delivery: OutputDelivery) => void
   onChooseSaveDirectory: () => void
   onAfterCaptureBehaviorChange: (behavior: AfterCaptureBehavior) => void
+  onHideMainWindowDuringCaptureChange: (enabled: boolean) => void
   onHdrStatusRemindersChange: (enabled: boolean) => void
   onShortcutChange: (update: ShortcutUpdate) => Promise<void>
   onShortcutRecordingChange: (recording: boolean) => Promise<void>
@@ -91,6 +92,7 @@ export function SettingsView({
   onOutputDeliveryChange,
   onChooseSaveDirectory,
   onAfterCaptureBehaviorChange,
+  onHideMainWindowDuringCaptureChange,
   onHdrStatusRemindersChange,
   onShortcutChange,
   onShortcutRecordingChange,
@@ -172,7 +174,10 @@ export function SettingsView({
         </Dock>
       </nav>
 
-      <section className="settings-content" aria-label={`${section} settings`}>
+      <section
+        className={`settings-content settings-content--${section}`}
+        aria-label={`${section} settings`}
+      >
         {section === 'output' ? (
           <OutputSettings
             snapshot={snapshot}
@@ -188,6 +193,7 @@ export function SettingsView({
           <CaptureSettings
             surfaceSnapshot={surfaceSnapshot}
             afterCaptureBehavior={snapshot?.afterCaptureBehavior ?? 'do-nothing'}
+            hideMainWindowDuringCapture={snapshot?.hideMainWindowDuringCapture ?? true}
             hdrStatusReminders={snapshot?.hdrStatusReminders ?? true}
             isSaving={isSaving}
             shortcuts={snapshot?.captureShortcuts ?? null}
@@ -195,6 +201,7 @@ export function SettingsView({
             onShortcutChange={onShortcutChange}
             onShortcutRecordingChange={onShortcutRecordingChange}
             onAfterCaptureBehaviorChange={onAfterCaptureBehaviorChange}
+            onHideMainWindowDuringCaptureChange={onHideMainWindowDuringCaptureChange}
             onHdrStatusRemindersChange={onHdrStatusRemindersChange}
           />
         ) : null}
@@ -301,6 +308,7 @@ function OutputSettings({
 function CaptureSettings({
   surfaceSnapshot,
   afterCaptureBehavior,
+  hideMainWindowDuringCapture,
   hdrStatusReminders,
   isSaving,
   shortcuts,
@@ -308,10 +316,12 @@ function CaptureSettings({
   onShortcutChange,
   onShortcutRecordingChange,
   onAfterCaptureBehaviorChange,
+  onHideMainWindowDuringCaptureChange,
   onHdrStatusRemindersChange,
 }: {
   surfaceSnapshot: CaptureSurfaceSnapshot | null
   afterCaptureBehavior: AfterCaptureBehavior
+  hideMainWindowDuringCapture: boolean
   hdrStatusReminders: boolean
   isSaving: boolean
   shortcuts: SettingsSnapshot['captureShortcuts'] | null
@@ -319,6 +329,7 @@ function CaptureSettings({
   onShortcutChange: (update: ShortcutUpdate) => Promise<void>
   onShortcutRecordingChange: (recording: boolean) => Promise<void>
   onAfterCaptureBehaviorChange: (behavior: AfterCaptureBehavior) => void
+  onHideMainWindowDuringCaptureChange: (enabled: boolean) => void
   onHdrStatusRemindersChange: (enabled: boolean) => void
 }): React.JSX.Element {
   const regionAvailable = surfaceSnapshot?.captureModes.includes('region') === true
@@ -344,6 +355,16 @@ function CaptureSettings({
         onChange={onShortcutChange}
         onRecordingChange={onShortcutRecordingChange}
       />
+      <div className="settings-row">
+        <span className="settings-row-label">Hide Lumiere during capture</span>
+        <Switch
+          checked={hideMainWindowDuringCapture}
+          disabled={!shortcuts || isSaving}
+          ariaLabel="Hide Lumiere during capture"
+          className="settings-switch"
+          onCheckedChange={onHideMainWindowDuringCaptureChange}
+        />
+      </div>
       <div className="settings-row">
         <span className="settings-row-label" id="after-capture-label">
           After capture

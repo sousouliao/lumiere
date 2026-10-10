@@ -214,6 +214,20 @@ fn exercise(app: &AppHandle, output: &std::path::Path) {
             );
         }
         if cycle == 0 {
+            // Exercise the real command/persistence seam before capturing with
+            // the visible main window. Background-only capture was checked above.
+            for enabled in [false, true] {
+                set_hide_main_window_during_capture(app.clone(), enabled).unwrap();
+                assert_eq!(
+                    crate::settings::Settings::load(&settings).hide_main_window_during_capture,
+                    enabled
+                );
+                let result =
+                    tauri::async_runtime::block_on(controller.capture(app, CaptureMode::Display));
+                assert_eq!(result["status"], "success");
+                wait_for(|| window.is_visible().unwrap_or(false));
+                assert!(!window.is_minimized().unwrap());
+            }
             let metrics = script(
                 &window,
                 "({width:innerWidth,height:innerHeight,dpr:devicePixelRatio})",

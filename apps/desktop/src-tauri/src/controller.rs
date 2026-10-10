@@ -374,34 +374,41 @@ impl Controller {
         };
         self.notifications.clear();
         let restore = app.get_webview_window("main").filter(|window| {
-            window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false)
+            settings.hide_main_window_during_capture
+                && window.is_visible().unwrap_or(false)
+                && !window.is_minimized().unwrap_or(false)
         });
         let _ = app.emit("capture-activity-changed", self.activity());
         self.update_tray(app);
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.hide();
-        }
+        let prepared = if let Some(window) = &restore {
+            crate::capture_window::hide_for_capture(window).await
+        } else {
+            Ok(())
+        };
         let mut params = json!({"delivery":settings.output_delivery});
         if settings.output_delivery != Delivery::Clipboard
             && let Some(path) = &settings.save_directory
         {
             params["saveDirectory"] = json!(path);
         }
-        let response = match self.host().await {
-            Ok(host) => {
-                host.request(
-                    id.clone(),
-                    if mode == CaptureMode::Region { 6 } else { 5 },
-                    if mode == CaptureMode::Region {
-                        "captureRegion"
-                    } else {
-                        "captureDisplay"
-                    },
-                    params,
-                )
-                .await
-            }
-            Err(error) => Err(error),
+        let response = match prepared {
+            Err(error) => Err(format!("Main window capture preparation failed: {error}")),
+            Ok(()) => match self.host().await {
+                Ok(host) => {
+                    host.request(
+                        id.clone(),
+                        if mode == CaptureMode::Region { 6 } else { 5 },
+                        if mode == CaptureMode::Region {
+                            "captureRegion"
+                        } else {
+                            "captureDisplay"
+                        },
+                        params,
+                    )
+                    .await
+                }
+                Err(error) => Err(error),
+            },
         };
         let result = match response {
             Ok(HostResult::Capture(outcome)) => project_result(outcome),
@@ -422,6 +429,12 @@ impl Controller {
                 ))
             }
         };
+        if !self.quitting.load(Ordering::Acquire)
+            && let Some(window) = &restore
+        {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
         {
             let mut data = self.data.lock().expect("Controller state poisoned");
             data.active = None;
@@ -432,12 +445,6 @@ impl Controller {
         self.update_tray(app);
         if self.quitting.load(Ordering::Acquire) {
             return result;
-        }
-        if mode == CaptureMode::Region
-            && let Some(window) = &restore
-        {
-            let _ = window.show();
-            let _ = window.set_focus();
         }
         let foreground = app
             .get_webview_window("main")

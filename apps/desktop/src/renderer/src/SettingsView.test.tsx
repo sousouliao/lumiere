@@ -37,6 +37,7 @@ function renderSystemSettings(
       onOutputDeliveryChange={() => undefined}
       onChooseSaveDirectory={() => undefined}
       onAfterCaptureBehaviorChange={() => undefined}
+      onHideMainWindowDuringCaptureChange={() => undefined}
       onHdrStatusRemindersChange={() => undefined}
       onShortcutChange={() => Promise.resolve()}
       onShortcutRecordingChange={() => Promise.resolve()}
@@ -90,6 +91,56 @@ describe('SettingsView', () => {
     expect(markup).toContain('role="alert">Launch at login could not be changed.')
   })
 
+  it.each([
+    [true, false, false],
+    [false, false, false],
+    [false, true, false],
+    [true, false, true],
+  ])('renders capture hiding checked=%s saving=%s loading=%s', (checked, saving, loading) => {
+    const markup = renderToStaticMarkup(
+      <SettingsView
+        {...autostartProps}
+        initialSection="capture"
+        snapshot={
+          loading
+            ? null
+            : {
+                outputDelivery: 'clipboard',
+                availableOutputDeliveries: ['clipboard'],
+                saveDirectory: 'C:\\Screenshots',
+                captureShortcuts: {
+                  region: { accelerator: null, status: 'unconfigured' },
+                  display: { accelerator: null, status: 'unconfigured' },
+                },
+                afterCaptureBehavior: 'do-nothing',
+                hdrStatusReminders: true,
+                hideMainWindowDuringCapture: checked,
+              }
+        }
+        surfaceSnapshot={null}
+        platform="windows"
+        isSaving={saving}
+        savingShortcut={null}
+        error={null}
+        updateState={{ status: 'idle', currentVersion: '0.8.0' }}
+        onDone={() => undefined}
+        onOutputDeliveryChange={() => undefined}
+        onChooseSaveDirectory={() => undefined}
+        onAfterCaptureBehaviorChange={() => undefined}
+        onHideMainWindowDuringCaptureChange={() => undefined}
+        onHdrStatusRemindersChange={() => undefined}
+        onShortcutChange={() => Promise.resolve()}
+        onShortcutRecordingChange={() => Promise.resolve()}
+        onCheckForUpdates={() => undefined}
+      />,
+    )
+    const control = /<button[^>]*aria-label="Hide Lumiere during capture"[^>]*>/.exec(markup)?.[0]
+    expect(control).toBeDefined()
+    expect(control).toContain('role="switch"')
+    expect(control).toContain(`aria-checked="${String(checked)}"`)
+    expect(control?.includes('disabled=""')).toBe(saving || loading)
+  })
+
   it('renders accessible Windows settings controls', () => {
     const markup = renderToStaticMarkup(
       <SettingsView
@@ -104,6 +155,7 @@ describe('SettingsView', () => {
           },
           afterCaptureBehavior: 'do-nothing',
           hdrStatusReminders: true,
+          hideMainWindowDuringCapture: true,
         }}
         surfaceSnapshot={{
           platform: 'windows',
@@ -125,6 +177,7 @@ describe('SettingsView', () => {
         onOutputDeliveryChange={() => undefined}
         onChooseSaveDirectory={() => undefined}
         onAfterCaptureBehaviorChange={() => undefined}
+        onHideMainWindowDuringCaptureChange={() => undefined}
         onHdrStatusRemindersChange={() => undefined}
         onShortcutChange={() => Promise.resolve()}
         onShortcutRecordingChange={() => Promise.resolve()}

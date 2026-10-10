@@ -1,7 +1,8 @@
 # Current Project State
 
 - Updated: 2026-10-10
-- Source frontier: snapshot synchronization, typed Host-result and native diagnostic cleanup under [#34](https://github.com/sousouliao/lumiere/issues/34) is repository-checked as scoped below. The maintainer owns Windows native shell build/tests and real runtime acceptance; this source is not a new published release.
+- Source frontier: configurable main-window hiding during capture under [#35](https://github.com/sousouliao/lumiere/issues/35) is implemented with scoped repository checks; Windows native build/runtime acceptance remains pending.
+- Prior source slice: snapshot synchronization, typed Host-result and native diagnostic cleanup under [#34](https://github.com/sousouliao/lumiere/issues/34) is repository-checked as scoped below. The maintainer owns Windows native shell build/tests and real runtime acceptance; this source is not a new published release.
 - Frontier: Windows v0.8.0 is published with current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33); maintainer installation/login/Startup Apps acceptance remains pending by explicit authorization. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
 - Public release: [v0.8.0](https://github.com/sousouliao/lumiere/releases/tag/v0.8.0), stable Windows x64; tag/source commit `6805dd6fb415ef00e1c5523a482b4ea72f1dfd1a`.
@@ -22,6 +23,14 @@ System settings offers Launch at login, off by default, using only current-user
 Windows registration. Login startup stays tray-only. Windows-disabled startup is
 reported without overriding it; unknown approval records remain unavailable.
 
+Capture settings offers Hide Lumiere during capture, on by default, persisted in v6
+settings with v1–v5 migration. The shell hides an originally visible, non-minimized
+main window on its owning thread without DWM transitions and waits for composition
+before dispatching capture. Display and Region both restore that window after any
+outcome; background capture creates no main WebView. Off retains the visible window.
+The reported intermittent translucency is consistent with the old unsynchronized
+hide/capture sequence; Windows observation must confirm the cause and resulting behavior.
+
 Windows v5 Display and v6 same-frame Region/cancellation retain floating-point
 acquisition and fixed sRGB Visual Match, with the same PNG for clipboard and folder.
 No HDR-preserved export, borderless capture or wider compositor-fidelity claim.
@@ -37,6 +46,20 @@ preserve installation location, settings and unknown files. Private keys stay ou
 Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
+
+[#35](https://github.com/sousouliao/lumiere/issues/35): SettingsView passes 20 tests,
+desktop TypeScript and renderer build pass, and scoped ESLint/Prettier/Rustfmt and
+`git diff --check` pass on macOS. A temporary crate loading production settings.rs
+passes two tests covering v1–v5 migration, v6 save/load and boolean validation.
+A Windows-target source fixture compiles capture_window.rs against windows 0.62.2
+with a minimal Tauri interface shim; this checks API signatures, not the real Tauri
+runtime. Static renderer previews at 480×370 and 440×340 retain the existing layout;
+Capture content scrolls when needed. Full shell `cargo check --locked --offline -p
+lumiere-desktop --target x86_64-pc-windows-msvc` stops at uncached aho-corasick 1.1.5.
+The existing Windows GUI fixture now checks persisted on/off choices and Display
+window restoration, but it has not been executed here. Native build/tests, actual
+on/off capture pixels, Region cancellation/failure and absence of translucent remnants
+remain maintainer Windows acceptance in #35.
 
 [#34](https://github.com/sousouliao/lumiere/issues/34) source cleanup: one renderer observer owns asynchronous listener readiness,
 initial snapshot/event ordering and cleanup; capture-contract owns decoded result types
@@ -86,6 +109,12 @@ hardware scope, not universal performance or public-binary peak memory. The user
 backups are restored and no isolated installer/legacy-download processes remain.
 
 ## Next action
+
+Under [#35](https://github.com/sousouliao/lumiere/issues/35), build/test the current source on Windows,
+run `native_shell_webview_lifecycle` explicitly with its isolated fixture directory,
+and verify Display/Region with hiding on/off, repeated capture, cancellation/failure,
+quiet/minimized/closed windows and translucent remnants. Continue the existing #34
+snapshot/diagnostic acceptance in the same Windows pass.
 
 Under [#34](https://github.com/sousouliao/lumiere/issues/34), build the current source on Windows, run the native checks in the Windows runbook,
 and verify settings/update state while opening/closing the WebView, Display/Region

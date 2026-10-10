@@ -17,6 +17,7 @@
     "allow-set-output-delivery",
     "allow-set-after-capture-behavior",
     "allow-set-hdr-status-reminders",
+    "allow-set-hide-main-window-during-capture",
     "allow-set-capture-shortcut",
     "allow-set-shortcut-recording",
     "allow-recover-capture",

@@ -13,6 +13,7 @@ export interface SettingsSnapshot {
   captureShortcuts: CaptureShortcutSnapshot
   afterCaptureBehavior: AfterCaptureBehavior
   hdrStatusReminders: boolean
+  hideMainWindowDuringCapture: boolean
 }
 
 export type ShortcutUpdateResult =
@@ -24,6 +25,7 @@ export interface LumiereSettingsApi {
   setOutputDelivery(delivery: OutputDelivery): Promise<SettingsSnapshot>
   setAfterCaptureBehavior(behavior: AfterCaptureBehavior): Promise<SettingsSnapshot>
   setHdrStatusReminders(enabled: boolean): Promise<SettingsSnapshot>
+  setHideMainWindowDuringCapture(enabled: boolean): Promise<SettingsSnapshot>
   setCaptureShortcut(update: ShortcutUpdate): Promise<ShortcutUpdateResult>
   setShortcutRecording(recording: boolean): Promise<void>
   onSettingsChanged(listener: (snapshot: SettingsSnapshot) => void): SnapshotSubscription

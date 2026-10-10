@@ -561,6 +561,18 @@ function SettingsWindow({
     }
   }
 
+  const setHideMainWindowDuringCapture = async (enabled: boolean): Promise<void> => {
+    setIsSaving(true)
+    setError(null)
+    try {
+      setSnapshot(await window.lumierePlatform.setHideMainWindowDuringCapture(enabled))
+    } catch {
+      setError('Unable to save window hiding preference. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const setHdrStatusReminders = async (enabled: boolean): Promise<void> => {
     setIsSaving(true)
     setError(null)
@@ -610,6 +622,9 @@ function SettingsWindow({
       onOutputDeliveryChange={(delivery) => void setOutputDelivery(delivery)}
       onChooseSaveDirectory={() => void chooseSaveDirectory()}
       onAfterCaptureBehaviorChange={(behavior) => void setAfterCaptureBehavior(behavior)}
+      onHideMainWindowDuringCaptureChange={(enabled) =>
+        void setHideMainWindowDuringCapture(enabled)
+      }
       onHdrStatusRemindersChange={(enabled) => void setHdrStatusReminders(enabled)}
       onShortcutChange={setCaptureShortcut}
       onShortcutRecordingChange={(recording) => {

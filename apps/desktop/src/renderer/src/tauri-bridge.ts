@@ -44,6 +44,8 @@ export const windowsApi: LumiereRendererApi = {
   chooseSaveDirectory: () => invoke('choose_save_directory'),
   setOutputDelivery: (delivery) => invoke('set_output_delivery', { delivery }),
   setAfterCaptureBehavior: (behavior) => invoke('set_after_capture_behavior', { behavior }),
+  setHideMainWindowDuringCapture: (enabled) =>
+    invoke('set_hide_main_window_during_capture', { enabled }),
   setHdrStatusReminders: (enabled) => invoke('set_hdr_status_reminders', { enabled }),
   setCaptureShortcut: (update) => invoke('set_capture_shortcut', { update }),
   setShortcutRecording: (recording) => invoke('set_shortcut_recording', { recording }),

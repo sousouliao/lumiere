@@ -40,16 +40,18 @@ pub struct Settings {
     pub capture_shortcuts: Shortcuts,
     pub after_capture_behavior: AfterCapture,
     pub hdr_status_reminders: bool,
+    pub hide_main_window_during_capture: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            version: 5,
+            version: 6,
             output_delivery: Delivery::Both,
             save_directory: None,
             capture_shortcuts: Shortcuts::default(),
             after_capture_behavior: AfterCapture::DoNothing,
             hdr_status_reminders: true,
+            hide_main_window_during_capture: true,
         }
     }
 }
@@ -91,12 +93,21 @@ impl Settings {
                 "hdrStatusReminders",
                 "saveDirectory",
             ],
+            6 => &[
+                "version",
+                "outputDelivery",
+                "captureShortcuts",
+                "afterCaptureBehavior",
+                "hdrStatusReminders",
+                "saveDirectory",
+                "hideMainWindowDuringCapture",
+            ],
             _ => return Err("Unsupported settings version".into()),
         };
         if object.len() != keys.len() || keys.iter().any(|key| !object.contains_key(*key)) {
             return Err("Invalid settings shape".into());
         }
-        object.insert("version".into(), json!(5));
+        object.insert("version".into(), json!(6));
         object
             .entry("captureShortcuts")
             .or_insert(json!({"region":null,"display":null}));
@@ -105,6 +116,9 @@ impl Settings {
             .or_insert(json!("do-nothing"));
         object.entry("hdrStatusReminders").or_insert(json!(true));
         object.entry("saveDirectory").or_insert(Value::Null);
+        object
+            .entry("hideMainWindowDuringCapture")
+            .or_insert(json!(true));
         let mut settings: Self =
             serde_json::from_value(value).map_err(|error| error.to_string())?;
         settings.validate()?;
@@ -199,10 +213,11 @@ mod tests {
                 value["hdrStatusReminders"] = json!(false);
             }
             if version >= 5 {
-                value["saveDirectory"] = json!("C:\\Screenshots");
+                value["saveDirectory"] = json!(std::env::temp_dir().join("Lumiere-Screenshots"));
             }
             let settings = Settings::parse(value.clone()).unwrap();
-            assert_eq!(settings.version, 5);
+            assert_eq!(settings.version, 6);
+            assert!(settings.hide_main_window_during_capture);
             if version >= 2 {
                 assert_eq!(
                     settings.capture_shortcuts.region.as_deref(),
@@ -210,6 +225,23 @@ mod tests {
                 );
             }
             assert_eq!(settings.hdr_status_reminders, version < 4);
+            assert_eq!(settings.output_delivery, Delivery::Folder);
+            assert_eq!(
+                settings.after_capture_behavior,
+                if version >= 3 {
+                    AfterCapture::ShowInFolder
+                } else {
+                    AfterCapture::DoNothing
+                }
+            );
+            assert_eq!(
+                settings.save_directory,
+                if version >= 5 {
+                    Some(std::env::temp_dir().join("Lumiere-Screenshots"))
+                } else {
+                    None
+                }
+            );
             value["unexpected"] = json!(true);
             assert!(Settings::parse(value).is_err());
         }
@@ -225,6 +257,42 @@ mod tests {
             "Control+Delete",
         ] {
             assert!(normalize_shortcut(invalid).is_err());
+        }
+    }
+    #[test]
+    fn hide_window_choice_round_trips_and_requires_a_boolean() {
+        assert!(Settings::default().hide_main_window_during_capture);
+        for enabled in [false, true] {
+            let mut settings = Settings::default();
+            settings.hide_main_window_during_capture = enabled;
+            let path = std::env::temp_dir().join(format!(
+                "lumiere-hide-settings-{}-{enabled}.json",
+                std::process::id()
+            ));
+            settings.save(&path).unwrap();
+            assert_eq!(
+                Settings::load(&path).hide_main_window_during_capture,
+                enabled
+            );
+            std::fs::remove_file(path).unwrap();
+            let value = serde_json::to_value(settings).unwrap();
+            assert_eq!(
+                Settings::parse(value.clone())
+                    .unwrap()
+                    .hide_main_window_during_capture,
+                enabled
+            );
+            for invalid in [Value::Null, json!("false"), json!(0)] {
+                let mut invalid_value = value.clone();
+                invalid_value["hideMainWindowDuringCapture"] = invalid;
+                assert!(Settings::parse(invalid_value).is_err());
+            }
+            let mut missing = value;
+            missing
+                .as_object_mut()
+                .unwrap()
+                .remove("hideMainWindowDuringCapture");
+            assert!(Settings::parse(missing).is_err());
         }
     }
 }

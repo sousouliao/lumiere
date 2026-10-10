@@ -753,6 +753,10 @@ button {
   padding: 4px 14px 14px;
 }
 
+.settings-content--capture {
+  overflow-y: auto;
+}
+
 .settings-list {
   display: grid;
   gap: 8px;
