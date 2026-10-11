@@ -1,12 +1,12 @@
 # Current Project State
 
-- Updated: 2026-10-11
-- Frontier: Windows v0.9.0 is published, integrating snapshot/diagnostic cleanup under [#34](https://github.com/sousouliao/lumiere/issues/34), configurable main-window hiding under [#35](https://github.com/sousouliao/lumiere/issues/35), and native FP16/scRGB Region preview/resource stability under [#36](https://github.com/sousouliao/lumiere/issues/36).
-- Windows default/shared tests, explicit native checks, Debug/Release GUI fixtures and repository gates pass. The maintainer accepted local Region selection behavior and authorized publication, and reported installed v0.9.0 real-machine verification without issues on 2026-10-11. This is maintainer evidence within their tested scope, not agent observation or a wider hardware matrix.
+- Updated: 2026-10-12
+- Frontier: Windows v0.9.1 is published with a taller minimum/default window, warm-white settings status badges, disabled main-window context menus, and compact update controls with loading indicators and explicit download/restart actions.
+- Shared checks and the scoped Windows Release WebView fixture pass; the v0.9.1 release workflow independently passes all jobs. The maintainer's installed v0.9.0 acceptance on 2026-10-11 remains evidence for their tested scope, not installed v0.9.1 acceptance or a wider hardware matrix.
 - Current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33) retains explicitly deferred real login/Startup Apps acceptance. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
-- Public release: [v0.9.0](https://github.com/sousouliao/lumiere/releases/tag/v0.9.0), stable Windows x64; tag/source commit `0c9b847d4d24659e274079fca23e8aee4ff6ea23`.
-- Installer: 3575757 bytes; SHA256 `d3bc398f7496a257cabf06129069ad73872aa0fe0997d379e8ab68c470f7e1e7`.
+- Public release: [v0.9.1](https://github.com/sousouliao/lumiere/releases/tag/v0.9.1), stable Windows x64; tag/source commit `5edfd33d77e11a390d0c5996f121edd052fd968f`.
+- Installer: 3578548 bytes; SHA256 `74fceab28a81f0072b690490c0b867adc968b87a3abc53dbdf8f100b49a0ef07`.
 
 ## Product
 
@@ -45,6 +45,10 @@ preserve installation location, settings and unknown files. Private keys stay ou
 Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
+
+v0.9.1 UI maintenance: `pnpm check`, `pnpm test:shared` (61 tests), and `pnpm build` pass locally. With `LUMIERE_GUI_CYCLES=3`, `cargo test --locked --release -p lumiere-desktop --features custom-protocol native_shell_webview_lifecycle -- --ignored --nocapture` passes. The fixture observes the Capture settings fitting at 440×400 logical pixels, warm-white badges, canceled context-menu events, and five scripted updater states in the real Windows WebView. Scripted states do not download or install an update. An Edge renderer check with mocked IPC separately verifies Check → Checking → new version → Downloading → Restart to update → Restarting, spinner rotation, and action dispatch.
+
+[Release 38159859710](https://github.com/sousouliao/lumiere/actions/runs/38159859710) passes Audit, Build Windows, and Publish for the tagged source. All five downloaded public assets match GitHub sizes/digests; the installer matches `SHA256SUMS`, both updater feeds identify the same bytes/version, and the latest-download feed matches the versioned signature. Public notes match the finalized changelog; release is non-draft/non-prerelease and its tag targets the release commit. `target/release/deps/Lumiere-7edc4410401e9982.exe official_updater_accepts_signed_bytes_and_rejects_tampering --ignored --nocapture` passes against downloaded v0.9.1 bytes using the unchanged verifier built for the UI fixture. Authenticode remains NotSigned.
 
 CI dependency caching at `18f265b` is verified by successful Windows CI
 [cold](https://github.com/sousouliao/lumiere/actions/runs/38133340528/attempts/1) and
@@ -116,7 +120,7 @@ backups are restored and no isolated installer/legacy-download processes remain.
 
 ## Next action
 
-The maintainer reports installed v0.9.0 real-machine verification without issues.
+The maintainer can verify the installed v0.9.1 settings and updater UI; local WebView observations do not replace installed-release acceptance.
 Confirm the explicitly deferred sign-out/sign-in and Windows Startup Apps disable/restore
 observations under #33 separately; the general usage report does not specify those steps.
 Future versions follow the
