@@ -46,6 +46,17 @@ Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
 
+CI dependency caching at `18f265b` is verified by successful Windows CI
+[cold](https://github.com/sousouliao/lumiere/actions/runs/38133340528/attempts/1) and
+[cache-hit](https://github.com/sousouliao/lumiere/actions/runs/38133340528/attempts/2)
+runs of the same commit: job time 16m56s → 4m42s, native build 7m53s → 2m22s,
+Rust gates 6m26s → 32s, including 50s cache restoration in the second run.
+All existing gates ran. Locally, `cargo test --locked --workspace --features
+lumiere-desktop/custom-protocol official_updater_accepts_signed_bytes_and_rejects_tampering
+-- --ignored --nocapture` passed against the staged signed installer and reused the
+test build (0.31s preparation, 0.59s test). Release-workflow elapsed time remains
+unmeasured after this change; observe it at the next authorized release.
+
 [#36](https://github.com/sousouliao/lumiere/issues/36): the native FP16/scRGB preview
 fixture preserves unmasked HDR/negative texture values and byte-identical PNG output.
 Selection-only masking persists through capture feedback; theme-colored crosshairs
