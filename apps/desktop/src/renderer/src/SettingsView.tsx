@@ -18,6 +18,8 @@ import {
   type SettingsSnapshot,
 } from '../../shared/settings-command'
 import { Button } from '@/components/motion/button/base'
+import { AnimatedBadge } from '@/components/motion/animated-badge'
+import { Loader } from '@/components/motion/loader'
 import { Dock, DockItem } from '@/components/motion/dock'
 import { FolderPickerButton } from '@/components/motion/folder-picker-button'
 import {
@@ -633,7 +635,7 @@ function SystemSettings({
           onInstall={onInstallUpdate}
         />
       ) : (
-        <SettingsRow label="Version" value={currentVersion} />
+        <SettingsRow label="Version" hint={currentVersion} value="" />
       )}
     </div>
   )
@@ -654,45 +656,42 @@ function WindowsUpdateRow({
   onDownload?: () => void
   onInstall?: () => void
 }): React.JSX.Element {
-  let hint = currentVersion
-  let label = 'Check for updates'
+  let label = 'Check'
   let action = onCheck
   let disabled = false
+  let loading = false
+  let title: string | undefined
+  const primary = ['available', 'downloading', 'ready', 'installing'].includes(state.status)
   switch (state.status) {
     case 'checking':
-      hint += ' · Checking…'
-      label = 'Checking…'
+      label = 'Checking'
       disabled = true
+      loading = true
       break
     case 'up-to-date':
-      hint += ' · Up to date'
-      label = 'Check again'
       break
     case 'available':
-      hint += ` · ${state.availableVersion} available`
-      label = 'Download update'
+      label = state.availableVersion
       action = onDownload ?? onCheck
       break
     case 'downloading':
-      hint += ` · Downloading ${String(Math.floor(state.percent))}%`
-      label = 'Downloading…'
+      label = 'Downloading'
       disabled = true
+      loading = true
       break
     case 'ready':
-      hint += captureBusy
-        ? ' · Complete ongoing capture to restart'
-        : ` · ${state.availableVersion} ready`
+      title = captureBusy ? 'Complete ongoing capture to restart' : undefined
       label = 'Restart to update'
       action = onInstall ?? onCheck
       disabled = captureBusy
       break
     case 'installing':
-      hint += ' · Restarting…'
-      label = 'Restarting…'
+      label = 'Restarting'
       disabled = true
+      loading = true
       break
     case 'failed':
-      hint += ` · ${state.message}`
+      title = state.message
       label = 'Try again'
       action =
         state.retry === 'download'
@@ -707,21 +706,24 @@ function WindowsUpdateRow({
     <div className="settings-row">
       <span className="settings-row-copy">
         <span className="settings-row-label">Version</span>
-        <span className="settings-row-hint" aria-live="polite">
-          {hint}
-        </span>
+        <span className="settings-row-hint">{currentVersion}</span>
       </span>
-      <Button
-        variant={state.status === 'available' || state.status === 'ready' ? 'primary' : 'ghost'}
-        size="sm"
-        hoverScale={1}
-        pressScale={0.98}
-        className="settings-inline-action update-check-button"
-        disabled={disabled}
-        onClick={action}
-      >
-        {label}
-      </Button>
+      <span aria-live="polite">
+        <Button
+          variant={primary ? 'primary' : 'ghost'}
+          size="sm"
+          hoverScale={1}
+          pressScale={0.98}
+          className={`settings-inline-action update-check-button${primary ? ' update-check-button--primary' : ''}`}
+          disabled={disabled}
+          aria-busy={loading}
+          title={title}
+          onClick={action}
+        >
+          {loading ? <Loader /> : null}
+          {label}
+        </Button>
+      </span>
     </div>
   )
 }
@@ -747,9 +749,33 @@ function SettingsRow({
         <span className="settings-row-label">{label}</span>
         {hint ? <span className="settings-row-hint">{hint}</span> : null}
       </span>
-      <span className={`settings-row-value settings-row-value--${control ? 'control' : tone}`}>
-        {value}
-      </span>
+      {tone === 'ready' ? (
+        <AnimatedBadge
+          status="info"
+          size="sm"
+          icon={
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              width="12"
+              height="12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m3 8 3 3 7-7" />
+            </svg>
+          }
+        >
+          {value}
+        </AnimatedBadge>
+      ) : (
+        <span className={`settings-row-value settings-row-value--${control ? 'control' : tone}`}>
+          {value}
+        </span>
+      )}
     </div>
   )
 }

@@ -49,8 +49,8 @@ fn show_window(app: &AppHandle, settings: bool) -> tauri::Result<()> {
         };
         let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(url.into()))
             .title("Lumiere")
-            .inner_size(480., 370.)
-            .min_inner_size(440., 340.)
+            .inner_size(480., 400.)
+            .min_inner_size(440., 400.)
             .decorations(false)
             .visible(false)
             .background_color(tauri::window::Color(31, 29, 27, 255))

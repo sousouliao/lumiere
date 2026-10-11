@@ -204,6 +204,9 @@ fn exercise(app: &AppHandle, output: &std::path::Path) {
                 "settings-shell settings-shell--windows"
             }
         );
+        if cycle == 1 {
+            verify_settings_ui(app, &window, output);
+        }
         if cycle < 2 {
             preview(
                 &window,
@@ -353,6 +356,121 @@ fn exercise(app: &AppHandle, output: &std::path::Path) {
         serde_json::to_vec_pretty(&samples).unwrap(),
     )
     .unwrap();
+}
+
+fn verify_settings_ui(app: &AppHandle, window: &tauri::WebviewWindow, output: &std::path::Path) {
+    window
+        .set_size(tauri::LogicalSize::new(440., 400.))
+        .unwrap();
+    assert_eq!(
+        script(
+            window,
+            "!document.body.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))"
+        ),
+        true
+    );
+    script(
+        window,
+        "document.querySelector('[aria-label=\"Capture settings\"]').click(); true",
+    );
+    wait_for(|| {
+        script(
+            window,
+            "Boolean(document.querySelector('.settings-content--capture'))",
+        ) == true
+    });
+    assert_eq!(
+        script(
+            window,
+            "(() => {const area=document.querySelector('.settings-content');return area.scrollHeight===area.clientHeight;})()"
+        ),
+        true
+    );
+    preview(window, output.join("capture-settings-minimum.png"));
+    script(
+        window,
+        "document.querySelector('[aria-label=\"System and about\"]').click(); true",
+    );
+    wait_for(|| {
+        script(
+            window,
+            "document.querySelectorAll('[data-badge-label]').length",
+        ) == 2
+    });
+    assert_eq!(
+        script(
+            window,
+            "[...document.querySelectorAll('[data-badge-label]')].every(el=>getComputedStyle(el).color==='rgb(240, 237, 230)')"
+        ),
+        true
+    );
+    let version = app.state::<updater::Updates>().snapshot(app)["currentVersion"].clone();
+    for (state, label, loading, primary) in [
+        (json!({"status":"up-to-date"}), "Check", false, false),
+        (json!({"status":"checking"}), "Checking", true, false),
+        (
+            json!({"status":"available","availableVersion":"0.99.0"}),
+            "0.99.0",
+            false,
+            true,
+        ),
+        (
+            json!({"status":"downloading","availableVersion":"0.99.0","percent":42}),
+            "Downloading",
+            true,
+            true,
+        ),
+        (
+            json!({"status":"ready","availableVersion":"0.99.0"}),
+            "Restart to update",
+            false,
+            true,
+        ),
+    ] {
+        window
+            .emit(
+                "update-changed",
+                json!({"currentVersion":version,"windowsUpdate":state}),
+            )
+            .unwrap();
+        wait_for(|| {
+            script(
+                window,
+                "document.querySelector('.update-check-button')?.textContent",
+            ) == label
+        });
+        let background = if primary {
+            "rgb(232, 102, 90)"
+        } else {
+            "rgb(41, 38, 36)"
+        };
+        wait_for(|| {
+            script(
+                window,
+                "getComputedStyle(document.querySelector('.update-check-button')).backgroundColor",
+            ) == background
+        });
+        let observed = script(
+            window,
+            "(() => {const b=document.querySelector('.update-check-button');return {version:b.closest('.settings-row').querySelector('.settings-row-hint').textContent,busy:b.getAttribute('aria-busy')==='true',spinner:Boolean(b.querySelector('svg')),disabled:b.disabled,background:getComputedStyle(b).backgroundColor};})()",
+        );
+        assert_eq!(observed["version"], version);
+        assert_eq!(observed["busy"], loading);
+        assert_eq!(observed["spinner"], loading);
+        assert_eq!(observed["disabled"], loading);
+        assert_eq!(observed["background"], background);
+        preview(
+            window,
+            output.join(format!("update-{}.png", state["status"].as_str().unwrap())),
+        );
+    }
+    // Synthetic snapshots verify renderer states, without downloading or installing.
+    window
+        .emit(
+            "update-changed",
+            app.state::<updater::Updates>().snapshot(app),
+        )
+        .unwrap();
 }
 
 // Explicit acceptance mode pauses at matching idle/visible/closed states so an

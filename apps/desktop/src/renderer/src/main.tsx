@@ -16,6 +16,11 @@ if (rootElement === null) {
 
 const isTrayMenu = new URLSearchParams(window.location.search).get('view') === 'tray-menu'
 if (isTrayMenu) document.documentElement.dataset.surface = 'tray-menu'
+else {
+  document.addEventListener('contextmenu', (event) => {
+    event.preventDefault()
+  })
+}
 
 createRoot(rootElement).render(<StrictMode>{isTrayMenu ? <TrayMenu /> : <App />}</StrictMode>)
 

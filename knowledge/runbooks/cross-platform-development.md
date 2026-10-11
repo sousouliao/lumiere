@@ -30,6 +30,8 @@ Installed beUI components:
 - `dock`
 - `select`
 - `switch`
+- `animated-badge` (inline SVG icons; warm-white info variant for ready settings status)
+- `loader` (spinner only; inherits the update button color)
 
 Preview and add a component from the live registry:
 

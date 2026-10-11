@@ -222,17 +222,17 @@ describe('SettingsView', () => {
       currentVersion: '0.2.0',
     })
 
-    expect(markup).toContain('settings-row-value--muted">0.2.0')
+    expect(markup).toContain('settings-row-hint">0.2.0')
     expect(markup).not.toContain('Check for updates')
   })
 
   it.each([
-    [{ status: 'idle' }, 'Check for updates'],
-    [{ status: 'checking' }, 'Checking…'],
-    [{ status: 'up-to-date' }, 'Check again'],
+    [{ status: 'idle' }, 'Check'],
+    [{ status: 'checking' }, 'Checking'],
+    [{ status: 'up-to-date' }, 'Check'],
     [{ status: 'failed', retry: 'check', message: 'Unable to check for updates' }, 'Try again'],
-    [{ status: 'available', availableVersion: '0.6.1' }, 'Download update'],
-    [{ status: 'downloading', availableVersion: '0.6.1', percent: 42 }, 'Downloading 42%'],
+    [{ status: 'available', availableVersion: '0.6.1' }, '0.6.1'],
+    [{ status: 'downloading', availableVersion: '0.6.1', percent: 42 }, 'Downloading'],
     [{ status: 'ready', availableVersion: '0.6.1' }, 'Restart to update'],
     [
       { status: 'failed', retry: 'download', message: 'Unable to download or verify the update' },
@@ -248,6 +248,15 @@ describe('SettingsView', () => {
       })
       expect(markup).toContain(text)
       expect(markup).toContain('aria-live="polite"')
+      expect(markup).toContain('settings-row-hint">0.6.0</span>')
+      const button = /<button[^>]*update-check-button[\s\S]*?<\/button>/.exec(markup)?.[0]
+      expect(button).not.toContain('…')
+      const loading = windowsUpdate.status === 'checking' || windowsUpdate.status === 'downloading'
+      expect(markup).toContain(`aria-busy="${String(loading)}"`)
+      if (loading) expect(markup).toContain('<svg aria-hidden="true" width="14"')
+      if (['available', 'downloading', 'ready'].includes(windowsUpdate.status)) {
+        expect(markup).toContain('update-check-button--primary')
+      }
       expect(markup).not.toContain('View update')
     },
   )
