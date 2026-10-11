@@ -32,8 +32,13 @@ fn hide(window: &WebviewWindow) -> Result<(), String> {
             size_of::<BOOL>() as u32,
         )
         .map_err(|error| error.to_string())?;
-        // ShowWindow's return value is the previous visibility, not a success flag.
-        let _ = ShowWindow(hwnd, SW_HIDE);
+        // Keep Tao's cached VISIBLE flag synchronized so a later window.show()
+        // actually restores the window. Raw ShowWindow alone bypasses that state.
+        let requested = window.hide().map_err(|error| error.to_string());
+        // Complete native hiding now even if the framework queued its request.
+        if requested.is_ok() {
+            let _ = ShowWindow(hwnd, SW_HIDE);
+        }
         let hidden = !IsWindowVisible(hwnd).as_bool();
         let composed = DwmFlush().map_err(|error| error.to_string());
         // Restore the default transition policy of our own main window.
@@ -44,6 +49,7 @@ fn hide(window: &WebviewWindow) -> Result<(), String> {
             size_of::<BOOL>() as u32,
         )
         .map_err(|error| error.to_string());
+        requested?;
         composed?;
         restored?;
         if !hidden {

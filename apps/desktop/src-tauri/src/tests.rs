@@ -85,6 +85,7 @@ fn preview(window: &tauri::WebviewWindow, path: PathBuf) {
         .unwrap();
     rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap();
 }
+#[track_caller]
 fn wait_for(mut condition: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(15);
     while !condition() {
@@ -112,14 +113,14 @@ fn resources() -> Value {
 
 fn exercise(app: &AppHandle, output: &std::path::Path) {
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
-    assert!(app.webview_windows().is_empty());
+    assert!(app.get_webview_window("main").is_none());
     let result = tauri::async_runtime::block_on(
         app.state::<Controller>().capture(app, CaptureMode::Display),
     );
     assert_eq!(result["status"], "success");
     assert!(
-        app.webview_windows().is_empty(),
-        "quiet capture created a WebView"
+        app.get_webview_window("main").is_none(),
+        "quiet capture created the main WebView"
     );
     let host_id =
         tauri::async_runtime::block_on(app.state::<Controller>().host_process_id()).unwrap();
@@ -227,7 +228,55 @@ fn exercise(app: &AppHandle, output: &std::path::Path) {
                 assert_eq!(result["status"], "success");
                 wait_for(|| window.is_visible().unwrap_or(false));
                 assert!(!window.is_minimized().unwrap());
+                let owned = app.clone();
+                let region = tauri::async_runtime::spawn(async move {
+                    owned
+                        .state::<Controller>()
+                        .capture(&owned, CaptureMode::Region)
+                        .await
+                });
+                // Discover and cancel only this fixture's supervised Region HWND.
+                use windows::{
+                    Win32::{
+                        Foundation::{LPARAM, WPARAM},
+                        UI::WindowsAndMessaging::*,
+                    },
+                    core::w,
+                };
+                let mut region_window = None;
+                wait_for(|| {
+                    // SAFETY: Read-only discovery; validate the Host PID before use.
+                    unsafe {
+                        if let Ok(hwnd) = FindWindowW(None, w!("Lumiere Region")) {
+                            let mut owner = 0;
+                            GetWindowThreadProcessId(hwnd, Some(&mut owner));
+                            if owner == host_id && IsWindowVisible(hwnd).as_bool() {
+                                region_window = Some(hwnd);
+                            }
+                        }
+                    }
+                    region_window.is_some()
+                });
+                // SAFETY: HWND was verified to belong to the fixture's child Host.
+                unsafe {
+                    PostMessageW(region_window, WM_KEYDOWN, WPARAM(0x1b), LPARAM(0)).unwrap();
+                }
+                assert_eq!(
+                    tauri::async_runtime::block_on(region).unwrap()["status"],
+                    "cancelled"
+                );
+                wait_for(|| window.is_visible().unwrap_or(false));
+                assert!(!window.is_minimized().unwrap());
             }
+            window.minimize().unwrap();
+            wait_for(|| window.is_minimized().unwrap_or(false));
+            assert_eq!(
+                tauri::async_runtime::block_on(controller.capture(app, CaptureMode::Display))["status"],
+                "success"
+            );
+            assert!(window.is_minimized().unwrap());
+            window.unminimize().unwrap();
+            wait_for(|| !window.is_minimized().unwrap_or(true));
             let metrics = script(
                 &window,
                 "({width:innerWidth,height:innerHeight,dpr:devicePixelRatio})",
@@ -276,7 +325,7 @@ fn exercise(app: &AppHandle, output: &std::path::Path) {
             &window,
             "document.querySelector('[aria-label=Close]').click(); true",
         );
-        wait_for(|| app.webview_windows().is_empty());
+        wait_for(|| app.get_webview_window("main").is_none());
         wait_for(|| !controller.shortcuts_suspended());
         std::thread::sleep(Duration::from_millis(250));
         samples.push(json!({"cycle":cycle+1,"resources":resources()}));
@@ -402,7 +451,7 @@ fn acceptance(app: &AppHandle, output: &std::path::Path) {
         &window,
         "document.querySelector('[aria-label=Close]').click(); true",
     );
-    wait_for(|| app.webview_windows().is_empty());
+    wait_for(|| app.get_webview_window("main").is_none());
     acceptance_phase(output, "closed");
 }
 
