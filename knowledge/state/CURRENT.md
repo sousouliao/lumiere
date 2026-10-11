@@ -1,14 +1,12 @@
 # Current Project State
 
 - Updated: 2026-10-11
-- Source frontier: native FP16/scRGB Region preview under [#36](https://github.com/sousouliao/lumiere/issues/36) preserves unmasked background values and existing PNG conversion. WGC support/target reuse and bounded resource observations pass without relaxed budgets; development capture/codecs compile with optimization. Clipboard acquisition now retries transient contention within one second without an unconditional delay; controlled contention/timeout and repeated 4K delivery pass. Default/shared tests, scoped native checks and repository gates pass. Physical SDR/HDR appearance and shell latency acceptance remain pending; exact measurements and prior failures are owned by the Issue.
-- Prior source slice: configurable main-window hiding during capture under [#35](https://github.com/sousouliao/lumiere/issues/35) is implemented with scoped repository checks; Windows native build/runtime acceptance remains pending.
-- Prior source slice: snapshot synchronization, typed Host-result and native diagnostic cleanup under [#34](https://github.com/sousouliao/lumiere/issues/34) is repository-checked as scoped below. The maintainer owns Windows native shell build/tests and real runtime acceptance; this source is not a new published release.
-- Frontier: Windows v0.8.0 is published with current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33); maintainer installation/login/Startup Apps acceptance remains pending by explicit authorization. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
+- Frontier: Windows v0.9.0 is published, integrating snapshot/diagnostic cleanup under [#34](https://github.com/sousouliao/lumiere/issues/34), configurable main-window hiding under [#35](https://github.com/sousouliao/lumiere/issues/35), and native FP16/scRGB Region preview/resource stability under [#36](https://github.com/sousouliao/lumiere/issues/36).
+- Windows default/shared tests, explicit native checks, Debug/Release GUI fixtures and repository gates pass. The maintainer accepted local Region selection behavior and authorized publication. Installed v0.9.0 observations and wider hardware coverage are not inferred from those checks.
+- Current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33) retains explicitly deferred real login/Startup Apps acceptance. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
-- Public release: [v0.8.0](https://github.com/sousouliao/lumiere/releases/tag/v0.8.0), stable Windows x64; tag/source commit `6805dd6fb415ef00e1c5523a482b4ea72f1dfd1a`.
-- Installer: 3545566 bytes; SHA256 `682ac6fe732e7b989686806d589ca8f3834d0ef08e26bbf0f97db5a0568a2dd1`.
-- The maintainer authorized v0.8.0 publication on 2026-10-09 and will install it to test; the latest completed installed-release observation remains v0.7.1.
+- Public release: [v0.9.0](https://github.com/sousouliao/lumiere/releases/tag/v0.9.0), stable Windows x64; tag/source commit `0c9b847d4d24659e274079fca23e8aee4ff6ea23`.
+- Installer: 3575757 bytes; SHA256 `d3bc398f7496a257cabf06129069ad73872aa0fe0997d379e8ab68c470f7e1e7`.
 
 ## Product
 
@@ -29,8 +27,8 @@ settings with v1–v5 migration. The shell hides an originally visible, non-mini
 main window on its owning thread without DWM transitions and waits for composition
 before dispatching capture. Display and Region both restore that window after any
 outcome; background capture creates no main WebView. Off retains the visible window.
-The reported intermittent translucency is consistent with the old unsynchronized
-hide/capture sequence; Windows observation must confirm the cause and resulting behavior.
+Framework visibility and native hiding are synchronized so restoration can show the
+window again. Debug and Release GUI fixtures verify scoped restoration behavior.
 
 Windows v5 Display and v6 same-frame Region/cancellation retain floating-point
 acquisition and fixed sRGB Visual Match, with the same PNG for clipboard and folder.
@@ -48,33 +46,29 @@ Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
 
-[#35](https://github.com/sousouliao/lumiere/issues/35): SettingsView passes 20 tests,
-desktop TypeScript and renderer build pass, and scoped ESLint/Prettier/Rustfmt and
-`git diff --check` pass on macOS. A temporary crate loading production settings.rs
-passes two tests covering v1–v5 migration, v6 save/load and boolean validation.
-A Windows-target source fixture compiles capture_window.rs against windows 0.62.2
-with a minimal Tauri interface shim; this checks API signatures, not the real Tauri
-runtime. Static renderer previews at 480×370 and 440×340 retain the existing layout;
-Capture content scrolls when needed. Full shell `cargo check --locked --offline -p
-lumiere-desktop --target x86_64-pc-windows-msvc` stops at uncached aho-corasick 1.1.5.
-The existing Windows GUI fixture now checks persisted on/off choices and Display
-window restoration, but it has not been executed here. Native build/tests, actual
-on/off capture pixels, Region cancellation/failure and absence of translucent remnants
-remain maintainer Windows acceptance in #35.
+[#36](https://github.com/sousouliao/lumiere/issues/36): the native FP16/scRGB preview
+fixture preserves unmasked HDR/negative texture values and byte-identical PNG output.
+Selection-only masking persists through capture feedback; theme-colored crosshairs
+disappear on release. WGC
+support/target reuse passes resource fixtures with unchanged budgets and bounded
+post-release sampling. Optimized development capture/codecs remove the measured Debug
+conversion/encoding delay. Clipboard retries only transient access contention for at
+most one second; controlled contention/timeout and repeated 4K delivery pass without
+an unconditional delay. Exact commands, measurements and hardware scope are in the Issue.
 
-[#34](https://github.com/sousouliao/lumiere/issues/34) source cleanup: one renderer observer owns asynchronous listener readiness,
-initial snapshot/event ordering and cleanup; capture-contract owns decoded result types
-and validation, which remain typed through shell projection. Native failure stages/HRESULT
-and Host request/delivery diagnostics use stderr without changing JSONL output.
-On macOS, `pnpm test:shared` passes 57 tests; desktop TypeScript, renderer build,
-scoped ESLint/Prettier/Rustfmt and `git diff --check` pass. Contract tests pass 8 tests with
-`RUSTUP_TOOLCHAIN=stable cargo test --locked --offline -p lumiere-capture-contract -- --skip current_windows_requests_conform`;
-the skipped existing test hardcodes Windows paths and remains for Windows. Windows-target
-`cargo check` and Clippy for capture-windows/Host (including tests) pass without executing
-Windows code. A temporary source-based shell transport/projection fixture passes 5 tests;
-one real-child test remains ignored. Independent read-only review found no blocking
-regression; its missing busy-capture diagnostic was fixed. Full Tauri native build/tests
-and GUI/capture observations remain unverified by the agent and assigned to the maintainer.
+[#35](https://github.com/sousouliao/lumiere/issues/35): Windows
+`native_shell_webview_lifecycle` passes three cycles in Debug and Release, checking
+persisted hiding on/off, Display restoration, Region cancellation/restoration,
+minimized state and main-WebView destruction. Framework visibility synchronization
+fixes the hidden-window restoration regression. These fixtures do not establish every
+physical shortcut, failure mode or compositor/hardware combination.
+
+[#34](https://github.com/sousouliao/lumiere/issues/34): current Windows checks cover
+snapshot ordering/listener cleanup, typed Host-result projection and stderr diagnostics.
+Local default Rust tests pass 43 tests, shared tests pass 61 tests, and eight explicit
+native capture/resource/supervision tests pass. `pnpm check`, workspace Clippy with
+`lumiere-desktop/custom-protocol`, Rustfmt, schema cases and renderer/native builds pass.
+The release workflow independently passes its audit and Windows build gates.
 
 #33: five scoped Rust tests, 16 SettingsView tests, desktop TypeScript,
 scoped ESLint/Clippy, formatting, renderer/native Release builds, and the explicit
@@ -87,12 +81,12 @@ are owned by #33. The maintainer authorized v0.8.0 publication before those manu
 observations and will test the installed public build; this is an explicit deferral,
 not completed platform evidence. The public v0.8.0 notes disclose that pending check.
 
-The v0.8.0 publication evidence is:
+The v0.9.0 publication evidence is:
 
-- [Release 37946086840](https://github.com/sousouliao/lumiere/actions/runs/37946086840) succeeded for the tagged commit, including shared checks, Windows Rust checks/build and updater signature verification. Local shared tests pass 47 tests.
-- Downloaded all five public assets; their SHA256 digests and sizes match GitHub metadata. The installer matches `SHA256SUMS`; both updater feeds identify v0.8.0, legacy SHA512 matches the installer, and Tauri metadata matches the detached signature and versioned installer URL.
-- The public tag targets the release commit; release is non-draft/non-prerelease, and the latest-download Tauri endpoint returns v0.8.0 with the same signature. Authenticode remains NotSigned.
-- Maintainer installation and real login/Startup Apps observations remain open in #33; synthetic approval records and source checks do not close them.
+- [Release 38131166684](https://github.com/sousouliao/lumiere/actions/runs/38131166684) succeeded for the tagged commit; Audit, Build Windows and Publish all completed successfully.
+- Downloaded all five public assets; SHA256 digests and sizes match GitHub metadata. The installer matches `SHA256SUMS`; both updater feeds identify v0.9.0, legacy SHA512 matches the installer, and Tauri metadata matches the detached signature and versioned installer URL.
+- The public tag targets the release commit; release is non-draft/non-prerelease, and the latest-download Tauri endpoint returns v0.9.0 with the same signature. Authenticode remains NotSigned.
+- `official_updater_accepts_signed_bytes_and_rejects_tampering` passes against the downloaded public installer/metadata, validating signed bytes and rejecting tampered bytes/signature/version.
 
 The following v0.7.0 migration evidence remains owned by
 [#32](https://github.com/sousouliao/lumiere/issues/32); P0–P5 evidence remains in #26–#31:
@@ -111,18 +105,9 @@ backups are restored and no isolated installer/legacy-download processes remain.
 
 ## Next action
 
-Under [#35](https://github.com/sousouliao/lumiere/issues/35), build/test the current source on Windows,
-run `native_shell_webview_lifecycle` explicitly with its isolated fixture directory,
-and verify Display/Region with hiding on/off, repeated capture, cancellation/failure,
-quiet/minimized/closed windows and translucent remnants. Continue the existing #34
-snapshot/diagnostic acceptance in the same Windows pass.
-
-Under [#34](https://github.com/sousouliao/lumiere/issues/34), build the current source on Windows, run the native checks in the Windows runbook,
-and verify settings/update state while opening/closing the WebView, Display/Region
-capture and cancellation, partial delivery, and structured failure diagnostics.
-
-Install published v0.8.0 and complete maintainer sign-out/sign-in and Windows Startup
-Apps disable/restore acceptance under #33. Future versions follow
-the [release contract](../contracts/releases.md) and [runbook](../runbooks/releasing.md);
+Install published v0.9.0 for maintainer usage observations within the existing #34–#36
+acceptance scope. Complete the explicitly deferred sign-out/sign-in and Windows Startup
+Apps disable/restore acceptance under #33. Future versions follow the
+[release contract](../contracts/releases.md) and [runbook](../runbooks/releasing.md);
 published bytes/tags are immutable. Do not recreate a migration backlog or reinterpret
 maintainer reports and synthetic fixtures as broader platform guarantees.
