@@ -2,7 +2,7 @@
 
 - Updated: 2026-10-11
 - Frontier: Windows v0.9.0 is published, integrating snapshot/diagnostic cleanup under [#34](https://github.com/sousouliao/lumiere/issues/34), configurable main-window hiding under [#35](https://github.com/sousouliao/lumiere/issues/35), and native FP16/scRGB Region preview/resource stability under [#36](https://github.com/sousouliao/lumiere/issues/36).
-- Windows default/shared tests, explicit native checks, Debug/Release GUI fixtures and repository gates pass. The maintainer accepted local Region selection behavior and authorized publication. Installed v0.9.0 observations and wider hardware coverage are not inferred from those checks.
+- Windows default/shared tests, explicit native checks, Debug/Release GUI fixtures and repository gates pass. The maintainer accepted local Region selection behavior and authorized publication, and reported installed v0.9.0 real-machine verification without issues on 2026-10-11. This is maintainer evidence within their tested scope, not agent observation or a wider hardware matrix.
 - Current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33) retains explicitly deferred real login/Startup Apps acceptance. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
 - Public release: [v0.9.0](https://github.com/sousouliao/lumiere/releases/tag/v0.9.0), stable Windows x64; tag/source commit `0c9b847d4d24659e274079fca23e8aee4ff6ea23`.
@@ -116,9 +116,10 @@ backups are restored and no isolated installer/legacy-download processes remain.
 
 ## Next action
 
-Install published v0.9.0 for maintainer usage observations within the existing #34–#36
-acceptance scope. Complete the explicitly deferred sign-out/sign-in and Windows Startup
-Apps disable/restore acceptance under #33. Future versions follow the
+The maintainer reports installed v0.9.0 real-machine verification without issues.
+Confirm the explicitly deferred sign-out/sign-in and Windows Startup Apps disable/restore
+observations under #33 separately; the general usage report does not specify those steps.
+Future versions follow the
 [release contract](../contracts/releases.md) and [runbook](../runbooks/releasing.md);
 published bytes/tags are immutable. Do not recreate a migration backlog or reinterpret
 maintainer reports and synthetic fixtures as broader platform guarantees.
