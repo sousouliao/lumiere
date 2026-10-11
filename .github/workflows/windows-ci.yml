@@ -38,6 +38,12 @@ jobs:
         shell: pwsh
         run: rustup show active-toolchain
 
+      - name: Restore Rust dependency cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-native
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Build native release shell and Host
         run: pnpm --filter @lumiere/desktop build:native
 

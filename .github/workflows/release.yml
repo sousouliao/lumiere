@@ -113,6 +113,12 @@ jobs:
         shell: pwsh
         run: rustup show active-toolchain
 
+      - name: Restore Rust dependency cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-native
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Prepare native release payload
         run: pnpm --filter @lumiere/desktop build:native
 
@@ -136,7 +142,7 @@ jobs:
 
       - name: Verify updater signatures against the embedded public key
         shell: pwsh
-        run: cargo test --locked -p lumiere-desktop --features custom-protocol official_updater_accepts_signed_bytes_and_rejects_tampering -- --ignored --nocapture
+        run: cargo test --locked --workspace --features lumiere-desktop/custom-protocol official_updater_accepts_signed_bytes_and_rejects_tampering -- --ignored --nocapture
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7

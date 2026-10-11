@@ -31,6 +31,16 @@ Multi-command native/check steps use explicit fail-fast Bash so an earlier failu
 be hidden by the last command succeeding. A local equivalent run verifies local source;
 it does not establish remote Actions success for a commit absent from the remote branch.
 
+Windows CI and release jobs share a Rust dependency cache after selecting the pinned
+toolchain. Only successful `main` jobs save it; PR jobs may restore it. Cached dependencies
+reduce compilation work but never skip current-source builds or verification gates.
+The post-package updater signature check uses the same workspace and feature selection
+as the earlier Rust tests to reuse their compiled test binaries:
+
+```powershell
+cargo test --locked --workspace --features lumiere-desktop/custom-protocol official_updater_accepts_signed_bytes_and_rejects_tampering -- --ignored --nocapture
+```
+
 ## Publish
 
 1. Re-audit changes since the prepared commit. If product behavior changed, return to
