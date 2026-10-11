@@ -4,6 +4,26 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.9.1`
+
+Release platforms: Windows
+
+### Changed
+
+- Show available capture permission and engine status as warm-white badges with checkmarks.
+- Keep the current version visible while checking or downloading updates. Use a compact Check button, animated loading indicators, and a coral new-version button to start downloading, followed by Restart to update.
+
+### Fixed
+
+- Increase the default and minimum window height so Capture settings fit without a scrollbar at normal zoom.
+- Disable the browser context menu in the main window and Settings.
+
+### Known limitations
+
+- The Windows installer is not Authenticode signed; Windows may show an unknown-publisher or SmartScreen warning, or block execution. Updater integrity signatures do not establish publisher identity.
+- Windows Graphics Capture retains its system capture border. Output remains sRGB Visual Match PNG, not HDR-preserved export.
+- Windows x64 is the only supported platform. Automatic startup after Windows sign-in and changes made in Windows Startup Apps retain the installed-release verification limitation from v0.8.0.
+
 ## [0.9.0] - 2026-10-11
 
 Release platforms: Windows
