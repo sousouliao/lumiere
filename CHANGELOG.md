@@ -4,6 +4,26 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.10.0`
+
+Release platforms: Windows
+
+### Added
+
+- Automatically outline the application window under the pointer during region capture. Click to lock the window and double-click to capture it, or drag to select a custom region as before.
+
+### Changed
+
+- Keep window hover and locked previews undimmed, with visible bounds, dimensions and capture hints. Use Windows visible frame bounds to avoid including invisible resize borders.
+
+### Known limitations
+
+- Window snapping selects a rectangle from the frozen image of the current display. It does not recover covered content, combine a window across displays, or detect internal UI elements. Moving windows may change between frame capture and boundary collection.
+- Native/GPU fixtures verify window snapping and synthetic double-click handling. Physical interaction in everyday applications and mixed-DPI display acceptance remain pending; the maintainer authorized publication with these checks deferred.
+- The Windows installer is not Authenticode signed; Windows may show an unknown-publisher or SmartScreen warning, or block execution. Updater integrity signatures do not establish publisher identity.
+- Windows Graphics Capture retains its system capture border. Output remains sRGB Visual Match PNG, not HDR-preserved export.
+- Windows x64 is the only supported platform. Automatic startup after Windows sign-in and changes made in Windows Startup Apps retain the installed-release verification limitation from v0.8.0.
+
 ## [0.9.1] - 2026-10-12
 
 Release platforms: Windows
