@@ -1,13 +1,13 @@
 # Current Project State
 
 - Updated: 2026-10-15
-- Active slice: [#37](https://github.com/sousouliao/lumiere/issues/37) implements native application-window hover snapping, click locking and double-click release capture, retaining manual drag capture. Scoped Windows fixtures pass; physical app/mixed-DPI acceptance remains pending. No UIA or internal-element detection is included.
-- Frontier: Windows v0.9.1 is published with a taller minimum/default window, warm-white settings status badges, disabled main-window context menus, and compact update controls with loading indicators and explicit download/restart actions.
-- Shared checks and the scoped Windows Release WebView fixture pass; the v0.9.1 release workflow independently passes all jobs. The maintainer's installed v0.9.0 acceptance on 2026-10-11 remains evidence for their tested scope, not installed v0.9.1 acceptance or a wider hardware matrix.
+- Frontier: Windows v0.10.0 is published with native application-window hover snapping, click locking and double-click release capture under [#37](https://github.com/sousouliao/lumiere/issues/37), retaining manual drag capture. No UIA or internal-element detection is included.
+- The maintainer requested publication after being informed that real-app physical interaction and mixed-DPI acceptance remain pending. These checks are explicitly deferred and disclosed in the public notes, not completed platform evidence.
+- Shared checks, three local Release native/GPU fixtures and the release workflow pass. The maintainer's installed v0.9.0 acceptance on 2026-10-11 remains evidence for their tested scope, not installed v0.10.0 acceptance or a wider hardware matrix.
 - Current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33) retains explicitly deferred real login/Startup Apps acceptance. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
-- Public release: [v0.9.1](https://github.com/sousouliao/lumiere/releases/tag/v0.9.1), stable Windows x64; tag/source commit `5edfd33d77e11a390d0c5996f121edd052fd968f`.
-- Installer: 3578548 bytes; SHA256 `74fceab28a81f0072b690490c0b867adc968b87a3abc53dbdf8f100b49a0ef07`.
+- Public release: [v0.10.0](https://github.com/sousouliao/lumiere/releases/tag/v0.10.0), stable Windows x64; tag/source commit `6c23d0609839a3873fa01c4fd36642086ab70396`.
+- Installer: 3580956 bytes; SHA256 `c2698b782b853039f97b876aa3a81ec48ebfe564ca6d5b51ac13289dc9c6bc58`.
 
 ## Product
 
@@ -33,6 +33,9 @@ window again. Debug and Release GUI fixtures verify scoped restoration behavior.
 
 Windows v5 Display and v6 same-frame Region/cancellation retain floating-point
 acquisition and fixed sRGB Visual Match, with the same PNG for clipboard and folder.
+Region automatically outlines top-level application windows using DWM visible bounds;
+hover and click-locked previews remain unmasked. Double-click release commits the
+frozen rectangle; manual dragging and cancellation remain available.
 No HDR-preserved export, borderless capture or wider compositor-fidelity claim.
 Installer Authenticode status remains NotSigned; updater integrity signatures do
 not establish Windows publisher identity.
@@ -46,6 +49,19 @@ preserve installation location, settings and unknown files. Private keys stay ou
 Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
+
+v0.10.0: [Release 38610882685, attempt 2](https://github.com/sousouliao/lumiere/actions/runs/38610882685/attempts/2)
+passes Audit, Build Windows and Publish for the tagged source, with all Rust/shared
+checks and official updater signature validation. Attempt 1 failed in the installer
+test binary with `0xc0000409`; six installer tests and 12 scoped repeats pass locally,
+and the unchanged source passes on attempt 2. The initial failure remains unexplained.
+All five downloaded public assets match GitHub sizes/digests. Installer SHA256 matches
+`SHA256SUMS`; legacy SHA512, signed Tauri metadata, detached signature, tag target,
+public notes and latest-download alias agree. The current-source Debug official
+updater verifier accepts downloaded v0.10.0 bytes and rejects tampered bytes/signature/
+version, using the existing development resource override to avoid copying over the
+running development Host. Authenticode remains NotSigned. Exact checks and explicitly
+deferred physical/mixed-DPI acceptance are in #37.
 
 #37: `cargo test --locked -p lumiere-capture-windows --lib` passes 10 default tests;
 `cargo test --locked -p lumiere-capture-windows overlay:: -- --ignored --nocapture --test-threads=1`
@@ -132,11 +148,9 @@ backups are restored and no isolated installer/legacy-download processes remain.
 
 ## Next action
 
-Try #37 in a restarted development app: hover/click/double-click real application
-windows, retain manual drag and cancellation, and check mixed-DPI/cross-monitor
-boundaries on the maintainer's displays. No release has been prepared for this slice.
-
-The maintainer can verify the installed v0.9.1 settings and updater UI; local WebView observations do not replace installed-release acceptance.
+Install published v0.10.0 and complete the explicitly deferred #37 physical
+hover/click/double-click, manual drag/cancellation and mixed-DPI/cross-monitor acceptance
+on the maintainer's displays. Local fixtures do not replace installed-release acceptance.
 Confirm the explicitly deferred sign-out/sign-in and Windows Startup Apps disable/restore
 observations under #33 separately; the general usage report does not specify those steps.
 Future versions follow the
