@@ -14,6 +14,13 @@ use windows::{
 };
 use windows_numerics::Vector2;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Phase {
+    Hover,
+    Drag,
+    Capture,
+}
+
 pub(super) struct Presenter {
     swap: IDXGISwapChain1,
     immediate: windows::Win32::Graphics::Direct3D11::ID3D11DeviceContext,
@@ -129,17 +136,13 @@ impl Presenter {
             })
         }
     }
-    pub fn draw(
-        &self,
-        selection: Option<Rect>,
-        pointer: (f64, f64),
-        capturing: bool,
-    ) -> Result<()> {
-        self.render(selection, pointer, capturing)?;
+    pub fn draw(&self, selection: Option<Rect>, pointer: (f64, f64), phase: Phase) -> Result<()> {
+        self.render(selection, pointer, phase)?;
         // SAFETY: The worker owns the completed swap-chain back buffer.
         unsafe { self.swap.Present(0, DXGI_PRESENT::default()).ok() }
     }
-    fn render(&self, selection: Option<Rect>, pointer: (f64, f64), capturing: bool) -> Result<()> {
+    fn render(&self, selection: Option<Rect>, pointer: (f64, f64), phase: Phase) -> Result<()> {
+        let capturing = phase == Phase::Capture;
         let source = self.source.as_ref().ok_or_else(|| {
             windows::core::Error::new(
                 windows::Win32::Foundation::E_FAIL,
@@ -153,6 +156,8 @@ impl Presenter {
                 self.pill(
                     if selection.is_none() {
                         "Drag to select · Esc cancels"
+                    } else if phase == Phase::Hover {
+                        "Double-click to capture · Drag to select · Esc cancels"
                     } else if valid {
                         "Release to capture · Esc cancels"
                     } else {
@@ -203,7 +208,7 @@ impl Presenter {
             // Only the independent swap-chain target receives UI; the frozen source is read-only.
             self.immediate.CopyResource(&self.target, source);
             c.BeginDraw();
-            if let Some(r) = selection {
+            if let Some(r) = selection.filter(|_| phase != Phase::Hover) {
                 // Dim only outside the selection; the four rectangles never overlap.
                 let fill = |bounds: D2D_RECT_F| {
                     if bounds.right > bounds.left && bounds.bottom > bounds.top {
@@ -537,26 +542,29 @@ mod tests {
             presenter
                 .attach(&frame.texture, 1.0, output_scale.recip())
                 .unwrap();
-            for selection in [
-                None,
-                Some(Rect {
-                    left: 16.0,
-                    top: 16.0,
-                    right: 80.0,
-                    bottom: 56.0,
-                }),
-                None,
+            let selection = Some(Rect {
+                left: 16.0,
+                top: 16.0,
+                right: 80.0,
+                bottom: 56.0,
+            });
+            for (selection, phase) in [
+                (None, Phase::Hover),
+                (selection, Phase::Hover),
+                (selection, Phase::Drag),
+                (selection, Phase::Capture),
+                (None, Phase::Hover),
             ] {
                 // Read before Present rotates the flip-model back buffers.
-                presenter.render(selection, (-1.0, -1.0), false).unwrap();
+                presenter.render(selection, (-1.0, -1.0), phase).unwrap();
                 let rendered = device.readback(&presenter.target, 128, 96, None).unwrap();
                 assert_eq!(
                     expected_pixel(&rendered, 40, 40),
                     pixel,
                     "Unmasked scRGB pixels must retain HDR and negative values"
                 );
-                if selection.is_some() {
-                    let outside = expected_pixel(&rendered, 100, 20);
+                if selection.is_some() && phase != Phase::Hover {
+                    let outside = expected_pixel(&rendered, 100, 90);
                     let red = f16::from_le_bytes([outside[0], outside[1]]).to_f32();
                     assert!(
                         (red - 1.5 * 0.45).abs() < 0.002,
@@ -564,7 +572,7 @@ mod tests {
                     );
                 } else {
                     assert_eq!(
-                        expected_pixel(&rendered, 100, 20),
+                        expected_pixel(&rendered, 100, 90),
                         pixel,
                         "No residual mask on the next draw"
                     );

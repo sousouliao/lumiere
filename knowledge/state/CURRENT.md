@@ -1,6 +1,7 @@
 # Current Project State
 
-- Updated: 2026-10-12
+- Updated: 2026-10-15
+- Active slice: [#37](https://github.com/sousouliao/lumiere/issues/37) implements native application-window hover snapping, click locking and double-click release capture, retaining manual drag capture. Scoped Windows fixtures pass; physical app/mixed-DPI acceptance remains pending. No UIA or internal-element detection is included.
 - Frontier: Windows v0.9.1 is published with a taller minimum/default window, warm-white settings status badges, disabled main-window context menus, and compact update controls with loading indicators and explicit download/restart actions.
 - Shared checks and the scoped Windows Release WebView fixture pass; the v0.9.1 release workflow independently passes all jobs. The maintainer's installed v0.9.0 acceptance on 2026-10-11 remains evidence for their tested scope, not installed v0.9.1 acceptance or a wider hardware matrix.
 - Current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33) retains explicitly deferred real login/Startup Apps acceptance. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
@@ -45,6 +46,17 @@ preserve installation location, settings and unknown files. Private keys stay ou
 Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
+
+#37: `cargo test --locked -p lumiere-capture-windows --lib` passes 10 default tests;
+`cargo test --locked -p lumiere-capture-windows overlay:: -- --ignored --nocapture --test-threads=1`
+passes all three native/GPU fixtures on `DISPLAY11` (HDR, output scale 0.33333334).
+The owned-window fixture verifies topmost/hidden/excluded untitled-window selection,
+DWM bounds, click/double-click messages, exact 462×311 frozen-frame crop and cleanup.
+The FP16 fixture verifies unmasked hover, drag/capture masks, unchanged HDR/negative
+source values and byte-identical PNG output; manual reverse-drag capture still passes.
+Scoped Clippy, Rustfmt and the Debug Host build pass. Synthetic messages and owned
+fixture windows do not establish physical double-click, named application coverage
+or mixed-DPI hardware acceptance. Exact commands and remaining checks are in #37.
 
 v0.9.1 UI maintenance: `pnpm check`, `pnpm test:shared` (61 tests), and `pnpm build` pass locally. With `LUMIERE_GUI_CYCLES=3`, `cargo test --locked --release -p lumiere-desktop --features custom-protocol native_shell_webview_lifecycle -- --ignored --nocapture` passes. The fixture observes the Capture settings fitting at 440×400 logical pixels, warm-white badges, canceled context-menu events, and five scripted updater states in the real Windows WebView. Scripted states do not download or install an update. An Edge renderer check with mocked IPC separately verifies Check → Checking → new version → Downloading → Restart to update → Restarting, spinner rotation, and action dispatch.
 
@@ -119,6 +131,10 @@ hardware scope, not universal performance or public-binary peak memory. The user
 backups are restored and no isolated installer/legacy-download processes remain.
 
 ## Next action
+
+Try #37 in a restarted development app: hover/click/double-click real application
+windows, retain manual drag and cancellation, and check mixed-DPI/cross-monitor
+boundaries on the maintainer's displays. No release has been prepared for this slice.
 
 The maintainer can verify the installed v0.9.1 settings and updater UI; local WebView observations do not replace installed-release acceptance.
 Confirm the explicitly deferred sign-out/sign-in and Windows Startup Apps disable/restore

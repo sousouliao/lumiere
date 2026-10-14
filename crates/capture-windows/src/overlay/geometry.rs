@@ -13,6 +13,9 @@ pub(crate) struct Crop {
     pub height: u32,
 }
 impl Rect {
+    pub fn contains(self, point: (f64, f64)) -> bool {
+        point.0 >= self.left && point.0 < self.right && point.1 >= self.top && point.1 < self.bottom
+    }
     pub fn is_valid_selection(self, scale: f64) -> bool {
         self.right - self.left >= 32.0 * scale && self.bottom - self.top >= 24.0 * scale
     }

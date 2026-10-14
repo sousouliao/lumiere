@@ -3,6 +3,7 @@ pub(crate) mod geometry;
 mod presenter;
 #[cfg(test)]
 mod tests;
+mod window_targets;
 use crate::{Cancellation, capture::FrozenFrame, graphics::Device};
 use geometry::{Crop, Rect};
 use std::time::{Duration, Instant};
@@ -14,7 +15,11 @@ use windows::{
             LibraryLoader::GetModuleHandleW,
             Threading::{AttachThreadInput, GetCurrentThreadId},
         },
-        UI::{HiDpi::GetDpiForWindow, Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
+        UI::{
+            HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
+            Input::KeyboardAndMouse::*,
+            WindowsAndMessaging::*,
+        },
     },
     core::{Error, HSTRING, PCWSTR, Result, w},
 };
@@ -31,6 +36,11 @@ struct State {
     scale: f64,
     pointer: (f64, f64),
     origin: Option<(f64, f64)>,
+    dragging: bool,
+    confirming: bool,
+    drag_threshold: (f64, f64),
+    windows: Vec<Rect>,
+    locked: Option<Rect>,
     selected: Option<Rect>,
     cancelled: bool,
     dirty: bool,
@@ -38,13 +48,66 @@ struct State {
 }
 impl State {
     fn rect(&self) -> Option<Rect> {
-        self.origin
-            .and_then(|o| Rect::drag(o, self.pointer, self.width, self.height))
+        if self.dragging {
+            self.origin
+                .and_then(|o| Rect::drag(o, self.pointer, self.width, self.height))
+        } else {
+            self.locked.or_else(|| self.hover())
+        }
+    }
+    fn hover(&self) -> Option<Rect> {
+        // The first containing top-level window owns the point, even if too small to capture.
+        self.windows
+            .iter()
+            .copied()
+            .find(|r| r.contains(self.pointer))
+            .filter(|r| r.is_valid_selection(self.scale))
+    }
+    fn press(&mut self) {
+        if self.locked.is_none_or(|r| !r.contains(self.pointer)) {
+            self.locked = self.hover();
+        }
+        self.origin = Some(self.pointer);
+        self.dragging = false;
+        self.confirming = false;
+        self.capture = Some(true);
+    }
+    fn release(&mut self) {
+        if self.dragging {
+            self.selected = self.rect().filter(|r| r.is_valid_selection(self.scale));
+            self.locked = None;
+        } else if self.confirming {
+            self.selected = self.locked.filter(|r| r.contains(self.pointer));
+        }
+        self.origin = None;
+        self.dragging = false;
+        self.confirming = false;
+        self.capture = Some(false);
+    }
+    fn double_click(&mut self) {
+        let same_window = self.locked.is_some_and(|r| r.contains(self.pointer));
+        self.press();
+        // Commit on the final mouse-up, so it cannot reach the underlying application.
+        self.confirming = same_window;
+    }
+    fn phase(&self) -> presenter::Phase {
+        if self.dragging {
+            presenter::Phase::Drag
+        } else {
+            presenter::Phase::Hover
+        }
     }
     fn pointer(&mut self, value: LPARAM) {
         let x = (value.0 as u16 as i16) as f64;
         let y = ((value.0 >> 16) as u16 as i16) as f64;
         self.pointer = (x.clamp(0.0, self.width), y.clamp(0.0, self.height));
+        if let Some(origin) = self.origin
+            && ((self.pointer.0 - origin.0).abs() >= self.drag_threshold.0
+                || (self.pointer.1 - origin.1).abs() >= self.drag_threshold.1)
+        {
+            self.dragging = true;
+            self.locked = None;
+        }
         self.dirty = true;
     }
 }
@@ -89,10 +152,11 @@ unsafe extern "system" fn window_proc(
         if !pointer.is_null() {
             // No message handler invokes synchronous APIs that reenter this state borrow.
             let state = &mut *pointer;
-            if !state.active
+            if (!state.active || state.selected.is_some())
                 && matches!(
                     message,
                     WM_LBUTTONDOWN
+                        | WM_LBUTTONDBLCLK
                         | WM_LBUTTONUP
                         | WM_MOUSEMOVE
                         | WM_RBUTTONDOWN
@@ -119,8 +183,12 @@ unsafe extern "system" fn window_proc(
                 }
                 WM_LBUTTONDOWN => {
                     state.pointer(lparam);
-                    state.origin = Some(state.pointer);
-                    state.capture = Some(true);
+                    state.press();
+                    return LRESULT(0);
+                }
+                WM_LBUTTONDBLCLK => {
+                    state.pointer(lparam);
+                    state.double_click();
                     return LRESULT(0);
                 }
                 WM_MOUSEMOVE => {
@@ -129,14 +197,7 @@ unsafe extern "system" fn window_proc(
                 }
                 WM_LBUTTONUP if state.origin.is_some() => {
                     state.pointer(lparam);
-                    let rect = state.rect();
-                    state.origin = None;
-                    state.capture = Some(false);
-                    if let Some(rect) = rect
-                        && rect.is_valid_selection(state.scale)
-                    {
-                        state.selected = Some(rect);
-                    }
+                    state.release();
                     return LRESULT(0);
                 }
                 WM_CAPTURECHANGED if state.origin.is_some() => {
@@ -165,6 +226,7 @@ impl Overlay {
         let name = HSTRING::from(format!("Lumiere.NativeRegion.Rust.{thread}"));
         let class_desc = WNDCLASSEXW {
             cbSize: size_of::<WNDCLASSEXW>() as u32,
+            style: CS_DBLCLKS,
             lpfnWndProc: Some(window_proc),
             hInstance: instance,
             lpszClassName: PCWSTR(name.as_ptr()),
@@ -184,6 +246,11 @@ impl Overlay {
             scale: 1.0,
             pointer: (0.0, 0.0),
             origin: None,
+            dragging: false,
+            confirming: false,
+            drag_threshold: (4.0, 4.0),
+            windows: Vec::new(),
+            locked: None,
             selected: None,
             cancelled: false,
             dirty: true,
@@ -246,6 +313,20 @@ impl Overlay {
                 (point.y - bounds.top) as f64,
             ),
             origin: None,
+            dragging: false,
+            confirming: false,
+            // SAFETY: System metrics are read on the worker's per-monitor-aware thread.
+            drag_threshold: unsafe {
+                (
+                    GetSystemMetricsForDpi(SM_CXDRAG, dpi).max(1) as f64,
+                    GetSystemMetricsForDpi(SM_CYDRAG, dpi).max(1) as f64,
+                )
+            },
+            windows: window_targets::snapshot(self.window.0, bounds).unwrap_or_else(|error| {
+                crate::native_failure("region-window-snapshot", error);
+                Vec::new()
+            }),
+            locked: None,
             selected: None,
             cancelled: false,
             dirty: true,
@@ -274,7 +355,7 @@ impl Overlay {
         self.presenter
             .as_ref()
             .expect("presenter initialized")
-            .draw(None, self.state.pointer, false)?;
+            .draw(self.state.rect(), self.state.pointer, self.state.phase())?;
         // SAFETY: Present the matching frame while hidden, then activate exactly this worker-owned HWND.
         unsafe {
             SetWindowPos(
@@ -302,6 +383,11 @@ impl Overlay {
     pub(crate) fn finish(&mut self) {
         self.state.active = false;
         self.state.origin = None;
+        self.state.locked = None;
+        self.state.selected = None;
+        self.state.windows.clear();
+        self.state.dragging = false;
+        self.state.confirming = false;
         self.state.capture = None;
         // SAFETY: Release only this worker's capture/visibility before detaching the frozen GPU surface.
         unsafe {
@@ -334,7 +420,7 @@ impl Overlay {
                 self.presenter.as_ref().expect("prepared presenter").draw(
                     Some(rect),
                     self.state.pointer,
-                    true,
+                    presenter::Phase::Capture,
                 )?;
                 self.state.active = false;
                 return rect
@@ -384,7 +470,7 @@ impl Overlay {
                 self.presenter.as_ref().expect("prepared presenter").draw(
                     self.state.rect(),
                     self.state.pointer,
-                    false,
+                    self.state.phase(),
                 )?;
             }
             std::thread::sleep(Duration::from_millis(2));
