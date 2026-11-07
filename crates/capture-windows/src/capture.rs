@@ -151,8 +151,9 @@ pub(crate) fn freeze(
         pool,
     };
     let session = resources.pool.CreateCaptureSession(item)?;
-    // Best effort, same unpackaged-app border policy as the baseline.
+    // Best-effort unpackaged capture session policies: suppress capture border and mouse cursor.
     let _ = session.SetIsBorderRequired(false);
+    let _ = session.SetIsCursorCaptureEnabled(false);
     resources.session = Some(session);
     resources
         .session
