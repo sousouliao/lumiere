@@ -1,13 +1,13 @@
 # Current Project State
 
-- Updated: 2026-10-15
-- Frontier: Windows v0.10.0 is published with native application-window hover snapping, click locking and double-click release capture under [#37](https://github.com/sousouliao/lumiere/issues/37), retaining manual drag capture. No UIA or internal-element detection is included.
-- The maintainer requested publication after being informed that real-app physical interaction and mixed-DPI acceptance remain pending. These checks are explicitly deferred and disclosed in the public notes, not completed platform evidence.
-- Shared checks, three local Release native/GPU fixtures and the release workflow pass. The maintainer's installed v0.9.0 acceptance on 2026-10-11 remains evidence for their tested scope, not installed v0.10.0 acceptance or a wider hardware matrix.
+- Updated: 2026-11-08
+- Frontier: Windows v0.11.0 is published with cursor suppression during WGC display and region capture sessions, eliminating pointer clutter and residual cursor ghosts under selection overlays, retaining window snap and manual drag capture.
+- The maintainer authorized publication; deferred real-app physical interaction and mixed-DPI acceptance under #37 remain disclosed in the public notes.
+- Shared checks, capture-windows unit tests and the release workflow pass.
 - Current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33) retains explicitly deferred real login/Startup Apps acceptance. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
 - Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
-- Public release: [v0.10.0](https://github.com/sousouliao/lumiere/releases/tag/v0.10.0), stable Windows x64; tag/source commit `6c23d0609839a3873fa01c4fd36642086ab70396`.
-- Installer: 3580956 bytes; SHA256 `c2698b782b853039f97b876aa3a81ec48ebfe564ca6d5b51ac13289dc9c6bc58`.
+- Public release: [v0.11.0](https://github.com/sousouliao/lumiere/releases/tag/v0.11.0), stable Windows x64; tag/source commit `37b6b780a35db2f7c45c2b350d7c60db80ddd886`.
+- Installer: 3579268 bytes; SHA256 `97b4e7bc5a734a7f24c5dfea2d33c037bd2c29cc406787861768e1be22247d52`.
 
 ## Product
 
@@ -49,6 +49,12 @@ preserve installation location, settings and unknown files. Private keys stay ou
 Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
+
+v0.11.0: [Release 42432661730](https://github.com/sousouliao/lumiere/actions/runs/42432661730)
+passes Audit, Build Windows and Publish for the tagged source, with all Rust/shared
+checks and official updater signature validation. All five downloaded public assets
+match GitHub sizes/digests. Installer SHA256 matches `SHA256SUMS`; signed Tauri metadata,
+detached signature, tag target and public notes agree. Authenticode remains NotSigned.
 
 v0.10.0: [Release 38610882685, attempt 2](https://github.com/sousouliao/lumiere/actions/runs/38610882685/attempts/2)
 passes Audit, Build Windows and Publish for the tagged source, with all Rust/shared
