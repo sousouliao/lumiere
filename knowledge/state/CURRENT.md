@@ -1,13 +1,13 @@
 # Current Project State
 
-- Updated: 2026-11-08
-- Frontier: Windows v0.11.0 is published with cursor suppression during WGC display and region capture sessions, eliminating pointer clutter and residual cursor ghosts under selection overlays, retaining window snap and manual drag capture.
-- The maintainer authorized publication; deferred real-app physical interaction and mixed-DPI acceptance under #37 remain disclosed in the public notes.
-- Shared checks, capture-windows unit tests and the release workflow pass.
+- Updated: 2026-11-19
+- Frontier: Windows v0.12.0 is published with adjustable 8-way selection bounds, drag repositioning, display locking during editing, and native FP16/Direct2D inline annotations (`Rect`, `Highlight`, `Arrow`, `Freehand`) with sRGB Visual Match two-stage export and a 300-second region lease.
+- The maintainer authorized publication; deferred mixed-DPI and broad desktop-app physical acceptance remain disclosed in the public notes.
+- Shared checks, workspace Rust tests, GPU Spotlight/vector compositing tests, and the release workflow pass.
 - Current-user launch-at-login under [#33](https://github.com/sousouliao/lumiere/issues/33) retains explicitly deferred real login/Startup Apps acceptance. P0–P6 migration acceptance under [#25](https://github.com/sousouliao/lumiere/issues/25) / [#32](https://github.com/sousouliao/lumiere/issues/32) remains unchanged.
-- Decision: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md).
-- Public release: [v0.11.0](https://github.com/sousouliao/lumiere/releases/tag/v0.11.0), stable Windows x64; tag/source commit `37b6b780a35db2f7c45c2b350d7c60db80ddd886`.
-- Installer: 3579268 bytes; SHA256 `97b4e7bc5a734a7f24c5dfea2d33c037bd2c29cc406787861768e1be22247d52`.
+- Decisions: [ADR 0021](../decisions/0021-windows-only-tauri-rust-migration.md), [ADR 0023](../decisions/0023-native-region-selection-annotation.md).
+- Public release: [v0.12.0](https://github.com/sousouliao/lumiere/releases/tag/v0.12.0), stable Windows x64; tag/source commit `520ba64a7a52ffdcd15e7adfcdaaa6b596f2ed2c`.
+- Installer: 3609236 bytes; SHA256 `12fbb5f355ede15a045efbceed3f0686994d799d225023656e6324ce60d117e8`.
 
 ## Product
 
@@ -34,8 +34,13 @@ window again. Debug and Release GUI fixtures verify scoped restoration behavior.
 Windows v5 Display and v6 same-frame Region/cancellation retain floating-point
 acquisition and fixed sRGB Visual Match, with the same PNG for clipboard and folder.
 Region automatically outlines top-level application windows using DWM visible bounds;
-hover and click-locked previews remain unmasked. Double-click release commits the
-frozen rectangle; manual dragging and cancellation remain available.
+hover and click-locked previews remain unmasked. Releasing a dragged selection or
+single-clicking a snapped window enters an interactive adjustment and annotation stage
+(8-way resize handles, drag repositioning, display lock, and floating Direct2D toolbar
+with `Rect`, `Highlight`, `Arrow`, and `Freehand`, plus undo/redo and a 300-second
+lease); `Done`, `Enter`, `Ctrl+C`, or double-clicking empty selection space commits
+capture, and `Esc` or cancellation remains available. When annotations exist, export
+composites them in sRGB after the fixed sRGB Visual Match conversion.
 No HDR-preserved export, borderless capture or wider compositor-fidelity claim.
 Installer Authenticode status remains NotSigned; updater integrity signatures do
 not establish Windows publisher identity.
@@ -49,6 +54,16 @@ preserve installation location, settings and unknown files. Private keys stay ou
 Git; matching encrypted Actions signing secrets are configured.
 
 ## Verification
+
+v0.12.0: [Release 44553492548](https://github.com/sousouliao/lumiere/actions/runs/44553492548)
+passes Audit, Build Windows and Publish for the tagged source, with all Rust/shared
+checks and official updater signature validation. All five downloaded public assets
+match GitHub sizes/digests. Installer SHA256 matches `SHA256SUMS`; `latest.yml` SHA512,
+signed `latest.json`, detached `.sig`, tag target `520ba64a7a52ffdcd15e7adfcdaaa6b596f2ed2c`
+and public notes agree. Authenticode remains NotSigned. Locally, `pnpm check`,
+`pnpm test:shared` (61 tests), `cargo test --locked --workspace --features lumiere-desktop/custom-protocol`,
+`node scripts/verify-rust-protocol.mjs`, and the GPU `spotlight_and_vector_export_preserve_lit_pixels_and_dim_surroundings`
+fixture pass.
 
 v0.11.0: [Release 42432661730](https://github.com/sousouliao/lumiere/actions/runs/42432661730)
 passes Audit, Build Windows and Publish for the tagged source, with all Rust/shared
