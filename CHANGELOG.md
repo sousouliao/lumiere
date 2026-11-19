@@ -4,7 +4,8 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
-Target version: `0.12.0`
+## [0.12.0] - 2026-11-19
+
 Release platforms: Windows
 
 ### Added
@@ -325,6 +326,7 @@ Release platforms: macOS
 - HDR-preserved export is not supported; the official output is sRGB Visual Match.
 - Windows release artifacts are not included in this version.
 
+[0.12.0]: https://github.com/sousouliao/lumiere/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sousouliao/lumiere/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/sousouliao/lumiere/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/sousouliao/lumiere/compare/v0.9.0...v0.9.1
