@@ -189,6 +189,7 @@ async fn real_child_repeats_selection_and_cancellation_without_resource_growth()
                 post(hwnd, WM_LBUTTONDOWN, 1, 100, 100);
                 post(hwnd, WM_MOUSEMOVE, 1, 300, 240);
                 post(hwnd, WM_LBUTTONUP, 0, 300, 240);
+                post(hwnd, WM_KEYDOWN, 0x0d, 0, 0);
             }
             1 => post(hwnd, WM_KEYDOWN, 0x1b, 0, 0),
             2 => post(hwnd, WM_RBUTTONDOWN, 0, 0, 0),

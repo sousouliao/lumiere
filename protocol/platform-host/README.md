@@ -17,7 +17,7 @@ saveDirectory are invalid. The Host resolves the pointer target at capture time.
 
 Native Region captures one frozen frame, presents a full-resolution overlay, selects
 in effective-DPI logical units and crops outward-aligned physical pixels from that
-same frame. At most one capture is active. Selection expires after 60 seconds.
+same frame. At most one capture is active. Selection expires after 300 seconds.
 Cancellation identifies the pending Region request with `requestId` and returns
 `released`, including for an already-ended request. The original capture result
 remains correlated with its original id. Capture is reserved before asynchronous work

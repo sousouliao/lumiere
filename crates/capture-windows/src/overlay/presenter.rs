@@ -1,4 +1,9 @@
-use super::geometry::Rect;
+use super::{
+    annotations::{AnnotationKind, AnnotationStore, RenderStyle, draw_annotations},
+    geometry::Rect,
+    theme::RenderResources,
+    toolbar::{ToolbarLayout, ToolbarState},
+};
 use crate::graphics::Device;
 use windows::{
     Win32::{
@@ -18,6 +23,7 @@ use windows_numerics::Vector2;
 pub(super) enum Phase {
     Hover,
     Drag,
+    Ready,
     Capture,
 }
 
@@ -30,18 +36,12 @@ pub(super) struct Presenter {
     text_factory: IDWriteFactory,
     text: IDWriteTextFormat,
     status_text: IDWriteTextFormat,
-    dim: ID2D1SolidColorBrush,
-    line: ID2D1SolidColorBrush,
-    caution: ID2D1SolidColorBrush,
-    pill_fill: ID2D1SolidColorBrush,
-    pill_border: ID2D1SolidColorBrush,
-    hint: ID2D1SolidColorBrush,
-    primary: ID2D1SolidColorBrush,
+    resources: RenderResources,
     scale: f32,
-    white_scale: f32,
     width: f32,
     height: f32,
 }
+
 impl Presenter {
     pub fn new(
         device: &Device,
@@ -100,19 +100,7 @@ impl Presenter {
             let text_factory: IDWriteFactory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
             let text = text_format(&text_factory, 11.0 * scale, DWRITE_FONT_WEIGHT_NORMAL)?;
             let status_text = text_format(&text_factory, 12.0 * scale, DWRITE_FONT_WEIGHT_MEDIUM)?;
-            let dim = context.CreateSolidColorBrush(&color(0.0, 0.0, 0.0, 0.55), None)?;
-            let line =
-                context.CreateSolidColorBrush(&token_color("accentBase", white_scale)?, None)?;
-            let caution =
-                context.CreateSolidColorBrush(&token_color("statusCaution", white_scale)?, None)?;
-            let pill_fill =
-                context.CreateSolidColorBrush(&token_color("surfaceWindow", white_scale)?, None)?;
-            let pill_border =
-                context.CreateSolidColorBrush(&token_color("borderDefault", white_scale)?, None)?;
-            let hint =
-                context.CreateSolidColorBrush(&token_color("textSecondary", white_scale)?, None)?;
-            let primary =
-                context.CreateSolidColorBrush(&token_color("textPrimary", white_scale)?, None)?;
+            let resources = RenderResources::new(&context, white_scale, false)?;
             Ok(Self {
                 swap,
                 immediate: device.context.clone(),
@@ -122,27 +110,39 @@ impl Presenter {
                 text_factory,
                 text,
                 status_text,
-                dim,
-                line,
-                caution,
-                pill_fill,
-                pill_border,
-                hint,
-                primary,
+                resources,
                 scale,
-                white_scale,
                 width: width as f32,
                 height: height as f32,
             })
         }
     }
-    pub fn draw(&self, selection: Option<Rect>, pointer: (f64, f64), phase: Phase) -> Result<()> {
-        self.render(selection, pointer, phase)?;
+
+    pub fn draw(
+        &self,
+        selection: Option<Rect>,
+        pointer: (f64, f64),
+        phase: Phase,
+        annotations: &AnnotationStore,
+        draft: Option<&AnnotationKind>,
+        toolbar: Option<(&ToolbarState, &ToolbarLayout)>,
+    ) -> Result<()> {
+        self.render(selection, pointer, phase, annotations, draft, toolbar)?;
         // SAFETY: The worker owns the completed swap-chain back buffer.
         unsafe { self.swap.Present(0, DXGI_PRESENT::default()).ok() }
     }
-    fn render(&self, selection: Option<Rect>, pointer: (f64, f64), phase: Phase) -> Result<()> {
+
+    fn render(
+        &self,
+        selection: Option<Rect>,
+        pointer: (f64, f64),
+        phase: Phase,
+        annotations: &AnnotationStore,
+        draft: Option<&AnnotationKind>,
+        toolbar: Option<(&ToolbarState, &ToolbarLayout)>,
+    ) -> Result<()> {
         let capturing = phase == Phase::Capture;
+        let ready = phase == Phase::Ready;
         let source = self.source.as_ref().ok_or_else(|| {
             windows::core::Error::new(
                 windows::Win32::Foundation::E_FAIL,
@@ -150,16 +150,16 @@ impl Presenter {
             )
         })?;
         let scale = self.scale;
-        let valid = selection.is_some_and(|r| r.is_valid_selection(scale as f64));
-        let hint = (!capturing)
+        let valid = selection.is_some_and(|r| r.is_valid_selection(f64::from(scale)));
+        let hint = (!capturing && !ready)
             .then(|| {
                 self.pill(
                     if selection.is_none() {
                         "Drag to select · Esc cancels"
                     } else if phase == Phase::Hover {
-                        "Double-click to capture · Drag to select · Esc cancels"
+                        "Click to annotate · Double-click to capture · Esc cancels"
                     } else if valid {
-                        "Release to capture · Esc cancels"
+                        "Release to annotate · Esc cancels"
                     } else {
                         "Keep dragging · Esc cancels"
                     },
@@ -173,7 +173,7 @@ impl Presenter {
         let readout = selection
             .map(|r| {
                 let crop = r.crop(
-                    (self.width as f64, self.height as f64),
+                    (f64::from(self.width), f64::from(self.height)),
                     (self.width as u32, self.height as u32),
                 );
                 let label = if capturing {
@@ -201,6 +201,7 @@ impl Presenter {
                 )
             })
             .transpose()?;
+
         // SAFETY: All drawing resources belong to this worker; geometry is bounded to the target.
         unsafe {
             let c = &self.context;
@@ -208,96 +209,159 @@ impl Presenter {
             // Only the independent swap-chain target receives UI; the frozen source is read-only.
             self.immediate.CopyResource(&self.target, source);
             c.BeginDraw();
-            if let Some(r) = selection.filter(|_| phase != Phase::Hover) {
-                // Dim only outside the selection; the four rectangles never overlap.
-                let fill = |bounds: D2D_RECT_F| {
-                    if bounds.right > bounds.left && bounds.bottom > bounds.top {
-                        c.FillRectangle(&bounds, &self.dim);
-                    }
-                };
-                let (left, top, right, bottom) =
-                    (r.left as f32, r.top as f32, r.right as f32, r.bottom as f32);
-                fill(rect(0.0, 0.0, self.width, top));
-                fill(rect(0.0, top, left, bottom));
-                fill(rect(right, top, self.width, bottom));
-                fill(rect(0.0, bottom, self.width, self.height));
-            }
-            if !capturing && (selection.is_none() || !valid) {
-                c.DrawLine(
-                    Vector2 {
-                        X: pointer.0 as f32,
-                        Y: 0.0,
-                    },
-                    Vector2 {
-                        X: pointer.0 as f32,
-                        Y: self.height,
-                    },
-                    &self.line,
-                    scale,
-                    None,
-                );
-                c.DrawLine(
-                    Vector2 {
-                        X: 0.0,
-                        Y: pointer.1 as f32,
-                    },
-                    Vector2 {
-                        X: self.width,
-                        Y: pointer.1 as f32,
-                    },
-                    &self.line,
-                    scale,
-                    None,
-                );
-            }
-            if let Some(r) = selection {
-                // Keep the 1 DIP stroke inside the crop, including at display edges.
-                let inset = scale.min((r.right - r.left).min(r.bottom - r.top) as f32) / 2.0;
-                c.DrawRectangle(
-                    &rect(
-                        r.left as f32 + inset,
-                        r.top as f32 + inset,
-                        r.right as f32 - inset,
-                        r.bottom as f32 - inset,
-                    ),
-                    if valid { &self.line } else { &self.caution },
-                    inset * 2.0,
-                    None,
-                );
-                if let Some(pill) = &readout {
-                    let x = (r.left as f32).clamp(0.0, (self.width - pill.width).max(0.0));
-                    let below = r.bottom as f32 + 8.0 * scale;
-                    let bottom_limit = self.height
-                        - 16.0 * scale
-                        - hint.as_ref().map_or(0.0, |hint| hint.height + 8.0 * scale);
-                    let y = if below + pill.height <= bottom_limit {
-                        below
-                    } else {
-                        (r.top as f32 - 8.0 * scale - pill.height).max(0.0)
+            let draw_result = (|| -> Result<()> {
+                if let Some(r) = selection.filter(|_| phase != Phase::Hover) {
+                    // Dim only outside the selection; the four rectangles never overlap.
+                    let fill = |bounds: D2D_RECT_F| {
+                        if bounds.right > bounds.left && bounds.bottom > bounds.top {
+                            c.FillRectangle(&bounds, &self.resources.dim_outer);
+                        }
                     };
-                    self.draw_pill(
-                        pill,
-                        (x, y),
-                        if valid { &self.primary } else { &self.caution },
-                        capturing,
+                    let (left, top, right, bottom) =
+                        (r.left as f32, r.top as f32, r.right as f32, r.bottom as f32);
+                    fill(rect(0.0, 0.0, self.width, top));
+                    fill(rect(0.0, top, left, bottom));
+                    fill(rect(right, top, self.width, bottom));
+                    fill(rect(0.0, bottom, self.width, self.height));
+
+                    if (ready || capturing) && (annotations.has_annotations() || draft.is_some()) {
+                        draw_annotations(
+                            c,
+                            &self.resources,
+                            r,
+                            annotations,
+                            if capturing { None } else { draft },
+                            RenderStyle {
+                                origin: (0.0, 0.0),
+                                scale,
+                                show_selection_chrome: !capturing,
+                            },
+                        )?;
+                    }
+                }
+
+                if !capturing && !ready && (selection.is_none() || !valid) {
+                    c.DrawLine(
+                        Vector2 {
+                            X: pointer.0 as f32,
+                            Y: 0.0,
+                        },
+                        Vector2 {
+                            X: pointer.0 as f32,
+                            Y: self.height,
+                        },
+                        &self.resources.accent_base,
+                        scale,
+                        None,
+                    );
+                    c.DrawLine(
+                        Vector2 {
+                            X: 0.0,
+                            Y: pointer.1 as f32,
+                        },
+                        Vector2 {
+                            X: self.width,
+                            Y: pointer.1 as f32,
+                        },
+                        &self.resources.accent_base,
+                        scale,
+                        None,
                     );
                 }
-            }
-            if let Some(hint) = &hint {
-                self.draw_pill(
-                    hint,
-                    (
-                        ((self.width - hint.width) / 2.0).max(0.0),
-                        (self.height - 16.0 * scale - hint.height).max(0.0),
-                    ),
-                    &self.hint,
-                    false,
-                );
-            }
-            c.EndDraw(None, None)?;
-            Ok(())
+
+                if let Some(r) = selection {
+                    // Keep the 1 DIP stroke inside the crop, including at display edges.
+                    let inset = scale.min((r.right - r.left).min(r.bottom - r.top) as f32) / 2.0;
+                    c.DrawRectangle(
+                        &rect(
+                            r.left as f32 + inset,
+                            r.top as f32 + inset,
+                            r.right as f32 - inset,
+                            r.bottom as f32 - inset,
+                        ),
+                        if valid {
+                            &self.resources.accent_base
+                        } else {
+                            &self.resources.caution
+                        },
+                        inset * 2.0,
+                        None,
+                    );
+
+                    if ready {
+                        let half = 3.0 * scale;
+                        for (_, pos) in r.handle_points() {
+                            let hx = (pos.0 as f32).clamp(half, (self.width - half).max(half));
+                            let hy = (pos.1 as f32).clamp(half, (self.height - half).max(half));
+                            let handle_rect = rect(hx - half, hy - half, hx + half, hy + half);
+                            c.FillRectangle(&handle_rect, &self.resources.text_primary);
+                            c.DrawRectangle(&handle_rect, &self.resources.accent_base, scale, None);
+                        }
+                    }
+
+                    if let Some(pill) = &readout {
+                        let x = (r.left as f32).clamp(0.0, (self.width - pill.width).max(0.0));
+                        let y = if ready {
+                            let above = r.top as f32 - 8.0 * scale - pill.height;
+                            if above >= 8.0 * scale {
+                                above
+                            } else {
+                                (r.top as f32 + 8.0 * scale)
+                                    .clamp(0.0, (self.height - pill.height).max(0.0))
+                            }
+                        } else {
+                            let below = r.bottom as f32 + 8.0 * scale;
+                            let bottom_limit = self.height
+                                - 16.0 * scale
+                                - hint.as_ref().map_or(0.0, |hint| hint.height + 8.0 * scale);
+                            if below + pill.height <= bottom_limit {
+                                below
+                            } else {
+                                (r.top as f32 - 8.0 * scale - pill.height).max(0.0)
+                            }
+                        };
+                        self.draw_pill(
+                            pill,
+                            (x, y),
+                            if valid {
+                                &self.resources.text_primary
+                            } else {
+                                &self.resources.caution
+                            },
+                            capturing,
+                        );
+                    }
+                }
+
+                if let Some(hint) = &hint {
+                    self.draw_pill(
+                        hint,
+                        (
+                            ((self.width - hint.width) / 2.0).max(0.0),
+                            (self.height - 16.0 * scale - hint.height).max(0.0),
+                        ),
+                        &self.resources.text_secondary,
+                        false,
+                    );
+                }
+
+                if ready && let Some((tb_state, tb_layout)) = toolbar {
+                    tb_layout.draw(
+                        c,
+                        &self.resources,
+                        &self.text_factory,
+                        &self.text,
+                        (tb_state, annotations, scale),
+                    )?;
+                }
+                Ok(())
+            })();
+            let end_result = c.EndDraw(None, None);
+            draw_result?;
+            end_result
         }
     }
+
     pub fn attach(
         &mut self,
         surface: &ID3D11Texture2D,
@@ -311,24 +375,11 @@ impl Presenter {
                 text_format(&self.text_factory, 12.0 * scale, DWRITE_FONT_WEIGHT_MEDIUM)?;
             self.scale = scale;
         }
-        if self.white_scale != white_scale {
-            for (brush, token) in [
-                (&self.line, "accentBase"),
-                (&self.caution, "statusCaution"),
-                (&self.pill_fill, "surfaceWindow"),
-                (&self.pill_border, "borderDefault"),
-                (&self.hint, "textSecondary"),
-                (&self.primary, "textPrimary"),
-            ] {
-                let value = token_color(token, white_scale)?;
-                // SAFETY: Brushes are owned and updated exclusively on this worker.
-                unsafe { brush.SetColor(&value) };
-            }
-            self.white_scale = white_scale;
-        }
+        self.resources.update_white_scale(white_scale)?;
         self.source = Some(surface.clone());
         Ok(())
     }
+
     fn pill(
         &self,
         label: &str,
@@ -357,6 +408,7 @@ impl Presenter {
             })
         }
     }
+
     fn draw_pill(
         &self,
         pill: &Pill,
@@ -372,9 +424,14 @@ impl Presenter {
                 radiusX: pill.radius,
                 radiusY: pill.radius,
             };
-            self.context.FillRoundedRectangle(&rounded, &self.pill_fill);
             self.context
-                .DrawRoundedRectangle(&rounded, &self.pill_border, self.scale, None);
+                .FillRoundedRectangle(&rounded, &self.resources.bar_bg);
+            self.context.DrawRoundedRectangle(
+                &rounded,
+                &self.resources.border_default,
+                self.scale,
+                None,
+            );
             if dot {
                 self.context.FillEllipse(
                     &D2D1_ELLIPSE {
@@ -385,7 +442,7 @@ impl Presenter {
                         radiusX: 3.5 * self.scale,
                         radiusY: 3.5 * self.scale,
                     },
-                    &self.line,
+                    &self.resources.accent_base,
                 );
             }
             self.context.DrawTextLayout(
@@ -399,6 +456,7 @@ impl Presenter {
             );
         }
     }
+
     pub fn detach(&mut self) {
         // SAFETY: Worker-exclusive context use; release bindings before dropping its frozen texture.
         unsafe {
@@ -408,6 +466,7 @@ impl Presenter {
         self.source = None;
     }
 }
+
 struct Pill {
     layout: IDWriteTextLayout,
     width: f32,
@@ -415,6 +474,7 @@ struct Pill {
     padding: (f32, f32),
     radius: f32,
 }
+
 fn text_format(
     factory: &IDWriteFactory,
     size: f32,
@@ -435,35 +495,7 @@ fn text_format(
         Ok(format)
     }
 }
-fn token_color(name: &str, white_scale: f32) -> Result<D2D1_COLOR_F> {
-    // Reuse the Ardot export rather than maintaining a separate native palette.
-    let tokens = include_str!("../../../../apps/desktop/src/renderer/src/tokens.generated.css");
-    let prefix = format!("--Lumiere-Dark-{name}: #");
-    let value = tokens
-        .lines()
-        .find_map(|line| line.trim().strip_prefix(&prefix))
-        .and_then(|value| value.strip_suffix(';'))
-        .and_then(|value| u32::from_str_radix(value, 16).ok())
-        .ok_or_else(|| {
-            windows::core::Error::new(
-                windows::Win32::Foundation::E_FAIL,
-                "Missing Region design color",
-            )
-        })?;
-    Ok(color(
-        srgb_to_linear(((value >> 16) & 255) as f32 / 255.0) * white_scale,
-        srgb_to_linear(((value >> 8) & 255) as f32 / 255.0) * white_scale,
-        srgb_to_linear((value & 255) as f32 / 255.0) * white_scale,
-        1.0,
-    ))
-}
-fn srgb_to_linear(value: f32) -> f32 {
-    if value <= 0.04045 {
-        value / 12.92
-    } else {
-        ((value + 0.055) / 1.055).powf(2.4)
-    }
-}
+
 impl Drop for Presenter {
     fn drop(&mut self) {
         // SAFETY: Release context's target reference before its owned swap chain/resources.
@@ -474,9 +506,7 @@ impl Drop for Presenter {
         }
     }
 }
-fn color(r: f32, g: f32, b: f32, a: f32) -> D2D1_COLOR_F {
-    D2D1_COLOR_F { r, g, b, a }
-}
+
 fn rect(left: f32, top: f32, right: f32, bottom: f32) -> D2D_RECT_F {
     D2D_RECT_F {
         left,
@@ -535,6 +565,7 @@ mod tests {
         let expected_pixel = |bytes: &[u8], x: usize, y: usize| {
             bytes[(y * 128 + x) * 8..(y * 128 + x + 1) * 8].to_vec()
         };
+        let store = AnnotationStore::default();
         for output_scale in [1.0, 0.25] {
             let baseline =
                 crate::delivery::encode_png(128, 96, &rgba16f_to_rgba8(&source, 128, output_scale))
@@ -552,11 +583,14 @@ mod tests {
                 (None, Phase::Hover),
                 (selection, Phase::Hover),
                 (selection, Phase::Drag),
+                (selection, Phase::Ready),
                 (selection, Phase::Capture),
                 (None, Phase::Hover),
             ] {
                 // Read before Present rotates the flip-model back buffers.
-                presenter.render(selection, (-1.0, -1.0), phase).unwrap();
+                presenter
+                    .render(selection, (-1.0, -1.0), phase, &store, None, None)
+                    .unwrap();
                 let rendered = device.readback(&presenter.target, 128, 96, None).unwrap();
                 assert_eq!(
                     expected_pixel(&rendered, 40, 40),

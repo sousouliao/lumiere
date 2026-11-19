@@ -26,8 +26,8 @@ delays capture or confirmation.
 - Prefer semantic HTML controls and restrained shared styling before custom primitives.
 - Use Tauri native facilities for windows, menus, tray and shortcuts;
   use native hosts for capture permission and platform-owned failure flows.
-- Custom UI is appropriate for overlay, crop handles, magnifier, result preview,
-  and future annotation canvas, but does not establish HDR fidelity.
+- Custom UI is appropriate for overlay, crop handles, floating annotation toolbar,
+  magnifier, result preview, and annotation canvas, but does not establish HDR fidelity.
 - Overlay geometry and controls must remain stable while the pointer moves.
 - Support platform theme behavior, keyboard access, visible focus, reduced motion,
   zoom, and platform contrast guidance.

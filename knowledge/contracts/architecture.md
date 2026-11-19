@@ -38,7 +38,7 @@ Settings remain at `%APPDATA%/Lumiere/settings.json`; upgrades preserve that dat
 
 - Retain native RGBA16F acquisition until fixed sRGB Visual Match conversion completes.
 - Probe HDR and SDR white level on the active target; missing required HDR input fails.
-- Region selects and crops the same frozen frame, with a 60-second native selection lease.
+- Region selects and crops the same frozen frame, with a 300-second native selection lease.
 - Clipboard and folder consume one encoded PNG; failures stay target-local.
 - Keep artifact success, visual match and HDR preservation separate under the claims contract.
 - Dispose native resources deterministically; log structured diagnostics to stderr.

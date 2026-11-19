@@ -250,7 +250,7 @@ impl WindowsEngine {
         }
         let device = cache.as_ref().expect("device initialized");
         let result = (|| {
-            let (frame, crop) = loop {
+            let (frame, region_commit) = loop {
                 if cancel.is_cancelled()
                     || (mode == CaptureMode::Region && std::time::Instant::now() >= deadline)
                 {
@@ -267,7 +267,7 @@ impl WindowsEngine {
                 match overlay::select(overlay, device, &frame, &cancel, deadline)
                     .map_err(|error| native_failure("region-select", error))?
                 {
-                    overlay::Selection::Selected(crop) => break (frame, Some(crop)),
+                    overlay::Selection::Selected(commit) => break (frame, Some(commit)),
                     overlay::Selection::Cancelled => return Ok(CaptureOutcome::Cancelled),
                     overlay::Selection::SwitchTarget => continue,
                 }
@@ -275,13 +275,26 @@ impl WindowsEngine {
             if cancel.is_cancelled() {
                 return Ok(CaptureOutcome::Cancelled);
             }
+            let crop = region_commit.as_ref().map(|c| c.crop);
             let source = device
                 .readback(&frame.texture, frame.width, frame.height, crop)
                 .map_err(|error| native_failure("frame-readback", error))?;
             let (width, height) = crop
                 .map(|c| (c.width, c.height))
                 .unwrap_or((frame.width, frame.height));
-            let pixels = graphics::rgba16f_to_rgba8(&source, width, frame.color.scale);
+            let mut pixels = graphics::rgba16f_to_rgba8(&source, width, frame.color.scale);
+            if let Some(commit) = &region_commit
+                && commit.annotations.has_annotations()
+            {
+                pixels = overlay::annotations::composite_export_rgba8(
+                    device,
+                    &pixels,
+                    commit.crop,
+                    commit.scale,
+                    &commit.annotations,
+                )
+                .map_err(|error| native_failure("annotation-composite", error))?;
+            }
             if cancel.is_cancelled() {
                 return Ok(CaptureOutcome::Cancelled);
             }

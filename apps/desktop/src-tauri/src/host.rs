@@ -124,7 +124,11 @@ impl Host {
                 return Err(error.to_string());
             }
         }
-        let limit = if method == "captureRegion" { 70 } else { 15 };
+        let limit = if method == "captureRegion" {
+            lumiere_capture_contract::REGION_LEASE_SECONDS + 15
+        } else {
+            15
+        };
         match tokio::time::timeout(Duration::from_secs(limit), receiver).await {
             Ok(Ok(reply)) => match reply {
                 Ok(value) => match HostResult::decode(method, version, &params, value) {

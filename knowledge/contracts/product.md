@@ -15,7 +15,8 @@ clipboard and folder workflows without claiming HDR preservation.
 ## MVP Scope
 
 - Shared main-window, tray, and configured-shortcut capture entry points.
-- Region capture with drag-to-select and release-to-capture behavior.
+- Region capture with drag-to-select, window snap, adjustable selection bounds, and
+  inline native annotation (`Rect`, `Spotlight`, `Arrow`, `Freehand`).
 - Display capture for the active target.
 - Platform-native HDR-aware capture through Windows Graphics Capture.
 - Clipboard, folder, and both-target output.
@@ -45,7 +46,7 @@ clipboard and folder workflows without claiming HDR preservation.
 
 - Broad or universal HDR-preserved export guarantees.
 - P3 or HDR10 as normal supported user-selectable modes.
-- General image editing, annotations, gallery/history, cloud upload, or sharing.
+- General standalone image editing, text/mosaic tools, gallery/history, cloud upload, or sharing.
 - Onboarding or telemetry.
 - Universal display-topology, viewer, DPI, accessibility, or long-run certification.
 

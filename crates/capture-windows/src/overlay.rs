@@ -1,12 +1,22 @@
-//! Worker-owned native selection window. No frame readback precedes interaction.
+//! Worker-owned native selection and annotation window. No frame readback precedes interaction.
+pub(crate) mod annotations;
 pub(crate) mod geometry;
+mod icons;
 mod presenter;
 #[cfg(test)]
 mod tests;
+mod theme;
+pub(crate) mod toolbar;
 mod window_targets;
+
 use crate::{Cancellation, capture::FrozenFrame, graphics::Device};
-use geometry::{Crop, Rect};
+use annotations::{
+    AnnotationHandle, AnnotationKind, AnnotationStore, Tool, constrain_arrow_angle,
+    hit_test_selected_handle, merge_drag_rect,
+};
+use geometry::{Crop, Handle, Rect};
 use std::time::{Duration, Instant};
+use toolbar::{ToolbarHit, ToolbarLayout, ToolbarState};
 use windows::{
     Win32::{
         Foundation::{E_FAIL, HINSTANCE, HWND, LPARAM, LRESULT, POINT, WPARAM},
@@ -24,37 +34,121 @@ use windows::{
     core::{Error, HSTRING, PCWSTR, Result, w},
 };
 
+pub(crate) struct RegionCommit {
+    pub crop: Crop,
+    pub scale: f32,
+    pub annotations: AnnotationStore,
+}
+
 pub(crate) enum Selection {
-    Selected(Crop),
+    Selected(RegionCommit),
     Cancelled,
     SwitchTarget,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Mode {
+    Hover,
+    DragSelection,
+    Ready,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CursorKind {
+    Cross,
+    Arrow,
+    SizeAll,
+    SizeNwSe,
+    SizeNeSw,
+    SizeNs,
+    SizeWe,
+}
+
+#[derive(Clone, Debug)]
+enum DragAction {
+    NewSelection {
+        origin: (f64, f64),
+        moved: bool,
+    },
+    ResizeSelection {
+        handle: Handle,
+    },
+    MoveSelection {
+        last: (f64, f64),
+    },
+    ToolbarPress(ToolbarHit),
+    DrawAnnotation {
+        start: (f64, f64),
+        kind: AnnotationKind,
+    },
+    MoveAnnotation {
+        id: u64,
+        last: (f64, f64),
+        pushed_undo: bool,
+    },
+    ResizeAnnotation {
+        id: u64,
+        handle: AnnotationHandle,
+        pushed_undo: bool,
+    },
+}
+
 struct State {
     active: bool,
     width: f64,
     height: f64,
     scale: f64,
     pointer: (f64, f64),
-    origin: Option<(f64, f64)>,
-    dragging: bool,
-    confirming: bool,
+    mode: Mode,
     drag_threshold: (f64, f64),
     windows: Vec<Rect>,
     locked: Option<Rect>,
-    selected: Option<Rect>,
+    selection: Option<Rect>,
+    committed: Option<Rect>,
+    drag: Option<DragAction>,
+    confirming_double_click: bool,
+    annotations: AnnotationStore,
+    toolbar: ToolbarState,
+    cached_layout: Option<ToolbarLayout>,
     cancelled: bool,
     dirty: bool,
     capture: Option<bool>,
 }
+
 impl State {
     fn rect(&self) -> Option<Rect> {
-        if self.dragging {
-            self.origin
-                .and_then(|o| Rect::drag(o, self.pointer, self.width, self.height))
-        } else {
-            self.locked.or_else(|| self.hover())
+        match self.mode {
+            Mode::Hover => self.locked.or_else(|| self.hover()),
+            Mode::DragSelection => match &self.drag {
+                Some(DragAction::NewSelection { origin, .. }) => {
+                    Rect::drag(*origin, self.pointer, self.width, self.height)
+                }
+                _ => self.selection,
+            },
+            Mode::Ready => self.committed.or(self.selection),
         }
     }
+
+    fn allows_monitor_switch(&self) -> bool {
+        self.mode == Mode::Hover && self.locked.is_none() && self.drag.is_none()
+    }
+
+    fn sync_layout(&mut self) {
+        self.cached_layout = if self.mode == Mode::Ready {
+            self.selection.map(|sel| {
+                ToolbarLayout::compute(
+                    sel,
+                    (self.width, self.height),
+                    self.scale,
+                    &self.toolbar,
+                    &self.annotations,
+                )
+            })
+        } else {
+            None
+        };
+    }
+
     fn hover(&self) -> Option<Rect> {
         // The first containing top-level window owns the point, even if too small to capture.
         self.windows
@@ -63,58 +157,672 @@ impl State {
             .find(|r| r.contains(self.pointer))
             .filter(|r| r.is_valid_selection(self.scale))
     }
-    fn press(&mut self) {
-        if self.locked.is_none_or(|r| !r.contains(self.pointer)) {
-            self.locked = self.hover();
-        }
-        self.origin = Some(self.pointer);
-        self.dragging = false;
-        self.confirming = false;
-        self.capture = Some(true);
+
+    fn handle_radius(&self) -> f64 {
+        7.0 * self.scale
     }
-    fn release(&mut self) {
-        if self.dragging {
-            self.selected = self.rect().filter(|r| r.is_valid_selection(self.scale));
-            self.locked = None;
-        } else if self.confirming {
-            self.selected = self.locked.filter(|r| r.contains(self.pointer));
-        }
-        self.origin = None;
-        self.dragging = false;
-        self.confirming = false;
-        self.capture = Some(false);
-    }
-    fn double_click(&mut self) {
-        let same_window = self.locked.is_some_and(|r| r.contains(self.pointer));
-        self.press();
-        // Commit on the final mouse-up, so it cannot reach the underlying application.
-        self.confirming = same_window;
-    }
-    fn phase(&self) -> presenter::Phase {
-        if self.dragging {
-            presenter::Phase::Drag
-        } else {
-            presenter::Phase::Hover
+
+    fn clear_drag(&mut self) {
+        if self.drag.take().is_some() || self.confirming_double_click {
+            self.confirming_double_click = false;
+            self.toolbar.pressed = None;
+            self.capture = Some(false);
         }
     }
-    fn pointer(&mut self, value: LPARAM) {
+
+    fn commit(&mut self) {
+        if let Some(sel) = self.selection.filter(|r| r.is_valid_selection(self.scale)) {
+            self.committed = Some(sel);
+            self.annotations.selected_id = None;
+            self.clear_drag();
+            self.cached_layout = None;
+            self.dirty = true;
+        }
+    }
+
+    fn press(&mut self, shift: bool) {
+        match self.mode {
+            Mode::Hover => {
+                if self.locked.is_none_or(|r| !r.contains(self.pointer)) {
+                    self.locked = self.hover();
+                }
+                self.drag = Some(DragAction::NewSelection {
+                    origin: self.pointer,
+                    moved: false,
+                });
+                self.capture = Some(true);
+                self.dirty = true;
+            }
+            Mode::DragSelection => {}
+            Mode::Ready => {
+                if let Some(hit) = self
+                    .cached_layout
+                    .as_ref()
+                    .and_then(|l| l.hit_test(self.pointer))
+                {
+                    self.toolbar.pressed = Some(hit);
+                    self.drag = Some(DragAction::ToolbarPress(hit));
+                    self.capture = Some(true);
+                    self.dirty = true;
+                    return;
+                }
+
+                let Some(sel) = self.selection else {
+                    return;
+                };
+
+                // Selected annotation handles take priority inside/around the selected object.
+                if self.toolbar.tool == Tool::Select
+                    && let Some((id, handle)) =
+                        hit_test_selected_handle(&self.annotations, self.pointer, self.scale)
+                {
+                    self.drag = Some(DragAction::ResizeAnnotation {
+                        id,
+                        handle,
+                        pushed_undo: false,
+                    });
+                    self.capture = Some(true);
+                    self.dirty = true;
+                    return;
+                }
+
+                // Selection crop handles remain draggable regardless of active drawing tool.
+                if let Some(handle) = sel.hit_handle(self.pointer, self.handle_radius()) {
+                    self.drag = Some(DragAction::ResizeSelection { handle });
+                    self.capture = Some(true);
+                    self.dirty = true;
+                    return;
+                }
+
+                match self.toolbar.tool {
+                    Tool::Select => {
+                        if let Some(id) = self.annotations.hit_test(self.pointer, self.scale) {
+                            self.annotations.selected_id = Some(id);
+                            self.toolbar.subbar_open = true;
+                            self.drag = Some(DragAction::MoveAnnotation {
+                                id,
+                                last: self.pointer,
+                                pushed_undo: false,
+                            });
+                        } else {
+                            self.annotations.selected_id = None;
+                            self.toolbar.subbar_open = false;
+                            if sel.contains_inclusive(self.pointer) {
+                                self.drag = Some(DragAction::MoveSelection { last: self.pointer });
+                            }
+                        }
+                    }
+                    Tool::Rect | Tool::Spotlight | Tool::Arrow | Tool::Freehand => {
+                        if !sel.contains_inclusive(self.pointer) {
+                            return;
+                        }
+                        self.annotations.selected_id = None;
+                        let start = (
+                            self.pointer.0.clamp(sel.left, sel.right),
+                            self.pointer.1.clamp(sel.top, sel.bottom),
+                        );
+                        let color = self.toolbar.color;
+                        let width = self.toolbar.width;
+                        let kind = match self.toolbar.tool {
+                            Tool::Rect => AnnotationKind::Rect {
+                                rect: Rect {
+                                    left: start.0,
+                                    top: start.1,
+                                    right: start.0,
+                                    bottom: start.1,
+                                },
+                                color,
+                                width,
+                            },
+                            Tool::Spotlight => AnnotationKind::Spotlight {
+                                rect: Rect {
+                                    left: start.0,
+                                    top: start.1,
+                                    right: start.0,
+                                    bottom: start.1,
+                                },
+                            },
+                            Tool::Arrow => AnnotationKind::Arrow {
+                                start,
+                                end: if shift {
+                                    constrain_arrow_angle(start, start)
+                                } else {
+                                    start
+                                },
+                                color,
+                                width,
+                            },
+                            Tool::Freehand => AnnotationKind::Freehand {
+                                points: vec![start],
+                                color,
+                                width,
+                            },
+                            Tool::Select => unreachable!(),
+                        };
+                        self.drag = Some(DragAction::DrawAnnotation { start, kind });
+                    }
+                }
+                if self.drag.is_some() {
+                    self.capture = Some(true);
+                }
+                self.sync_layout();
+                self.dirty = true;
+            }
+        }
+    }
+
+    fn double_click(&mut self, shift: bool) {
+        if self.mode == Mode::Ready {
+            let on_toolbar = self
+                .cached_layout
+                .as_ref()
+                .is_some_and(|l| l.hit_test(self.pointer).is_some());
+            let on_handle = self
+                .selection
+                .is_some_and(|s| s.hit_handle(self.pointer, self.handle_radius()).is_some());
+            if !on_toolbar
+                && !on_handle
+                && self.toolbar.tool == Tool::Select
+                && self
+                    .selection
+                    .is_some_and(|s| s.contains_inclusive(self.pointer))
+                && self
+                    .annotations
+                    .hit_test(self.pointer, self.scale)
+                    .is_none()
+            {
+                // Commit on the final mouse-up, so it cannot reach the underlying application.
+                self.confirming_double_click = true;
+                self.capture = Some(true);
+                return;
+            }
+        }
+        self.press(shift);
+    }
+
+    fn pointer_move(&mut self, value: LPARAM, shift: bool) {
         let x = (value.0 as u16 as i16) as f64;
         let y = ((value.0 >> 16) as u16 as i16) as f64;
         self.pointer = (x.clamp(0.0, self.width), y.clamp(0.0, self.height));
-        if let Some(origin) = self.origin
-            && ((self.pointer.0 - origin.0).abs() >= self.drag_threshold.0
-                || (self.pointer.1 - origin.1).abs() >= self.drag_threshold.1)
-        {
-            self.dragging = true;
-            self.locked = None;
+
+        match self.drag.take() {
+            Some(DragAction::NewSelection { origin, mut moved }) => {
+                if !moved
+                    && ((self.pointer.0 - origin.0).abs() >= self.drag_threshold.0
+                        || (self.pointer.1 - origin.1).abs() >= self.drag_threshold.1)
+                {
+                    moved = true;
+                    self.mode = Mode::DragSelection;
+                    self.locked = None;
+                }
+                self.drag = Some(DragAction::NewSelection { origin, moved });
+            }
+            Some(DragAction::ResizeSelection { handle }) => {
+                if let Some(sel) = self.selection {
+                    self.selection = Some(sel.resize_with_handle(
+                        handle,
+                        self.pointer,
+                        (self.width, self.height),
+                        self.scale,
+                        shift,
+                    ));
+                    self.sync_layout();
+                }
+                self.drag = Some(DragAction::ResizeSelection { handle });
+            }
+            Some(DragAction::MoveSelection { last }) => {
+                if let Some(sel) = self.selection {
+                    let delta = (self.pointer.0 - last.0, self.pointer.1 - last.1);
+                    self.selection = Some(sel.translate(delta, (self.width, self.height)));
+                    self.sync_layout();
+                }
+                self.drag = Some(DragAction::MoveSelection { last: self.pointer });
+            }
+            Some(DragAction::ToolbarPress(pressed)) => {
+                self.toolbar.hovered = self
+                    .cached_layout
+                    .as_ref()
+                    .and_then(|l| l.hit_test(self.pointer));
+                self.drag = Some(DragAction::ToolbarPress(pressed));
+            }
+            Some(DragAction::DrawAnnotation { start, mut kind }) => {
+                if let Some(sel) = self.selection {
+                    let clamped = (
+                        self.pointer.0.clamp(sel.left, sel.right),
+                        self.pointer.1.clamp(sel.top, sel.bottom),
+                    );
+                    match &mut kind {
+                        AnnotationKind::Rect { rect, .. } | AnnotationKind::Spotlight { rect } => {
+                            if let Some(next) = merge_drag_rect(start, clamped, sel, shift) {
+                                *rect = next;
+                            }
+                        }
+                        AnnotationKind::Arrow { end, .. } => {
+                            let target = if shift {
+                                constrain_arrow_angle(start, clamped)
+                            } else {
+                                clamped
+                            };
+                            *end = (
+                                target.0.clamp(sel.left, sel.right),
+                                target.1.clamp(sel.top, sel.bottom),
+                            );
+                        }
+                        AnnotationKind::Freehand { points, .. } => {
+                            if let Some(prev) = points.last() {
+                                let dx = clamped.0 - prev.0;
+                                let dy = clamped.1 - prev.1;
+                                if dx * dx + dy * dy >= (2.0 * self.scale).powi(2) {
+                                    points.push(clamped);
+                                }
+                            }
+                        }
+                    }
+                }
+                self.drag = Some(DragAction::DrawAnnotation { start, kind });
+            }
+            Some(DragAction::MoveAnnotation {
+                id,
+                last,
+                mut pushed_undo,
+            }) => {
+                if let Some(sel) = self.selection {
+                    let delta = (self.pointer.0 - last.0, self.pointer.1 - last.1);
+                    if !pushed_undo {
+                        let before = self.annotations.items.clone();
+                        if let Some(item) = self.annotations.items.iter_mut().find(|i| i.id == id)
+                            && item.kind.translate_clamped(delta, sel)
+                        {
+                            let current = std::mem::replace(&mut self.annotations.items, before);
+                            self.annotations.push_undo_checkpoint();
+                            self.annotations.items = current;
+                            pushed_undo = true;
+                        }
+                    } else if let Some(item) =
+                        self.annotations.items.iter_mut().find(|i| i.id == id)
+                    {
+                        item.kind.translate_clamped(delta, sel);
+                    }
+                }
+                self.drag = Some(DragAction::MoveAnnotation {
+                    id,
+                    last: self.pointer,
+                    pushed_undo,
+                });
+            }
+            Some(DragAction::ResizeAnnotation {
+                id,
+                handle,
+                mut pushed_undo,
+            }) => {
+                if let Some(sel) = self.selection {
+                    if !pushed_undo {
+                        let before = self.annotations.items.clone();
+                        if let Some(item) = self.annotations.items.iter_mut().find(|i| i.id == id)
+                            && item
+                                .kind
+                                .resize_with_handle(handle, self.pointer, sel, self.scale)
+                        {
+                            let current = std::mem::replace(&mut self.annotations.items, before);
+                            self.annotations.push_undo_checkpoint();
+                            self.annotations.items = current;
+                            pushed_undo = true;
+                        }
+                    } else if let Some(item) =
+                        self.annotations.items.iter_mut().find(|i| i.id == id)
+                    {
+                        item.kind
+                            .resize_with_handle(handle, self.pointer, sel, self.scale);
+                    }
+                }
+                self.drag = Some(DragAction::ResizeAnnotation {
+                    id,
+                    handle,
+                    pushed_undo,
+                });
+            }
+            None => {
+                if self.mode == Mode::Ready {
+                    self.toolbar.hovered = self
+                        .cached_layout
+                        .as_ref()
+                        .and_then(|l| l.hit_test(self.pointer));
+                }
+            }
         }
         self.dirty = true;
     }
+
+    fn release(&mut self) {
+        self.capture = Some(false);
+        if self.confirming_double_click {
+            self.confirming_double_click = false;
+            if self
+                .selection
+                .is_some_and(|s| s.contains_inclusive(self.pointer))
+            {
+                self.commit();
+            }
+            return;
+        }
+
+        match self.drag.take() {
+            Some(DragAction::NewSelection { origin, moved }) => {
+                if moved {
+                    let dragged = Rect::drag(origin, self.pointer, self.width, self.height)
+                        .filter(|r| r.is_valid_selection(self.scale));
+                    if let Some(rect) = dragged {
+                        self.selection = Some(rect);
+                        self.mode = Mode::Ready;
+                        self.locked = None;
+                    } else {
+                        self.selection = None;
+                        self.mode = Mode::Hover;
+                        self.locked = None;
+                    }
+                } else if let Some(locked) = self.locked.take() {
+                    self.selection = Some(locked);
+                    self.mode = Mode::Ready;
+                } else {
+                    self.mode = Mode::Hover;
+                }
+            }
+            Some(DragAction::ToolbarPress(pressed)) => {
+                self.toolbar.pressed = None;
+                let current = self
+                    .cached_layout
+                    .as_ref()
+                    .and_then(|l| l.hit_test(self.pointer));
+                self.toolbar.hovered = current;
+                if current == Some(pressed) {
+                    self.activate_toolbar_hit(pressed);
+                }
+            }
+            Some(DragAction::DrawAnnotation { kind, .. }) => {
+                if kind.is_meaningful(self.scale) {
+                    self.annotations.add(kind);
+                    self.annotations.selected_id = None;
+                }
+            }
+            Some(
+                DragAction::ResizeSelection { .. }
+                | DragAction::MoveSelection { .. }
+                | DragAction::MoveAnnotation { .. }
+                | DragAction::ResizeAnnotation { .. },
+            )
+            | None => {}
+        }
+        self.sync_layout();
+        self.dirty = true;
+    }
+
+    fn activate_toolbar_hit(&mut self, hit: ToolbarHit) {
+        match hit {
+            ToolbarHit::Tool(tool) => {
+                self.toolbar.set_tool(tool);
+                if tool != Tool::Select {
+                    self.annotations.selected_id = None;
+                }
+            }
+            ToolbarHit::AttributeToggle => {
+                self.toolbar.subbar_open = !self.toolbar.subbar_open;
+            }
+            ToolbarHit::Undo => {
+                self.annotations.undo();
+            }
+            ToolbarHit::Redo => {
+                self.annotations.redo();
+            }
+            ToolbarHit::Cancel => {
+                self.cancelled = true;
+            }
+            ToolbarHit::Confirm => {
+                self.commit();
+            }
+            ToolbarHit::ColorSwatch(color) => {
+                self.toolbar.color = color;
+                if self.toolbar.tool == Tool::Select
+                    && self
+                        .annotations
+                        .selected()
+                        .is_some_and(|a| !a.kind.is_spotlight())
+                {
+                    let before = self.annotations.items.clone();
+                    if self
+                        .annotations
+                        .selected_mut()
+                        .is_some_and(|s| s.kind.set_color(color))
+                    {
+                        let current = std::mem::replace(&mut self.annotations.items, before);
+                        self.annotations.push_undo_checkpoint();
+                        self.annotations.items = current;
+                    }
+                }
+            }
+            ToolbarHit::StrokeWidth(width) => {
+                self.toolbar.width = width;
+                if self.toolbar.tool == Tool::Select
+                    && self
+                        .annotations
+                        .selected()
+                        .is_some_and(|a| !a.kind.is_spotlight())
+                {
+                    let before = self.annotations.items.clone();
+                    if self
+                        .annotations
+                        .selected_mut()
+                        .is_some_and(|s| s.kind.set_width(width))
+                    {
+                        let current = std::mem::replace(&mut self.annotations.items, before);
+                        self.annotations.push_undo_checkpoint();
+                        self.annotations.items = current;
+                    }
+                }
+            }
+            ToolbarHit::SpotlightDim(dim) => {
+                if self.annotations.spotlight_dim != dim {
+                    if self.annotations.has_spotlights() {
+                        self.annotations.push_undo_checkpoint();
+                    }
+                    self.annotations.spotlight_dim = dim;
+                }
+            }
+            ToolbarHit::ClearSpotlights => {
+                self.annotations.clear_spotlights();
+            }
+            ToolbarHit::BarBody => {}
+        }
+        self.sync_layout();
+        self.dirty = true;
+    }
+
+    fn right_click(&mut self) {
+        match self.mode {
+            Mode::Hover | Mode::DragSelection => {
+                self.clear_drag();
+                self.cancelled = true;
+            }
+            Mode::Ready => {
+                if self.drag.is_some() {
+                    self.clear_drag();
+                } else if self.toolbar.tool != Tool::Select {
+                    self.toolbar.set_tool(Tool::Select);
+                } else if self.annotations.selected_id.is_some() {
+                    self.annotations.selected_id = None;
+                    self.toolbar.subbar_open = false;
+                } else {
+                    self.cancelled = true;
+                }
+                self.sync_layout();
+            }
+        }
+        self.dirty = true;
+    }
+
+    fn key_down(&mut self, vk: u16, ctrl: bool, shift: bool, alt: bool) {
+        if vk == VK_ESCAPE.0 {
+            if self.drag.is_some() {
+                self.clear_drag();
+            } else if self.annotations.selected_id.is_some() {
+                self.annotations.selected_id = None;
+                self.toolbar.subbar_open = false;
+                self.sync_layout();
+            } else {
+                self.cancelled = true;
+            }
+            self.dirty = true;
+            return;
+        }
+        if self.mode != Mode::Ready {
+            return;
+        }
+        if vk == VK_RETURN.0 {
+            self.commit();
+            return;
+        }
+        if vk == VK_DELETE.0 || vk == VK_BACK.0 {
+            if self.annotations.delete_selected() {
+                self.sync_layout();
+                self.dirty = true;
+            }
+            return;
+        }
+        if ctrl && !alt {
+            match vk {
+                0x5A => {
+                    // Ctrl+Z / Ctrl+Shift+Z
+                    if shift {
+                        self.annotations.redo();
+                    } else {
+                        self.annotations.undo();
+                    }
+                    self.sync_layout();
+                    self.dirty = true;
+                }
+                0x59 => {
+                    // Ctrl+Y
+                    self.annotations.redo();
+                    self.sync_layout();
+                    self.dirty = true;
+                }
+                0x43 => {
+                    // Ctrl+C
+                    self.commit();
+                }
+                _ => {}
+            }
+            return;
+        }
+        if !ctrl && !alt {
+            let next_tool = match vk {
+                0x56 => Some(Tool::Select),    // V
+                0x52 => Some(Tool::Rect),      // R
+                0x48 => Some(Tool::Spotlight), // H
+                0x41 => Some(Tool::Arrow),     // A
+                0x50 => Some(Tool::Freehand),  // P
+                _ => None,
+            };
+            if let Some(tool) = next_tool {
+                self.clear_drag();
+                self.toolbar.tool = tool;
+                self.toolbar.subbar_open = tool != Tool::Select;
+                if tool != Tool::Select {
+                    self.annotations.selected_id = None;
+                }
+                self.sync_layout();
+                self.dirty = true;
+            }
+        }
+    }
+
+    fn phase(&self) -> presenter::Phase {
+        match self.mode {
+            Mode::Hover => presenter::Phase::Hover,
+            Mode::DragSelection => presenter::Phase::Drag,
+            Mode::Ready => {
+                if self.committed.is_some() {
+                    presenter::Phase::Capture
+                } else {
+                    presenter::Phase::Ready
+                }
+            }
+        }
+    }
+
+    fn draft(&self) -> Option<&AnnotationKind> {
+        match &self.drag {
+            Some(DragAction::DrawAnnotation { kind, .. }) => Some(kind),
+            _ => None,
+        }
+    }
+
+    fn cursor_kind(&self) -> CursorKind {
+        if self.mode != Mode::Ready {
+            return CursorKind::Cross;
+        }
+        if self
+            .cached_layout
+            .as_ref()
+            .is_some_and(|l| l.hit_test(self.pointer).is_some())
+        {
+            return CursorKind::Arrow;
+        }
+        if let Some(DragAction::ResizeSelection { handle }) = &self.drag {
+            return handle_cursor(*handle);
+        }
+        if let Some(DragAction::MoveSelection { .. }) = &self.drag {
+            return CursorKind::SizeAll;
+        }
+        if self.toolbar.tool == Tool::Select
+            && let Some((_, handle)) =
+                hit_test_selected_handle(&self.annotations, self.pointer, self.scale)
+        {
+            return match handle {
+                AnnotationHandle::Corner(h) => handle_cursor(h),
+                AnnotationHandle::ArrowStart | AnnotationHandle::ArrowEnd => CursorKind::SizeAll,
+            };
+        }
+        if let Some(sel) = self.selection
+            && let Some(handle) = sel.hit_handle(self.pointer, self.handle_radius())
+        {
+            return handle_cursor(handle);
+        }
+        if self.toolbar.tool == Tool::Select {
+            if self
+                .annotations
+                .hit_test(self.pointer, self.scale)
+                .is_some()
+                || self
+                    .selection
+                    .is_some_and(|s| s.contains_inclusive(self.pointer))
+            {
+                return CursorKind::SizeAll;
+            }
+            return CursorKind::Arrow;
+        }
+        CursorKind::Cross
+    }
 }
+
+fn handle_cursor(handle: Handle) -> CursorKind {
+    match handle {
+        Handle::TopLeft | Handle::BottomRight => CursorKind::SizeNwSe,
+        Handle::TopRight | Handle::BottomLeft => CursorKind::SizeNeSw,
+        Handle::Top | Handle::Bottom => CursorKind::SizeNs,
+        Handle::Left | Handle::Right => CursorKind::SizeWe,
+    }
+}
+
+fn key_down_now(vk: VIRTUAL_KEY) -> bool {
+    // SAFETY: Querying instantaneous key state on the window thread.
+    unsafe { (GetKeyState(i32::from(vk.0)) as u16 & 0x8000) != 0 }
+}
+
 struct Class {
     name: HSTRING,
     instance: HINSTANCE,
 }
+
 impl Drop for Class {
     fn drop(&mut self) {
         // SAFETY: Class name/instance remain valid; its owned window has already been destroyed.
@@ -123,7 +831,9 @@ impl Drop for Class {
         }
     }
 }
+
 struct Window(HWND);
+
 impl Drop for Window {
     fn drop(&mut self) {
         // SAFETY: HWND and attached state still belong to this worker during teardown.
@@ -136,6 +846,7 @@ impl Drop for Window {
         }
     }
 }
+
 unsafe extern "system" fn window_proc(
     window: HWND,
     message: u32,
@@ -152,7 +863,7 @@ unsafe extern "system" fn window_proc(
         if !pointer.is_null() {
             // No message handler invokes synchronous APIs that reenter this state borrow.
             let state = &mut *pointer;
-            if (!state.active || state.selected.is_some())
+            if (!state.active || state.committed.is_some())
                 && matches!(
                     message,
                     WM_LBUTTONDOWN
@@ -173,34 +884,61 @@ unsafe extern "system" fn window_proc(
                     let _ = ValidateRect(Some(window), None);
                     return LRESULT(0);
                 }
-                WM_CLOSE | WM_DESTROY | WM_DISPLAYCHANGE | WM_DPICHANGED | WM_RBUTTONDOWN => {
+                WM_SETCURSOR if (lparam.0 & 0xFFFF) as u32 == HTCLIENT => {
+                    let id = match state.cursor_kind() {
+                        CursorKind::Cross => IDC_CROSS,
+                        CursorKind::Arrow => IDC_ARROW,
+                        CursorKind::SizeAll => IDC_SIZEALL,
+                        CursorKind::SizeNwSe => IDC_SIZENWSE,
+                        CursorKind::SizeNeSw => IDC_SIZENESW,
+                        CursorKind::SizeNs => IDC_SIZENS,
+                        CursorKind::SizeWe => IDC_SIZEWE,
+                    };
+                    if let Ok(cursor) = LoadCursorW(None, id) {
+                        SetCursor(Some(cursor));
+                    }
+                    return LRESULT(1);
+                }
+                WM_CLOSE | WM_DESTROY | WM_DISPLAYCHANGE | WM_DPICHANGED => {
                     state.cancelled = true;
                     return LRESULT(0);
                 }
-                WM_KEYDOWN if wparam.0 == VK_ESCAPE.0 as usize => {
-                    state.cancelled = true;
+                WM_RBUTTONDOWN => {
+                    state.pointer_move(lparam, key_down_now(VK_SHIFT));
+                    state.right_click();
+                    return LRESULT(0);
+                }
+                WM_KEYDOWN => {
+                    state.key_down(
+                        wparam.0 as u16,
+                        key_down_now(VK_CONTROL),
+                        key_down_now(VK_SHIFT),
+                        key_down_now(VK_MENU),
+                    );
                     return LRESULT(0);
                 }
                 WM_LBUTTONDOWN => {
-                    state.pointer(lparam);
-                    state.press();
+                    let shift = key_down_now(VK_SHIFT);
+                    state.pointer_move(lparam, shift);
+                    state.press(shift);
                     return LRESULT(0);
                 }
                 WM_LBUTTONDBLCLK => {
-                    state.pointer(lparam);
-                    state.double_click();
+                    let shift = key_down_now(VK_SHIFT);
+                    state.pointer_move(lparam, shift);
+                    state.double_click(shift);
                     return LRESULT(0);
                 }
                 WM_MOUSEMOVE => {
-                    state.pointer(lparam);
+                    state.pointer_move(lparam, key_down_now(VK_SHIFT));
                     return LRESULT(0);
                 }
-                WM_LBUTTONUP if state.origin.is_some() => {
-                    state.pointer(lparam);
+                WM_LBUTTONUP if state.drag.is_some() || state.confirming_double_click => {
+                    state.pointer_move(lparam, key_down_now(VK_SHIFT));
                     state.release();
                     return LRESULT(0);
                 }
-                WM_CAPTURECHANGED if state.origin.is_some() => {
+                WM_CAPTURECHANGED if state.drag.is_some() => {
                     state.cancelled = true;
                     return LRESULT(0);
                 }
@@ -218,6 +956,7 @@ pub(crate) struct Overlay {
     state: Box<State>,
     _class: Class,
 }
+
 impl Overlay {
     fn new(frame: &FrozenFrame) -> Result<Self> {
         // SAFETY: Read this worker's module/thread identity for its private window class.
@@ -241,17 +980,21 @@ impl Overlay {
         let class = Class { name, instance };
         let mut state = Box::new(State {
             active: false,
-            width: frame.width as f64,
-            height: frame.height as f64,
+            width: f64::from(frame.width),
+            height: f64::from(frame.height),
             scale: 1.0,
             pointer: (0.0, 0.0),
-            origin: None,
-            dragging: false,
-            confirming: false,
+            mode: Mode::Hover,
             drag_threshold: (4.0, 4.0),
             windows: Vec::new(),
             locked: None,
-            selected: None,
+            selection: None,
+            committed: None,
+            drag: None,
+            confirming_double_click: false,
+            annotations: AnnotationStore::default(),
+            toolbar: ToolbarState::default(),
+            cached_layout: None,
             cancelled: false,
             dirty: true,
             capture: None,
@@ -282,6 +1025,7 @@ impl Overlay {
             _class: class,
         })
     }
+
     fn prepare(&mut self, device: &Device, frame: &FrozenFrame) -> Result<()> {
         let bounds = frame.monitor.bounds;
         // SAFETY: Worker owns the hidden window and has per-monitor physical coordinate awareness.
@@ -305,21 +1049,19 @@ impl Overlay {
         }
         *self.state = State {
             active: true,
-            width: frame.width as f64,
-            height: frame.height as f64,
-            scale: dpi as f64 / 96.0,
+            width: f64::from(frame.width),
+            height: f64::from(frame.height),
+            scale: f64::from(dpi) / 96.0,
             pointer: (
-                (point.x - bounds.left) as f64,
-                (point.y - bounds.top) as f64,
+                f64::from(point.x - bounds.left),
+                f64::from(point.y - bounds.top),
             ),
-            origin: None,
-            dragging: false,
-            confirming: false,
+            mode: Mode::Hover,
             // SAFETY: System metrics are read on the worker's per-monitor-aware thread.
             drag_threshold: unsafe {
                 (
-                    GetSystemMetricsForDpi(SM_CXDRAG, dpi).max(1) as f64,
-                    GetSystemMetricsForDpi(SM_CYDRAG, dpi).max(1) as f64,
+                    f64::from(GetSystemMetricsForDpi(SM_CXDRAG, dpi).max(1)),
+                    f64::from(GetSystemMetricsForDpi(SM_CYDRAG, dpi).max(1)),
                 )
             },
             windows: window_targets::snapshot(self.window.0, bounds).unwrap_or_else(|error| {
@@ -327,7 +1069,13 @@ impl Overlay {
                 Vec::new()
             }),
             locked: None,
-            selected: None,
+            selection: None,
+            committed: None,
+            drag: None,
+            confirming_double_click: false,
+            annotations: AnnotationStore::default(),
+            toolbar: ToolbarState::default(),
+            cached_layout: None,
             cancelled: false,
             dirty: true,
             capture: None,
@@ -352,10 +1100,7 @@ impl Overlay {
             )?);
             self.size = (frame.width, frame.height);
         }
-        self.presenter
-            .as_ref()
-            .expect("presenter initialized")
-            .draw(self.state.rect(), self.state.pointer, self.state.phase())?;
+        self.draw_current()?;
         // SAFETY: Present the matching frame while hidden, then activate exactly this worker-owned HWND.
         unsafe {
             SetWindowPos(
@@ -380,14 +1125,36 @@ impl Overlay {
         }
         Ok(())
     }
+
+    fn draw_current(&self) -> Result<()> {
+        let presenter = self.presenter.as_ref().expect("prepared presenter");
+        let toolbar_pair = self
+            .state
+            .cached_layout
+            .as_ref()
+            .map(|l| (&self.state.toolbar, l));
+        presenter.draw(
+            self.state.rect(),
+            self.state.pointer,
+            self.state.phase(),
+            &self.state.annotations,
+            self.state.draft(),
+            toolbar_pair,
+        )
+    }
+
     pub(crate) fn finish(&mut self) {
         self.state.active = false;
-        self.state.origin = None;
+        self.state.mode = Mode::Hover;
         self.state.locked = None;
-        self.state.selected = None;
+        self.state.selection = None;
+        self.state.committed = None;
+        self.state.drag = None;
+        self.state.confirming_double_click = false;
         self.state.windows.clear();
-        self.state.dragging = false;
-        self.state.confirming = false;
+        self.state.annotations.reset();
+        self.state.toolbar.reset();
+        self.state.cached_layout = None;
         self.state.capture = None;
         // SAFETY: Release only this worker's capture/visibility before detaching the frozen GPU surface.
         unsafe {
@@ -405,6 +1172,7 @@ impl Overlay {
             presenter.detach();
         }
     }
+
     fn run(
         &mut self,
         frame: &FrozenFrame,
@@ -416,20 +1184,28 @@ impl Overlay {
             if cancel.is_cancelled() || self.state.cancelled || Instant::now() >= deadline {
                 return Ok(Selection::Cancelled);
             }
-            if let Some(rect) = self.state.selected {
+            if let Some(rect) = self.state.committed {
                 self.presenter.as_ref().expect("prepared presenter").draw(
                     Some(rect),
                     self.state.pointer,
                     presenter::Phase::Capture,
+                    &self.state.annotations,
+                    None,
+                    None,
                 )?;
                 self.state.active = false;
-                return rect
+                let crop = rect
                     .crop(
                         (self.state.width, self.state.height),
                         (frame.width, frame.height),
                     )
-                    .map(Selection::Selected)
-                    .ok_or_else(|| Error::new(E_FAIL, "Region selection has no source pixels"));
+                    .ok_or_else(|| Error::new(E_FAIL, "Region selection has no source pixels"))?;
+                let annotations = std::mem::take(&mut self.state.annotations);
+                return Ok(Selection::Selected(RegionCommit {
+                    crop,
+                    scale: self.state.scale as f32,
+                    annotations,
+                }));
             }
             let mut message = MSG::default();
             // SAFETY: Dispatch only worker messages; no State borrow spans a native callback.
@@ -448,8 +1224,8 @@ impl Overlay {
                         }
                     }
                 }
-                if self.state.selected.is_some()
-                    || checked_pointer.elapsed() >= Duration::from_millis(50)
+                if self.state.allows_monitor_switch()
+                    && checked_pointer.elapsed() >= Duration::from_millis(50)
                 {
                     checked_pointer = Instant::now();
                     let mut point = POINT::default();
@@ -460,23 +1236,18 @@ impl Overlay {
                     }
                 }
             }
-            // Mouse-up clears the drag origin. Do not present an empty selection
-            // between the committed rectangle and its capturing feedback.
-            if self.state.selected.is_some() {
+            if self.state.committed.is_some() {
                 continue;
             }
             if self.state.dirty {
                 self.state.dirty = false;
-                self.presenter.as_ref().expect("prepared presenter").draw(
-                    self.state.rect(),
-                    self.state.pointer,
-                    self.state.phase(),
-                )?;
+                self.draw_current()?;
             }
             std::thread::sleep(Duration::from_millis(2));
         }
     }
 }
+
 pub(crate) fn select(
     cache: &mut Option<Overlay>,
     device: &Device,

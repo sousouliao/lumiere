@@ -12,7 +12,7 @@ pub use results::{
 
 pub const DISPLAY_VERSION: u8 = 5;
 pub const REGION_VERSION: u8 = 6;
-pub const REGION_LEASE_SECONDS: u64 = 60;
+pub const REGION_LEASE_SECONDS: u64 = 300;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

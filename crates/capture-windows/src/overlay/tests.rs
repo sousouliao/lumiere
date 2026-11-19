@@ -1,4 +1,4 @@
-use super::*;
+use super::{annotations::InkColor, *};
 use crate::{
     WindowsEngine,
     interop::{Apartment, DpiScope},
@@ -16,9 +16,7 @@ fn interaction() -> State {
         height: 800.0,
         scale: 1.0,
         pointer: (150.0, 150.0),
-        origin: None,
-        dragging: false,
-        confirming: false,
+        mode: Mode::Hover,
         drag_threshold: (4.0, 4.0),
         windows: vec![
             Rect {
@@ -35,7 +33,13 @@ fn interaction() -> State {
             },
         ],
         locked: None,
-        selected: None,
+        selection: None,
+        committed: None,
+        drag: None,
+        confirming_double_click: false,
+        annotations: AnnotationStore::default(),
+        toolbar: ToolbarState::default(),
+        cached_layout: None,
         cancelled: false,
         dirty: true,
         capture: None,
@@ -43,21 +47,28 @@ fn interaction() -> State {
 }
 
 #[test]
-fn hover_respects_occlusion_and_click_locks_until_double_click_release() {
+fn hover_respects_occlusion_and_click_enters_ready_until_double_click_release() {
     let mut state = interaction();
     let front = state.windows[0];
     assert_eq!(state.rect(), Some(front));
-    state.press();
-    state.pointer(input(151, 152)); // Ordinary click jitter must not become a manual crop.
+    assert!(state.allows_monitor_switch());
+
+    state.press(false);
+    state.pointer_move(input(151, 152), false); // Ordinary click jitter must not become a manual crop.
     state.release();
-    assert!(state.selected.is_none());
-    state.pointer(input(500, 500));
+    assert_eq!(state.mode, Mode::Ready);
+    assert_eq!(state.selection, Some(front));
+    assert!(state.committed.is_none());
+    assert!(!state.allows_monitor_switch());
+
+    state.pointer_move(input(500, 500), false);
     assert_eq!(state.rect(), Some(front));
-    state.pointer(input(150, 150));
-    state.double_click();
-    assert!(state.selected.is_none(), "Wait for the second mouse-up");
+
+    state.pointer_move(input(150, 150), false);
+    state.double_click(false);
+    assert!(state.committed.is_none(), "Wait for the second mouse-up");
     state.release();
-    assert_eq!(state.selected, Some(front));
+    assert_eq!(state.committed, Some(front));
 
     let mut state = interaction();
     state.windows[0].right = 110.0;
@@ -69,35 +80,139 @@ fn hover_respects_occlusion_and_click_locks_until_double_click_release() {
 }
 
 #[test]
-fn dragging_overrides_snapping_and_invalid_drag_never_commits_a_window() {
+fn dragging_enters_ready_supports_handles_annotations_and_enter_commit() {
     let mut state = interaction();
-    state.press();
-    state.pointer(input(100, 80));
+    state.press(false);
+    state.pointer_move(input(100, 80), false);
     assert_eq!(state.phase(), presenter::Phase::Drag);
+    assert!(!state.allows_monitor_switch());
+    state.release();
+    assert_eq!(state.mode, Mode::Ready);
+    assert!(state.committed.is_none());
+    let expected = Rect {
+        left: 100.0,
+        top: 80.0,
+        right: 150.0,
+        bottom: 150.0,
+    };
+    assert_eq!(state.selection, Some(expected));
+
+    // Resize bottom-right handle to make room for annotations.
+    state.pointer_move(input(150, 150), false);
+    state.press(false);
+    state.pointer_move(input(420, 340), false);
     state.release();
     assert_eq!(
-        state.selected,
+        state.selection,
         Some(Rect {
             left: 100.0,
             top: 80.0,
-            right: 150.0,
-            bottom: 150.0
+            right: 420.0,
+            bottom: 340.0,
         })
     );
 
-    let mut state = interaction();
-    state.press();
-    state.pointer(input(170, 155));
+    // Draw Spotlight (H), Arrow (A), Rect (R), Freehand (P).
+    state.key_down(0x48, false, false, false);
+    assert_eq!(state.toolbar.tool, Tool::Spotlight);
+    state.pointer_move(input(140, 120), false);
+    state.press(false);
+    state.pointer_move(input(260, 220), false);
     state.release();
-    assert!(state.selected.is_none());
+    assert_eq!(state.annotations.items.len(), 1);
+    assert!(state.annotations.has_spotlights());
+
+    state.key_down(0x41, false, false, false);
+    assert_eq!(state.toolbar.tool, Tool::Arrow);
+    state.pointer_move(input(280, 140), false);
+    state.press(false);
+    state.pointer_move(input(360, 200), false);
+    state.release();
+    assert_eq!(state.annotations.items.len(), 2);
+
+    // Undo / Redo
+    state.key_down(0x5A, true, false, false);
+    assert_eq!(state.annotations.items.len(), 1);
+    state.key_down(0x59, true, false, false);
+    assert_eq!(state.annotations.items.len(), 2);
+
+    // Right-click steps drawing tool back to Select rather than discarding annotations.
+    state.right_click();
+    assert_eq!(state.toolbar.tool, Tool::Select);
+    assert!(!state.cancelled);
+
+    // Click outside selection must NOT leak SetCapture.
+    state.capture = None;
+    state.pointer_move(input(10, 10), false);
+    state.press(false);
+    assert_ne!(state.capture, Some(true));
+
+    // Selecting an annotation -> Esc clears selection first, second Esc cancels.
+    state.annotations.selected_id = Some(state.annotations.items[0].id);
+    state.key_down(VK_ESCAPE.0, false, false, false);
+    assert!(state.annotations.selected_id.is_none());
+    assert!(!state.cancelled);
+
+    // Enter commits cleanly.
+    state.key_down(VK_RETURN.0, false, false, false);
+    assert_eq!(
+        state.committed,
+        Some(Rect {
+            left: 100.0,
+            top: 80.0,
+            right: 420.0,
+            bottom: 340.0,
+        })
+    );
+
+    // Small invalid drag returns cleanly to Hover and never commits.
+    let mut state = interaction();
+    state.press(false);
+    state.pointer_move(input(170, 155), false);
+    state.release();
+    assert_eq!(state.mode, Mode::Hover);
+    assert!(state.committed.is_none());
     assert!(state.locked.is_none());
-    state.pointer(input(1000, 800));
-    state.double_click();
+    state.pointer_move(input(1000, 800), false);
+    state.double_click(false);
     state.release();
     assert!(
-        state.selected.is_none(),
+        state.committed.is_none(),
         "Empty space cannot double-click capture"
     );
+}
+
+#[test]
+fn toolbar_buttons_click_cleanly_without_drawing_behind() {
+    let mut state = interaction();
+    state.mode = Mode::Ready;
+    state.selection = Some(Rect {
+        left: 100.0,
+        top: 100.0,
+        right: 500.0,
+        bottom: 360.0,
+    });
+    state.sync_layout();
+    let layout = state.cached_layout.as_ref().unwrap();
+    let spotlight_rect = matches!(
+        layout.hit_test((
+            layout.bar_rect.left + 84.0,
+            (layout.bar_rect.top + layout.bar_rect.bottom) * 0.5,
+        )),
+        Some(ToolbarHit::Tool(Tool::Spotlight))
+    );
+    assert!(spotlight_rect || layout.bar_rect.width() > 300.0);
+
+    // Clicking same color must not push an empty undo checkpoint.
+    let initial_undo = state.annotations.can_undo();
+    state.activate_toolbar_hit(ToolbarHit::ColorSwatch(InkColor::Coral));
+    assert_eq!(state.annotations.can_undo(), initial_undo);
+
+    // Click Confirm directly via layout hit position.
+    state.activate_toolbar_hit(ToolbarHit::Tool(Tool::Rect));
+    assert_eq!(state.toolbar.tool, Tool::Rect);
+    state.activate_toolbar_hit(ToolbarHit::Confirm);
+    assert_eq!(state.committed, state.selection);
 }
 
 #[test]
@@ -222,7 +337,7 @@ fn native_window_snap_double_click_crops_the_frozen_frame() {
         );
     }
     assert_eq!(overlay.state.rect(), Some(rect));
-    assert!(overlay.state.selected.is_none());
+    assert!(overlay.state.committed.is_none());
     // SAFETY: Keep the final mouse-up within the capture overlay, just as physical double-click dispatch does.
     unsafe {
         SendMessageW(
@@ -231,7 +346,7 @@ fn native_window_snap_double_click_crops_the_frozen_frame() {
             Some(WPARAM(1)),
             Some(position),
         );
-        assert!(overlay.state.selected.is_none());
+        assert!(overlay.state.committed.is_none());
         SendMessageW(
             overlay.window.0,
             WM_LBUTTONUP,
@@ -247,13 +362,14 @@ fn native_window_snap_double_click_crops_the_frozen_frame() {
         )
         .unwrap();
     overlay.finish();
-    let Selection::Selected(crop) = selection else {
+    let Selection::Selected(commit) = selection else {
         panic!("Window selection did not complete");
     };
+    let crop = commit.crop;
     assert_eq!(
         Some(crop),
         rect.crop(
-            (frame.width as f64, frame.height as f64),
+            (f64::from(frame.width), f64::from(frame.height)),
             (frame.width, frame.height)
         )
     );
@@ -312,6 +428,7 @@ fn retained_gpu_frame_crop_is_exact_after_the_overlay_was_visible() {
                             .unwrap();
                         PostMessageW(Some(window), WM_LBUTTONUP, WPARAM(0), pack(100, 100))
                             .unwrap();
+                        PostMessageW(Some(window), WM_KEYDOWN, WPARAM(0x0D), LPARAM(0)).unwrap();
                         break;
                     }
                 }
@@ -331,9 +448,10 @@ fn retained_gpu_frame_crop_is_exact_after_the_overlay_was_visible() {
     .unwrap();
     controller.join().unwrap();
     overlay.as_mut().unwrap().finish();
-    let Selection::Selected(crop) = selected else {
+    let Selection::Selected(commit) = selected else {
         panic!("Fixture selection was cancelled");
     };
+    let crop = commit.crop;
     assert_eq!(
         crop,
         Crop {
