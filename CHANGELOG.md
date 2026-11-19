@@ -4,6 +4,26 @@ All notable user-visible changes to Lumiere are documented in this file.
 
 ## [Unreleased]
 
+Target version: `0.12.0`
+Release platforms: Windows
+
+### Added
+
+- Add 8-way selection resize handles and drag-to-move repositioning after dragging a region or clicking a snapped window, locking the active display once selection adjustment begins.
+- Add a native floating annotation toolbar in the region overlay with Rect (`R`), Highlight (`H`), Arrow (`A`), and Freehand (`P`) tools, 6 ink colors, 3 stroke weights, 3 Highlight dim levels (`40%`, `55%`, `72%`), object selection/move/resize/delete, and undo/redo history.
+
+### Changed
+
+- Enter the interactive adjustment and annotation stage upon region drag release or single-click window lock; commit capture with `Done`, `Enter`, `Ctrl+C`, or double-clicking empty selection space, and extend the region capture lease to 300 seconds.
+
+### Known limitations
+
+- Native/GPU fixtures verify sRGB annotation compositing, selection geometry, and state transitions; full physical mixed-DPI display acceptance and broad desktop application coverage remain pending.
+- Window snapping selects a rectangle from the frozen image of the current display. It does not recover covered content, combine a window across displays, or detect internal UI elements. Moving windows may change between frame capture and boundary collection.
+- The Windows installer is not Authenticode signed; Windows may show an unknown-publisher or SmartScreen warning, or block execution. Updater integrity signatures do not establish publisher identity.
+- Windows Graphics Capture retains its system capture border. Output remains sRGB Visual Match PNG, not HDR-preserved export.
+- Windows x64 is the only supported platform. Automatic startup after Windows sign-in and changes made in Windows Startup Apps retain the installed-release verification limitation from v0.8.0.
+
 ## [0.11.0] - 2026-11-08
 
 Release platforms: Windows
